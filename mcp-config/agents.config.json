@@ -1,0 +1,371 @@
+{
+  "$schema": "./agents.schema.json",
+  "version": "1.0.0",
+  "name": "PG AI Squad",
+  "description": "Pandora Group AI Squad - A production-grade agentic system for building the Pandora Group Site",
+  "agents": [
+    {
+      "id": "task-manager",
+      "name": "Task Manager Agent",
+      "description": "Scrum Master Agent that orchestrates the PG AI Squad. Accepts user tasks in natural language, decomposes them into subtasks, assigns to specialized agents, and produces final PR-ready deliverables.",
+      "role": "orchestrator",
+      "capabilities": [
+        "task-decomposition",
+        "dependency-planning",
+        "agent-routing",
+        "output-merging",
+        "pandora-standards-enforcement"
+      ],
+      "commands": [
+        "task-decompose",
+        "task-assign",
+        "task-merge"
+      ],
+      "skills": [
+        "pandora-coding-standards",
+        "task-decomposition-patterns"
+      ],
+      "model": "sonnet",
+      "priority": 1
+    },
+    {
+      "id": "frontend-engineer",
+      "name": "Frontend Engineer Agent",
+      "description": "Specialized in React/Next.js component development following Pandora UI Toolkit patterns, atomic design, and accessibility standards.",
+      "role": "specialist",
+      "capabilities": [
+        "figma-parsing",
+        "react-component-generation",
+        "storybook-stories",
+        "accessibility-validation",
+        "design-token-implementation"
+      ],
+      "commands": [
+        "component-generate",
+        "story-create",
+        "accessibility-validate"
+      ],
+      "skills": [
+        "pandora-ui-toolkit",
+        "atomic-design-patterns",
+        "next-js-app-router",
+        "accessibility-wcag"
+      ],
+      "tools": [
+        "filesystem",
+        "command-runner",
+        "figma-parser"
+      ],
+      "model": "sonnet",
+      "priority": 2
+    },
+    {
+      "id": "amplience-cms",
+      "name": "Amplience CMS Agent",
+      "description": "Specialized in Amplience content management including content type creation, JSON schema generation, and content scaffolding.",
+      "role": "specialist",
+      "capabilities": [
+        "content-type-creation",
+        "json-schema-generation",
+        "payload-examples",
+        "content-scaffolding",
+        "frontend-sync"
+      ],
+      "commands": [
+        "content-type-create",
+        "schema-generate",
+        "payload-example"
+      ],
+      "skills": [
+        "amplience-content-types",
+        "json-schema-draft-07",
+        "pandora-content-patterns"
+      ],
+      "tools": [
+        "filesystem",
+        "amplience-api"
+      ],
+      "model": "sonnet",
+      "priority": 2
+    },
+    {
+      "id": "code-review",
+      "name": "Code Review Agent",
+      "description": "Validates code against Pandora coding standards, INS-2509 architecture, atomic design, Next.js conventions, accessibility, and TypeScript rules.",
+      "role": "validator",
+      "capabilities": [
+        "standards-validation",
+        "architecture-review",
+        "accessibility-audit",
+        "typescript-validation",
+        "pr-commenting"
+      ],
+      "commands": [
+        "review-code",
+        "validate-standards",
+        "pr-comment"
+      ],
+      "skills": [
+        "pandora-coding-standards",
+        "typescript-strict-mode",
+        "eslint-rules",
+        "accessibility-wcag"
+      ],
+      "tools": [
+        "filesystem",
+        "command-runner"
+      ],
+      "model": "sonnet",
+      "priority": 3
+    },
+    {
+      "id": "performance",
+      "name": "Performance Agent",
+      "description": "Analyzes HAR files, identifies performance bottlenecks, and provides optimization recommendations for Core Web Vitals.",
+      "role": "specialist",
+      "capabilities": [
+        "har-analysis",
+        "core-web-vitals",
+        "optimization-suggestions",
+        "caching-recommendations",
+        "cdn-optimization"
+      ],
+      "commands": [
+        "har-analyze",
+        "performance-report",
+        "optimization-suggest"
+      ],
+      "skills": [
+        "web-performance",
+        "core-web-vitals",
+        "caching-strategies"
+      ],
+      "tools": [
+        "filesystem",
+        "har-analyzer"
+      ],
+      "model": "sonnet",
+      "priority": 3
+    },
+    {
+      "id": "qa",
+      "name": "QA Agent",
+      "description": "Generates unit tests, integration tests, and Playwright E2E tests. Validates acceptance criteria and produces coverage reports.",
+      "role": "validator",
+      "capabilities": [
+        "unit-test-generation",
+        "integration-test-generation",
+        "e2e-test-generation",
+        "coverage-analysis",
+        "acceptance-validation"
+      ],
+      "commands": [
+        "test-generate",
+        "coverage-report",
+        "acceptance-validate"
+      ],
+      "skills": [
+        "jest-testing",
+        "playwright-testing",
+        "react-testing-library",
+        "test-coverage"
+      ],
+      "tools": [
+        "filesystem",
+        "command-runner"
+      ],
+      "model": "sonnet",
+      "priority": 3
+    },
+    {
+      "id": "backend",
+      "name": "Backend Agent",
+      "description": "Creates Next.js API routes, Server Components, and mock API services following Pandora backend patterns.",
+      "role": "specialist",
+      "capabilities": [
+        "api-route-creation",
+        "server-component-creation",
+        "mock-api-generation",
+        "data-fetching-patterns",
+        "caching-implementation"
+      ],
+      "commands": [
+        "api-route-create",
+        "server-component-create",
+        "mock-api-create"
+      ],
+      "skills": [
+        "next-js-api-routes",
+        "server-components",
+        "data-fetching",
+        "msw-mocking"
+      ],
+      "tools": [
+        "filesystem",
+        "command-runner"
+      ],
+      "model": "sonnet",
+      "priority": 2
+    }
+  ],
+  "tools": [
+    {
+      "id": "filesystem",
+      "name": "Filesystem Tool",
+      "description": "File system operations including read, write, list, copy, move, and delete.",
+      "module": "tools.filesystem",
+      "class": "FilesystemTool"
+    },
+    {
+      "id": "command-runner",
+      "name": "Command Runner",
+      "description": "Execute development commands like ESLint, Prettier, TypeScript, Jest, and Playwright.",
+      "module": "tools.command_runner",
+      "class": "CommandRunner"
+    },
+    {
+      "id": "figma-parser",
+      "name": "Figma Parser",
+      "description": "Parse Figma designs to extract component structure, colors, typography, and spacing.",
+      "module": "tools.figma_parser",
+      "class": "FigmaParser"
+    },
+    {
+      "id": "amplience-api",
+      "name": "Amplience API",
+      "description": "Interact with Amplience CMS for content fetching, filtering, and image URL building.",
+      "module": "tools.amplience_api",
+      "class": "AmplienceAPI"
+    },
+    {
+      "id": "har-analyzer",
+      "name": "HAR Analyzer",
+      "description": "Analyze HTTP Archive files for performance metrics and optimization recommendations.",
+      "module": "tools.har_analyzer",
+      "class": "HARAnalyzer"
+    }
+  ],
+  "workflows": [
+    {
+      "id": "component-from-figma",
+      "name": "Create Component from Figma",
+      "description": "End-to-end workflow to create a React component from Figma design with tests and stories.",
+      "steps": [
+        {
+          "agent": "task-manager",
+          "command": "task-decompose",
+          "description": "Break down the component creation task"
+        },
+        {
+          "agent": "frontend-engineer",
+          "command": "component-generate",
+          "description": "Generate React component from Figma"
+        },
+        {
+          "agent": "frontend-engineer",
+          "command": "story-create",
+          "description": "Create Storybook story"
+        },
+        {
+          "agent": "qa",
+          "command": "test-generate",
+          "description": "Generate unit tests"
+        },
+        {
+          "agent": "frontend-engineer",
+          "command": "accessibility-validate",
+          "description": "Validate accessibility"
+        },
+        {
+          "agent": "code-review",
+          "command": "review-code",
+          "description": "Review generated code"
+        },
+        {
+          "agent": "task-manager",
+          "command": "task-merge",
+          "description": "Merge outputs into final deliverable"
+        }
+      ]
+    },
+    {
+      "id": "amplience-content-type",
+      "name": "Create Amplience Content Type",
+      "description": "Create a new Amplience content type with schema, UI config, and example payload.",
+      "steps": [
+        {
+          "agent": "task-manager",
+          "command": "task-decompose",
+          "description": "Break down the content type creation task"
+        },
+        {
+          "agent": "amplience-cms",
+          "command": "content-type-create",
+          "description": "Design and create content type"
+        },
+        {
+          "agent": "amplience-cms",
+          "command": "schema-generate",
+          "description": "Generate JSON schema"
+        },
+        {
+          "agent": "amplience-cms",
+          "command": "payload-example",
+          "description": "Generate example payload"
+        },
+        {
+          "agent": "code-review",
+          "command": "validate-standards",
+          "description": "Validate against standards"
+        },
+        {
+          "agent": "task-manager",
+          "command": "task-merge",
+          "description": "Merge outputs into final deliverable"
+        }
+      ]
+    },
+    {
+      "id": "performance-optimization",
+      "name": "Performance Optimization",
+      "description": "Analyze performance and implement optimizations.",
+      "steps": [
+        {
+          "agent": "performance",
+          "command": "har-analyze",
+          "description": "Analyze HAR file"
+        },
+        {
+          "agent": "performance",
+          "command": "performance-report",
+          "description": "Generate performance report"
+        },
+        {
+          "agent": "performance",
+          "command": "optimization-suggest",
+          "description": "Generate optimization suggestions"
+        },
+        {
+          "agent": "frontend-engineer",
+          "command": "component-generate",
+          "description": "Implement optimizations"
+        },
+        {
+          "agent": "code-review",
+          "command": "review-code",
+          "description": "Review optimizations"
+        }
+      ]
+    }
+  ],
+  "settings": {
+    "defaultModel": "sonnet",
+    "maxConcurrentAgents": 3,
+    "timeoutMs": 300000,
+    "retryAttempts": 3,
+    "logging": {
+      "level": "info",
+      "format": "json"
+    }
+  }
+}

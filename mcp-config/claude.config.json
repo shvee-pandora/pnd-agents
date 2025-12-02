@@ -1,0 +1,82 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/claude-code/main/schemas/mcp-config.schema.json",
+  "mcpServers": {
+    "pg-ai-squad": {
+      "command": "python",
+      "args": ["-m", "pnd_agents.server"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}",
+        "AMPLIENCE_HUB_NAME": "${env:AMPLIENCE_HUB_NAME}",
+        "AMPLIENCE_BASE_URL": "${env:AMPLIENCE_BASE_URL}",
+        "FIGMA_ACCESS_TOKEN": "${env:FIGMA_ACCESS_TOKEN}"
+      }
+    },
+    "task-manager": {
+      "command": "python",
+      "args": ["-m", "pnd_agents.agents.task_manager"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}",
+        "AGENT_NAME": "task-manager"
+      }
+    },
+    "frontend-engineer": {
+      "command": "python",
+      "args": ["-m", "pnd_agents.agents.frontend"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}",
+        "AGENT_NAME": "frontend-engineer",
+        "FIGMA_ACCESS_TOKEN": "${env:FIGMA_ACCESS_TOKEN}"
+      }
+    },
+    "amplience-cms": {
+      "command": "python",
+      "args": ["-m", "pnd_agents.agents.amplience"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}",
+        "AGENT_NAME": "amplience-cms",
+        "AMPLIENCE_HUB_NAME": "${env:AMPLIENCE_HUB_NAME}",
+        "AMPLIENCE_BASE_URL": "${env:AMPLIENCE_BASE_URL}"
+      }
+    },
+    "code-review": {
+      "command": "python",
+      "args": ["-m", "pnd_agents.agents.code_review"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}",
+        "AGENT_NAME": "code-review"
+      }
+    },
+    "performance": {
+      "command": "python",
+      "args": ["-m", "pnd_agents.agents.performance"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}",
+        "AGENT_NAME": "performance"
+      }
+    },
+    "qa": {
+      "command": "python",
+      "args": ["-m", "pnd_agents.agents.qa"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}",
+        "AGENT_NAME": "qa"
+      }
+    },
+    "backend": {
+      "command": "python",
+      "args": ["-m", "pnd_agents.agents.backend"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}",
+        "AGENT_NAME": "backend"
+      }
+    }
+  }
+}

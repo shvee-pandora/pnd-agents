@@ -1,0 +1,20 @@
+# PG AI Squad - Python Dependencies
+
+# Core
+python-dotenv>=1.0.0
+
+# Type hints and validation
+typing-extensions>=4.0.0
+
+# JSON handling
+orjson>=3.9.0
+
+# HTTP client (for future API integrations)
+httpx>=0.25.0
+
+# Development
+pytest>=7.4.0
+pytest-cov>=4.1.0
+black>=23.0.0
+ruff>=0.1.0
+mypy>=1.6.0
