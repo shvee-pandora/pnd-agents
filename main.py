@@ -1,3 +1,21 @@
+#!/usr/bin/env python3
+"""
+PG AI Squad MCP Server
+
+Main entry point for the MCP server. This script handles the case where
+Claude Desktop may not respect the cwd setting by using __file__ to
+determine the project root and set up sys.path accordingly.
+"""
+
+import os
+import sys
+
+# Ensure this directory is on sys.path so imports work even if cwd is /
+# This is critical because Claude Desktop may ignore the cwd setting
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
 import asyncio
 from mcp.server.stdio import stdio_server
 from mcp.server import Server
