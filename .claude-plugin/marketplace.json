@@ -1,0 +1,258 @@
+{
+  "name": "pg-ai-squad",
+  "owner": {
+    "name": "Pandora Group",
+    "email": "tech@pandora.net",
+    "url": "https://github.com/shvee-pandora"
+  },
+  "metadata": {
+    "description": "PG AI Squad - A production-ready agentic system for Pandora Group site development with MCP-compatible agents for engineering tasks, Amplience CMS integration, code review, and quality assurance",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "task-manager",
+      "source": "./agents/task_manager",
+      "description": "Scrum Master Agent that accepts user tasks in natural language, breaks them into subtasks, assigns to correct agents, and produces final deliverables following Pandora coding standards",
+      "version": "1.0.0",
+      "author": {
+        "name": "Pandora Group",
+        "url": "https://github.com/shvee-pandora"
+      },
+      "homepage": "https://github.com/shvee-pandora/pnd-agents",
+      "repository": "https://github.com/shvee-pandora/pnd-agents",
+      "license": "MIT",
+      "keywords": [
+        "task-management",
+        "orchestration",
+        "scrum",
+        "pandora",
+        "workflow"
+      ],
+      "category": "orchestration",
+      "strict": false,
+      "commands": [
+        "./commands/task-decompose.md",
+        "./commands/task-assign.md",
+        "./commands/task-merge.md"
+      ],
+      "agents": [
+        "./agents/task-manager-agent.md"
+      ],
+      "skills": [
+        "./skills/pandora-coding-standards",
+        "./skills/task-decomposition-patterns"
+      ]
+    },
+    {
+      "name": "frontend-engineer",
+      "source": "./agents/frontend",
+      "description": "Frontend Engineer Agent for generating React/Next.js components from Figma, creating Storybook stories, validating accessibility, and implementing styling following Pandora UI Toolkit patterns",
+      "version": "1.0.0",
+      "author": {
+        "name": "Pandora Group",
+        "url": "https://github.com/shvee-pandora"
+      },
+      "homepage": "https://github.com/shvee-pandora/pnd-agents",
+      "repository": "https://github.com/shvee-pandora/pnd-agents",
+      "license": "MIT",
+      "keywords": [
+        "frontend",
+        "react",
+        "nextjs",
+        "figma",
+        "storybook",
+        "accessibility",
+        "pandora"
+      ],
+      "category": "development",
+      "strict": false,
+      "commands": [
+        "./commands/component-generate.md",
+        "./commands/story-create.md",
+        "./commands/accessibility-validate.md"
+      ],
+      "agents": [
+        "./agents/frontend-engineer-agent.md"
+      ],
+      "skills": [
+        "./skills/nextjs-app-router",
+        "./skills/atomic-design-patterns",
+        "./skills/pandora-ui-toolkit"
+      ]
+    },
+    {
+      "name": "amplience-cms",
+      "source": "./agents/amplience",
+      "description": "Amplience CMS Agent for creating/updating Content Types, generating JSON Schemas, producing Amplience payload examples, and building content scaffolding for the Pandora Group site",
+      "version": "1.0.0",
+      "author": {
+        "name": "Pandora Group",
+        "url": "https://github.com/shvee-pandora"
+      },
+      "homepage": "https://github.com/shvee-pandora/pnd-agents",
+      "repository": "https://github.com/shvee-pandora/pnd-agents",
+      "license": "MIT",
+      "keywords": [
+        "amplience",
+        "cms",
+        "content-types",
+        "json-schema",
+        "pandora"
+      ],
+      "category": "cms",
+      "strict": false,
+      "commands": [
+        "./commands/content-type-create.md",
+        "./commands/schema-generate.md",
+        "./commands/payload-example.md"
+      ],
+      "agents": [
+        "./agents/amplience-cms-agent.md"
+      ],
+      "skills": [
+        "./skills/amplience-content-modeling",
+        "./skills/json-schema-patterns"
+      ]
+    },
+    {
+      "name": "code-review",
+      "source": "./agents/code_review",
+      "description": "Code Review Agent that validates generated code against Pandora Coding Standards, INS-2509 technical architecture, atomic design, Next.js App Router conventions, accessibility, and TypeScript rules",
+      "version": "1.0.0",
+      "author": {
+        "name": "Pandora Group",
+        "url": "https://github.com/shvee-pandora"
+      },
+      "homepage": "https://github.com/shvee-pandora/pnd-agents",
+      "repository": "https://github.com/shvee-pandora/pnd-agents",
+      "license": "MIT",
+      "keywords": [
+        "code-review",
+        "quality",
+        "standards",
+        "typescript",
+        "accessibility",
+        "pandora"
+      ],
+      "category": "quality",
+      "strict": false,
+      "commands": [
+        "./commands/review-code.md",
+        "./commands/validate-standards.md",
+        "./commands/pr-comment.md"
+      ],
+      "agents": [
+        "./agents/code-review-agent.md"
+      ],
+      "skills": [
+        "./skills/pandora-review-checklist",
+        "./skills/typescript-best-practices"
+      ]
+    },
+    {
+      "name": "performance",
+      "source": "./agents/performance",
+      "description": "Performance Agent for analyzing HAR files, identifying slow endpoints, suggesting caching/CDN improvements, and providing metrics to optimize frontend and backend performance",
+      "version": "1.0.0",
+      "author": {
+        "name": "Pandora Group",
+        "url": "https://github.com/shvee-pandora"
+      },
+      "homepage": "https://github.com/shvee-pandora/pnd-agents",
+      "repository": "https://github.com/shvee-pandora/pnd-agents",
+      "license": "MIT",
+      "keywords": [
+        "performance",
+        "har",
+        "optimization",
+        "caching",
+        "cdn",
+        "metrics"
+      ],
+      "category": "performance",
+      "strict": false,
+      "commands": [
+        "./commands/har-analyze.md",
+        "./commands/performance-report.md",
+        "./commands/optimization-suggest.md"
+      ],
+      "agents": [
+        "./agents/performance-agent.md"
+      ],
+      "skills": [
+        "./skills/web-performance-patterns",
+        "./skills/caching-strategies"
+      ]
+    },
+    {
+      "name": "qa",
+      "source": "./agents/qa",
+      "description": "QA Agent for generating unit tests, integration tests, Playwright tests, validating acceptance criteria, and producing test coverage reports",
+      "version": "1.0.0",
+      "author": {
+        "name": "Pandora Group",
+        "url": "https://github.com/shvee-pandora"
+      },
+      "homepage": "https://github.com/shvee-pandora/pnd-agents",
+      "repository": "https://github.com/shvee-pandora/pnd-agents",
+      "license": "MIT",
+      "keywords": [
+        "qa",
+        "testing",
+        "jest",
+        "playwright",
+        "coverage",
+        "automation"
+      ],
+      "category": "testing",
+      "strict": false,
+      "commands": [
+        "./commands/test-generate.md",
+        "./commands/coverage-report.md",
+        "./commands/acceptance-validate.md"
+      ],
+      "agents": [
+        "./agents/qa-agent.md"
+      ],
+      "skills": [
+        "./skills/jest-testing-patterns",
+        "./skills/playwright-e2e-patterns"
+      ]
+    },
+    {
+      "name": "backend",
+      "source": "./agents/backend",
+      "description": "Backend Agent for creating API routes, performing DOL/OMS integration, building mock API responses, designing shared utility modules, and implementing Next.js Server Components",
+      "version": "1.0.0",
+      "author": {
+        "name": "Pandora Group",
+        "url": "https://github.com/shvee-pandora"
+      },
+      "homepage": "https://github.com/shvee-pandora/pnd-agents",
+      "repository": "https://github.com/shvee-pandora/pnd-agents",
+      "license": "MIT",
+      "keywords": [
+        "backend",
+        "api",
+        "nextjs",
+        "server-components",
+        "integration"
+      ],
+      "category": "development",
+      "strict": false,
+      "commands": [
+                "./commands/api-route-create.md",
+                "./commands/server-component-create.md",
+                "./commands/mock-api-create.md"
+      ],
+      "agents": [
+        "./agents/backend-agent.md"
+      ],
+      "skills": [
+        "./skills/nextjs-server-patterns",
+        "./skills/api-design-patterns"
+      ]
+    }
+  ]
+}
