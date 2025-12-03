@@ -12,6 +12,7 @@ from .command_runner import CommandRunner
 from .figma_parser import FigmaParser
 from .amplience_api import AmplienceAPI
 from .har_analyzer import HARAnalyzer
+from .registry import register_tools
 
 __all__ = [
     'FilesystemTool',
@@ -19,6 +20,7 @@ __all__ = [
     'FigmaParser',
     'AmplienceAPI',
     'HARAnalyzer',
+    'register_tools',
 ]
 
 __version__ = '1.0.0'
