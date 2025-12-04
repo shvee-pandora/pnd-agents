@@ -297,7 +297,8 @@ class FigmaReaderAgent:
         node_match = re.search(node_pattern, url)
         node_id = None
         if node_match:
-            node_id = node_match.group(1).replace("%3A", ":")
+            # Normalize node ID format: convert dashes and URL-encoded colons to colons
+            node_id = node_match.group(1).replace("%3A", ":").replace("-", ":")
         
         return file_key, node_id
     
@@ -725,7 +726,7 @@ class FigmaReaderAgent:
             node_id: The node ID to read.
             
         Returns:
-            Component metadata dictionary.
+            Component metadata dictionary or list of components for CANVAS/DOCUMENT nodes.
         """
         nodes_data = self._fetch_file_nodes(file_key, [node_id])
         
@@ -735,7 +736,30 @@ class FigmaReaderAgent:
         
         node_data = nodes[node_id]
         document = node_data.get("document", {})
+        node_type = document.get("type", "")
         
+        # Handle CANVAS (page) and DOCUMENT nodes by extracting their children
+        if node_type in ["CANVAS", "DOCUMENT"]:
+            components = []
+            self._find_components(document, components)
+            
+            # If no components found, try to parse frames as components
+            if not components:
+                for child in document.get("children", []):
+                    child_type = child.get("type", "")
+                    if child_type in ["FRAME", "COMPONENT", "COMPONENT_SET", "INSTANCE"]:
+                        metadata = self._parse_node(child)
+                        if metadata:
+                            components.append(metadata.to_dict())
+            
+            return {
+                "nodeName": document.get("name", ""),
+                "nodeId": node_id,
+                "nodeType": node_type,
+                "components": components,
+            }
+        
+        # For other node types, parse directly
         metadata = self._parse_node(document)
         if not metadata:
             raise ValueError(f"Could not parse node {node_id}")
