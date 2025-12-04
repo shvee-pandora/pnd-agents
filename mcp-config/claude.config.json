@@ -77,6 +77,18 @@
         "PYTHONPATH": "${workspaceFolder}",
         "AGENT_NAME": "backend"
       }
+    },
+    "commerce": {
+      "command": "python",
+      "args": ["-m", "pnd_agents.agents.commerce"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}",
+        "AGENT_NAME": "commerce",
+        "SFCC_OCAPI_INSTANCE": "${env:SFCC_OCAPI_INSTANCE}",
+        "SFCC_CLIENT_ID": "${env:SFCC_CLIENT_ID}",
+        "SFCC_SITE_ID": "${env:SFCC_SITE_ID}"
+      }
     }
   }
 }

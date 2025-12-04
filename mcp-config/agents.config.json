@@ -206,6 +206,33 @@
       ],
       "model": "sonnet",
       "priority": 2
+    },
+    {
+      "id": "commerce",
+      "name": "Commerce Agent",
+      "description": "Agentic commerce agent that fetches real products from Pandora e-commerce APIs, understands natural language shopping goals, filters products by price/material/category, and prepares cart-add metadata.",
+      "role": "specialist",
+      "capabilities": [
+        "product-search",
+        "goal-parsing",
+        "product-filtering",
+        "cart-preparation",
+        "price-filtering"
+      ],
+      "commands": [
+        "find-product-and-prepare-cart"
+      ],
+      "skills": [
+        "sfcc-ocapi",
+        "natural-language-parsing",
+        "product-matching",
+        "cart-operations"
+      ],
+      "tools": [
+        "commerce-api"
+      ],
+      "model": "sonnet",
+      "priority": 2
     }
   ],
   "tools": [
