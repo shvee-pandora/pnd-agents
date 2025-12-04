@@ -29,6 +29,7 @@ PG AI Squad is a comprehensive agent ecosystem designed to assist with building 
 | Performance | Specialist | Analyzes HAR files, suggests optimizations |
 | QA | Validator | Generates tests, validates acceptance criteria |
 | Backend | Specialist | Creates API routes, Server Components, mock APIs |
+| Commerce | Specialist | Agentic commerce - finds products, filters by criteria, prepares cart metadata |
 
 ## Quick Start
 
@@ -198,6 +199,53 @@ pnd-agents/
 └── .claude-plugin/            # Plugin marketplace config
     └── marketplace.json
 ```
+
+## Agentic Commerce POC
+
+The Commerce Agent enables AI-powered product discovery and cart preparation. It understands natural language shopping goals and returns product recommendations ready for cart addition.
+
+### Usage
+
+```python
+from agents.commerce_agent import find_product_and_prepare_cart
+
+# Find a product matching a shopping goal
+result = find_product_and_prepare_cart("silver bracelet under 700 DKK")
+print(result)
+# {
+#   "productId": "599114C00",
+#   "name": "Pandora Moments Silver Heart Clasp Snake Chain Bracelet",
+#   "price": 599,
+#   "currency": "DKK",
+#   "imageUrl": "https://...",
+#   "message": "Found Pandora Moments Silver Heart Clasp Snake Chain Bracelet (599 DKK) - Ready to add to cart."
+# }
+```
+
+### MCP Tool
+
+The commerce agent is registered as an MCP tool: `commerce_find_product_and_prepare_cart`
+
+Example prompts:
+- "Find a silver bracelet under 700 DKK"
+- "Heart charms under 400 DKK"
+- "Gold ring under 2000 EUR"
+
+### Environment Variables
+
+For live API access, set these environment variables:
+
+```bash
+export SFCC_OCAPI_INSTANCE="production-emea-pandora.demandware.net"
+export SFCC_CLIENT_ID="your-client-id"
+export SFCC_SITE_ID="en-GB"
+```
+
+The agent includes mock product data for POC testing when API access is unavailable.
+
+### Integration with pandora-ecom-web
+
+The Commerce Agent integrates with pandora-ecom-web via the `/api/agentic-commerce` endpoint and the `/ai-demo` page. See the pandora-ecom-web repository for frontend integration details.
 
 ## Documentation
 

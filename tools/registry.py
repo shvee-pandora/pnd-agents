@@ -19,6 +19,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from agents.figma_reader_agent import FigmaReaderAgent
+from agents.commerce_agent import CommerceAgent
 
 
 def register_tools(server: Server) -> None:
@@ -344,6 +345,27 @@ def register_tools(server: Server) -> None:
                     "required": ["file_path"]
                 }
             ),
+
+            # Commerce Agent Tools
+            types.Tool(
+                name="commerce_find_product_and_prepare_cart",
+                description="Find a product matching a natural language shopping goal and prepare cart-add metadata. Understands goals like 'silver bracelet under 700 DKK' or 'heart charms under 400 DKK'. Filters by price, material, and category. Returns product details ready for cart addition.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "goal": {
+                            "type": "string",
+                            "description": "Natural language shopping goal (e.g., 'silver bracelet under 700 DKK', 'heart charms under 400 DKK')"
+                        },
+                        "currency": {
+                            "type": "string",
+                            "description": "Optional currency override (DKK, GBP, EUR, USD). Defaults to currency detected in goal or DKK.",
+                            "enum": ["DKK", "GBP", "EUR", "USD"]
+                        }
+                    },
+                    "required": ["goal"]
+                }
+            ),
         ]
 
     # Register call_tool handler
@@ -473,6 +495,20 @@ def register_tools(server: Server) -> None:
                 result = har_analyzer.get_performance_metrics(arguments["file_path"])
                 import json
                 return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+
+            # Commerce Agent tools
+            elif name == "commerce_find_product_and_prepare_cart":
+                import json
+                try:
+                    commerce_agent = CommerceAgent()
+                    result = commerce_agent.find_product_and_prepare_cart(
+                        arguments["goal"],
+                        arguments.get("currency")
+                    )
+                    commerce_agent.close()
+                    return [types.TextContent(type="text", text=json.dumps(result.to_dict(), indent=2))]
+                except Exception as ce:
+                    return [types.TextContent(type="text", text=f"Commerce Agent Error: {str(ce)}")]
 
             else:
                 raise ValueError(f"Unknown tool: {name}")
