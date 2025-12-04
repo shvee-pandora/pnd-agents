@@ -10,6 +10,7 @@ PG AI Squad is a comprehensive agent ecosystem designed to assist with building 
 
 - **Task Orchestration**: Scrum Master Agent that decomposes tasks and coordinates other agents
 - **Frontend Development**: React/Next.js component generation following Pandora UI Toolkit patterns
+- **Figma Integration**: Extract component metadata directly from Figma designs via API
 - **Amplience CMS**: Content type creation, JSON schema generation, and payload examples
 - **Code Review**: Automated validation against Pandora coding standards
 - **Performance Analysis**: HAR file analysis and Core Web Vitals optimization
@@ -22,6 +23,7 @@ PG AI Squad is a comprehensive agent ecosystem designed to assist with building 
 |-------|------|-------------|
 | Task Manager | Orchestrator | Decomposes tasks, assigns to agents, merges outputs |
 | Frontend Engineer | Specialist | Generates React components, Storybook stories, validates accessibility |
+| Figma Reader | Specialist | Extracts component metadata, design tokens, variants from Figma |
 | Amplience CMS | Specialist | Creates content types, schemas, and example payloads |
 | Code Review | Validator | Validates code against Pandora standards |
 | Performance | Specialist | Analyzes HAR files, suggests optimizations |
@@ -33,40 +35,114 @@ PG AI Squad is a comprehensive agent ecosystem designed to assist with building 
 ### Prerequisites
 
 - Python 3.10+
-- Node.js 20+
-- Claude Desktop (for MCP integration)
+- Claude Desktop or Claude Code (for MCP integration)
 
-### Installation
+### One-Command Installation
 
 ```bash
-# Clone the repository
+# Clone and install
 git clone https://github.com/shvee-pandora/pnd-agents.git
 cd pnd-agents
+pip install -e .
 
-# Install Python dependencies
-pip install -r requirements.txt
-
-# Configure Claude Desktop
-cp mcp-config/claude.config.json ~/.config/claude/mcp.json
+# Run the setup wizard
+pnd-agents setup
 ```
 
-### Configuration
+The setup wizard will:
+1. Let you choose which agents to enable
+2. Configure environment variables (Figma token, Amplience settings)
+3. Automatically update your Claude configuration
 
-Set the following environment variables:
+### Installation Options
 
 ```bash
+# Interactive setup (recommended)
+pnd-agents setup
+
+# Use preset configurations
+pnd-agents setup --preset default    # Recommended agents
+pnd-agents setup --preset full       # All agents enabled
+pnd-agents setup --preset minimal    # Only essential agents
+
+# Skip environment variable prompts
+pnd-agents setup --skip-env
+
+# Auto-write config without prompts
+pnd-agents setup --auto --preset default
+```
+
+### Reconfigure Anytime
+
+```bash
+# Change which agents are enabled
+pnd-agents config --agents
+
+# Update environment variables
+pnd-agents config --env
+
+# View current configuration
+pnd-agents config --show
+
+# Check installation status
+pnd-agents status
+
+# Remove from Claude config
+pnd-agents uninstall
+```
+
+### Manual Configuration (Alternative)
+
+If you prefer manual setup, set these environment variables:
+
+```bash
+export FIGMA_ACCESS_TOKEN="your-figma-token"
 export AMPLIENCE_HUB_NAME="pandoragroup"
 export AMPLIENCE_BASE_URL="https://cdn.content.amplience.net"
-export FIGMA_ACCESS_TOKEN="your-figma-token"
+```
+
+Then add to your Claude config (`~/.claude.json`):
+
+```json
+{
+  "mcpServers": {
+    "pnd-agents": {
+      "command": "python",
+      "args": ["/path/to/pnd-agents/main.py"],
+      "env": {
+        "FIGMA_ACCESS_TOKEN": "${env:FIGMA_ACCESS_TOKEN}"
+      }
+    }
+  }
+}
 ```
 
 ### Usage
 
-#### With Claude Desktop
+#### With Claude Desktop / Claude Code
 
-1. Open Claude Desktop
-2. The PG AI Squad agents will be available as MCP plugins
-3. Start a conversation and ask for help with development tasks
+1. Run `pnd-agents setup` to configure
+2. Restart Claude Desktop/Code
+3. Start a conversation and the agents will be available
+4. Try: "Use the Task Manager to help me create a component from Figma"
+
+#### Figma Workflow (Design-First)
+
+For best results when creating components from Figma:
+
+1. Provide a Figma URL in your task
+2. The Task Manager will automatically:
+   - Call the Figma Reader Agent first
+   - Extract component metadata, design tokens, variants
+   - Pass the data to the Frontend Engineer Agent
+   - Generate React components matching the design
+   - Run Code Review and QA agents
+
+Example prompt:
+```
+Create a Stories carousel component from this Figma design:
+https://www.figma.com/design/ABC123/My-Design?node-id=123-456
+```
 
 #### Programmatic Usage
 

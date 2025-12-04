@@ -6,204 +6,324 @@ This guide provides detailed instructions for setting up the PG AI Squad agent s
 
 ### Required Software
 
-- **Python 3.10+** - For running agent tools
-- **Node.js 20+** - For running development commands
-- **pnpm** - Package manager for Node.js projects
-- **Claude Desktop** - For MCP integration (optional)
+- **Python 3.10+** - For running agent tools and the setup CLI
+- **Claude Desktop or Claude Code** - For MCP integration
 
 ### Recommended Tools
 
 - **VS Code** - With Python and TypeScript extensions
 - **Git** - For version control
 
-## Installation
+## Quick Installation (Recommended)
 
-### 1. Clone the Repository
+The fastest way to get started is using the setup CLI:
+
+```bash
+# Clone the repository
+git clone https://github.com/shvee-pandora/pnd-agents.git
+cd pnd-agents
+
+# Install the package
+pip install -e .
+
+# Run the setup wizard
+pnd-agents setup
+```
+
+The setup wizard will guide you through:
+1. Selecting which agents to enable
+2. Configuring environment variables (Figma token, Amplience settings)
+3. Updating your Claude configuration automatically
+
+## Installation Options
+
+### Interactive Setup (Default)
+
+```bash
+pnd-agents setup
+```
+
+This launches an interactive wizard that lets you:
+- Choose agents individually with Y/n prompts
+- Enter environment variables securely
+- Review and confirm the Claude config update
+
+### Preset Configurations
+
+For faster setup, use presets:
+
+```bash
+# Default - Recommended agents for most workflows
+pnd-agents setup --preset default
+
+# Full - Enable all agents
+pnd-agents setup --preset full
+
+# Minimal - Only essential agents (Task Manager, Frontend, Code Review)
+pnd-agents setup --preset minimal
+```
+
+### Non-Interactive Setup
+
+For CI/CD or scripted installations:
+
+```bash
+# Auto-write config without prompts
+pnd-agents setup --auto --preset default
+
+# Skip environment variable prompts
+pnd-agents setup --skip-env --preset default
+```
+
+## Agent Selection
+
+The setup wizard lets you choose which agents to enable:
+
+| Agent | Default | Description |
+|-------|---------|-------------|
+| Task Manager | Yes | Orchestrates tasks, routes to other agents |
+| Frontend Engineer | Yes | React/Next.js components, Storybook |
+| Figma Reader | Yes | Extracts design metadata from Figma API |
+| Code Review | Yes | Validates code against standards |
+| QA | Yes | Generates tests, validates acceptance criteria |
+| Amplience CMS | No | Content types, JSON schemas |
+| Performance | No | HAR analysis, Core Web Vitals |
+| Backend | No | API routes, Server Components |
+
+### Changing Agent Selection Later
+
+```bash
+# Reconfigure which agents are enabled
+pnd-agents config --agents
+
+# View current configuration
+pnd-agents config --show
+```
+
+## Environment Variables
+
+### Required for Figma Integration
+
+```bash
+FIGMA_ACCESS_TOKEN=your-figma-personal-access-token
+```
+
+To get a Figma token:
+1. Go to Figma Settings > Account
+2. Scroll to "Personal access tokens"
+3. Generate a new token with read access
+
+### Required for Amplience Integration
+
+```bash
+AMPLIENCE_HUB_NAME=pandoragroup
+AMPLIENCE_BASE_URL=https://cdn.content.amplience.net
+```
+
+### Configuring Environment Variables
+
+The setup wizard will prompt for these values. You can also:
+
+```bash
+# Update environment variables later
+pnd-agents config --env
+
+# Or create a .env file manually
+cat > .env << EOF
+FIGMA_ACCESS_TOKEN=your-token
+AMPLIENCE_HUB_NAME=pandoragroup
+AMPLIENCE_BASE_URL=https://cdn.content.amplience.net
+EOF
+```
+
+## Manual Configuration (Alternative)
+
+If you prefer manual setup instead of the CLI:
+
+### 1. Clone and Install
 
 ```bash
 git clone https://github.com/shvee-pandora/pnd-agents.git
 cd pnd-agents
+pip install -e .
 ```
 
-### 2. Set Up Python Environment
+### 2. Create .env File
 
 ```bash
-# Create virtual environment
-python -m venv venv
-
-# Activate virtual environment
-# On macOS/Linux:
-source venv/bin/activate
-# On Windows:
-.\venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-### 3. Configure Environment Variables
-
-Create a `.env` file in the project root:
-
-```bash
-# Amplience Configuration
+cat > .env << EOF
+FIGMA_ACCESS_TOKEN=your-figma-token
 AMPLIENCE_HUB_NAME=pandoragroup
 AMPLIENCE_BASE_URL=https://cdn.content.amplience.net
-AMPLIENCE_LOCALE=en
-AMPLIENCE_CACHE_TTL=300000
-
-# Figma Configuration (optional)
-FIGMA_ACCESS_TOKEN=your-figma-personal-access-token
-
-# Development
-NODE_ENV=development
+EOF
 ```
 
-### 4. Configure Claude Desktop (Optional)
+### 3. Update Claude Config
 
-To use the agents as Claude Desktop plugins:
-
-```bash
-# Copy MCP configuration
-mkdir -p ~/.config/claude
-cp mcp-config/claude.config.json ~/.config/claude/mcp.json
-
-# Edit the configuration to set your workspace folder
-# Replace ${workspaceFolder} with the actual path
-```
-
-Example `~/.config/claude/mcp.json`:
+Add to `~/.claude.json` (Claude Code) or `~/Library/Application Support/Claude/claude_desktop_config.json` (Claude Desktop on macOS):
 
 ```json
 {
   "mcpServers": {
-    "pg-ai-squad": {
-      "command": "python",
-      "args": ["-m", "pnd_agents.server"],
-      "cwd": "/path/to/pnd-agents",
+    "pnd-agents": {
+      "command": "/usr/bin/python3",
+      "args": ["/path/to/pnd-agents/main.py"],
       "env": {
         "PYTHONPATH": "/path/to/pnd-agents",
-        "AMPLIENCE_HUB_NAME": "pandoragroup"
+        "FIGMA_ACCESS_TOKEN": "your-figma-token",
+        "AMPLIENCE_HUB_NAME": "pandoragroup",
+        "AMPLIENCE_BASE_URL": "https://cdn.content.amplience.net"
       }
     }
   }
 }
 ```
 
-## Configuration
-
-### Agent Configuration
-
-The `mcp-config/agents.config.json` file defines all agents and their capabilities:
-
-```json
-{
-  "agents": [
-    {
-      "id": "task-manager",
-      "name": "Task Manager Agent",
-      "role": "orchestrator",
-      "capabilities": ["task-decomposition", "agent-routing"],
-      "commands": ["task-decompose", "task-assign", "task-merge"]
-    }
-  ]
-}
-```
-
-### Tool Configuration
-
-Each tool can be configured independently:
-
-#### Filesystem Tool
-
-```python
-from tools import FilesystemTool
-
-# Restrict operations to a specific directory
-fs = FilesystemTool(base_path='/path/to/project')
-```
-
-#### Command Runner
-
-```python
-from tools import CommandRunner
-
-# Configure working directory and timeout
-runner = CommandRunner(
-    working_dir='/path/to/project',
-    timeout=300,  # 5 minutes
-    env={'NODE_ENV': 'development'}
-)
-```
-
-#### Amplience API
-
-```python
-from tools import AmplienceAPI, AmplienceConfig
-
-# Custom configuration
-config = AmplienceConfig(
-    hub_name='pandoragroup',
-    base_url='https://cdn.content.amplience.net',
-    locale='en',
-    cache_ttl=300000
-)
-api = AmplienceAPI(config)
-```
-
 ## Verification
 
-### Test the Installation
+### Check Installation Status
 
 ```bash
-# Test Python tools
-python -c "from tools import FilesystemTool; print('Tools loaded successfully')"
-
-# Test command runner
-python -c "from tools import CommandRunner; r = CommandRunner(); print(r.run('echo Hello').stdout)"
+pnd-agents status
 ```
 
-### Test Agent Commands
+This shows:
+- Installation path
+- Whether main.py exists
+- Agent configuration status
+- Claude config status
+
+### Test the MCP Server
 
 ```bash
-# List available agents
-cat mcp-config/agents.config.json | jq '.agents[].name'
-
-# View agent commands
-cat agents/task_manager/commands/task-decompose.md
+# Start the server manually to check for errors
+python main.py
 ```
+
+The server should start without errors and wait for MCP client connections.
+
+### Test in Claude
+
+1. Restart Claude Desktop/Code after setup
+2. Start a new conversation
+3. The pnd-agents tools should be available
+4. Try: "List the available pnd-agents tools"
+
+## CLI Reference
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `pnd-agents setup` | Run the setup wizard |
+| `pnd-agents config --agents` | Reconfigure agent selection |
+| `pnd-agents config --env` | Reconfigure environment variables |
+| `pnd-agents config --show` | Show current configuration |
+| `pnd-agents status` | Show installation status |
+| `pnd-agents uninstall` | Remove from Claude config |
+
+### Setup Options
+
+| Option | Description |
+|--------|-------------|
+| `--preset default` | Use default agent selection |
+| `--preset full` | Enable all agents |
+| `--preset minimal` | Enable only essential agents |
+| `--skip-env` | Skip environment variable prompts |
+| `--auto` | Auto-write config without prompts |
 
 ## Troubleshooting
 
 ### Common Issues
 
-#### Python Import Errors
+#### "pnd-agents: command not found"
+
+The CLI wasn't installed properly. Try:
 
 ```bash
-# Ensure PYTHONPATH is set
-export PYTHONPATH=/path/to/pnd-agents:$PYTHONPATH
+pip install -e .
+# Or check if it's in your PATH
+python -m pnd_agents.cli setup
 ```
 
 #### Claude Desktop Not Finding Agents
 
-1. Check that `~/.config/claude/mcp.json` exists
-2. Verify the paths in the configuration are absolute
+1. Check that the config file exists:
+   - macOS: `~/.claude.json` or `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+   - Linux: `~/.claude.json`
+
+2. Verify paths are absolute (not relative)
+
 3. Restart Claude Desktop after configuration changes
 
-#### Amplience API Errors
+#### Figma API Errors
 
-1. Verify `AMPLIENCE_HUB_NAME` is correct
-2. Check network connectivity to Amplience CDN
-3. For preview mode, ensure VSE parameter is set
+1. Verify your `FIGMA_ACCESS_TOKEN` is valid
+2. Check the token has read access to the file
+3. Ensure the Figma URL format is correct
+
+#### Python Import Errors
+
+```bash
+# Ensure PYTHONPATH includes the project
+export PYTHONPATH=/path/to/pnd-agents:$PYTHONPATH
+```
 
 ### Getting Help
 
-- Check the [Architecture](ARCHITECTURE.md) document for system design
-- Review [Examples](examples/) for usage patterns
-- Open an issue on GitHub for bugs or feature requests
+```bash
+# View CLI help
+pnd-agents --help
+pnd-agents setup --help
+
+# Check status
+pnd-agents status
+```
+
+## Updating
+
+To update pnd-agents:
+
+```bash
+cd pnd-agents
+git pull origin main
+pip install -e .
+
+# Re-run setup if there are new agents or config changes
+pnd-agents setup
+```
+
+## Uninstalling
+
+```bash
+# Remove from Claude config
+pnd-agents uninstall
+
+# Optionally remove the directory
+rm -rf /path/to/pnd-agents
+```
 
 ## Next Steps
 
 1. Read the [Architecture](ARCHITECTURE.md) document
 2. Try the [Examples](examples/)
-3. Start using agents with Claude Desktop or programmatically
+3. Start using agents with Claude Desktop or Claude Code
+
+### Example Workflows
+
+**Create a component from Figma:**
+```
+Create a Stories carousel component from this Figma design:
+https://www.figma.com/design/ABC123/My-Design?node-id=123-456
+```
+
+**Review code against standards:**
+```
+Review the code in src/components/Header for Pandora coding standards
+```
+
+**Generate tests:**
+```
+Generate unit tests for the PageCover component
+```
