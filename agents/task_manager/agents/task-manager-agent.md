@@ -21,6 +21,7 @@ Elite task orchestrator and scrum master focused on decomposing complex developm
 - Create clear acceptance criteria for each subtask
 
 ### Agent Routing & Coordination
+- **Figma Reader Agent**: Extract component metadata, design tokens, variants from Figma designs
 - **Frontend Engineer Agent**: React/Next.js components, Storybook stories, styling, accessibility
 - **Amplience CMS Agent**: Content types, JSON schemas, content scaffolding, preview payloads
 - **Code Review Agent**: Standards validation, architecture compliance, PR comments
@@ -42,6 +43,92 @@ Elite task orchestrator and scrum master focused on decomposing complex developm
 - Progress tracking and status reporting
 - Output collection and merging from multiple agents
 - Final deliverable assembly and validation
+
+### Multi-Agent Workflow Modes
+
+The Task Manager supports predefined workflow modes that automatically coordinate multiple agents based on task type. Workflows are configured in `config/agent-workflow.json`.
+
+#### Figma Workflow (Triggered by Figma URL or "figma" keyword)
+
+When a task contains a Figma URL or the word "figma", the Task Manager automatically executes this workflow:
+
+```
+Task Manager Agent
+    |
+    v
+1. Create Feature Branch
+    - Name: feature/<ticket-id>-<component-name>
+    |
+    v
+2. Figma Reader Agent
+    - Input: Figma URL
+    - Output: Component metadata JSON
+    - Saves context to /tmp/agent-context.json
+    |
+    v
+3. Frontend Engineer Agent
+    - Input: Figma Reader output (component metadata)
+    - Output: React/Next.js components + Storybook stories
+    |
+    v
+4. Code Review Agent
+    - Input: Generated code
+    - Output: Review comments, auto-fixes applied
+    |
+    v
+5. QA Agent
+    - Input: Generated components
+    - Output: Unit tests, integration tests
+    |
+    v
+6. Performance Agent (Optional)
+    - Input: Preview build
+    - Output: Performance metrics, optimization suggestions
+    |
+    v
+7. Final Status
+    - Commit message summary
+    - PR ready for review
+```
+
+#### Workflow Detection Logic
+
+The Task Manager detects workflow type by analyzing the task description:
+
+1. **Figma Workflow**: Task contains:
+   - URL matching `figma.com/file/` or `figma.com/design/`
+   - Keywords: "figma", "design", "component from figma"
+
+2. **Amplience Workflow**: Task contains:
+   - Keywords: "content type", "amplience", "cms schema"
+
+3. **Performance Workflow**: Task contains:
+   - Keywords: "har", "performance", "optimize", "slow"
+
+4. **Default Workflow**: No specific triggers detected
+   - Manual agent routing based on task analysis
+
+#### Context Passing Between Agents
+
+Intermediate outputs are stored in `/tmp/agent-context.json`:
+
+```json
+{
+  "workflow": "figma",
+  "ticketId": "INS-2509",
+  "branch": "feature/INS-2509-hero-banner",
+  "stages": {
+    "figma-reader": {
+      "status": "completed",
+      "output": { /* component metadata */ }
+    },
+    "frontend": {
+      "status": "in-progress",
+      "input": { /* from figma-reader */ }
+    }
+  }
+}
+```
 
 ### Quality Assurance
 - Ensure all code follows Pandora coding standards

@@ -14,6 +14,12 @@ from .figma_parser import FigmaParser
 from .amplience_api import AmplienceAPI
 from .har_analyzer import HARAnalyzer
 
+# Import Figma Reader Agent (for API-based Figma reading)
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from agents.figma_reader_agent import FigmaReaderAgent
+
 
 def register_tools(server: Server) -> None:
     """
@@ -251,6 +257,26 @@ def register_tools(server: Server) -> None:
                 }
             ),
 
+            # Figma Reader Agent Tools (API-based)
+            types.Tool(
+                name="figma_read",
+                description="Read a Figma design via the Figma API and extract component metadata, design tokens, variants, and assets. Returns normalized JSON for the Frontend Engineer Agent. Requires FIGMA_ACCESS_TOKEN environment variable.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "url_or_file_key": {
+                            "type": "string",
+                            "description": "Figma file URL (e.g., https://www.figma.com/file/ABC123/Design), node URL with node-id parameter, or just the file key"
+                        },
+                        "node_id": {
+                            "type": "string",
+                            "description": "Optional specific node ID to read (if not included in URL)"
+                        }
+                    },
+                    "required": ["url_or_file_key"]
+                }
+            ),
+
             # Amplience API Tools
             types.Tool(
                 name="amplience_fetch_by_key",
@@ -405,6 +431,20 @@ def register_tools(server: Server) -> None:
                 result = figma_parser.extract_colors(arguments["file_path"])
                 import json
                 return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+
+            # Figma Reader Agent tools (API-based)
+            elif name == "figma_read":
+                import json
+                try:
+                    figma_reader = FigmaReaderAgent()
+                    result = figma_reader.get_component_for_frontend_agent(
+                        arguments["url_or_file_key"],
+                        arguments.get("node_id")
+                    )
+                    figma_reader.close()
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except ValueError as ve:
+                    return [types.TextContent(type="text", text=f"Figma Reader Error: {str(ve)}")]
 
             # Amplience API tools
             elif name == "amplience_fetch_by_key":

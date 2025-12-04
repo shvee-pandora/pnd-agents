@@ -1,0 +1,261 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "PG AI Squad Agent Workflow Configuration",
+  "version": "1.0.0",
+  "workflows": {
+    "figma": {
+      "name": "Figma to Component Workflow",
+      "description": "Converts Figma designs into React components with tests and code review",
+      "triggers": {
+        "urlPatterns": [
+          "figma.com/file/",
+          "figma.com/design/"
+        ],
+        "keywords": [
+          "figma",
+          "design",
+          "component from figma",
+          "from design"
+        ]
+      },
+      "agents": [
+        "figma-reader",
+        "frontend",
+        "code-review",
+        "qa"
+      ],
+      "optionalAgents": [
+        "performance"
+      ],
+      "stages": [
+        {
+          "id": "branch",
+          "name": "Create Feature Branch",
+          "action": "git_checkout",
+          "branchPattern": "feature/{ticket-id}-{component-name}"
+        },
+        {
+          "id": "figma-reader",
+          "name": "Read Figma Design",
+          "agent": "figma-reader",
+          "command": "figma-read",
+          "inputFrom": "task",
+          "outputTo": "context"
+        },
+        {
+          "id": "frontend",
+          "name": "Generate Components",
+          "agent": "frontend",
+          "commands": [
+            "component-generate",
+            "story-create"
+          ],
+          "inputFrom": "figma-reader",
+          "outputTo": "context"
+        },
+        {
+          "id": "code-review",
+          "name": "Review Generated Code",
+          "agent": "code-review",
+          "commands": [
+            "review-code",
+            "validate-standards"
+          ],
+          "inputFrom": "frontend",
+          "autoFix": true
+        },
+        {
+          "id": "qa",
+          "name": "Generate Tests",
+          "agent": "qa",
+          "commands": [
+            "test-generate"
+          ],
+          "inputFrom": "frontend"
+        },
+        {
+          "id": "performance",
+          "name": "Performance Analysis",
+          "agent": "performance",
+          "optional": true,
+          "commands": [
+            "performance-report"
+          ],
+          "condition": "preview_build_available"
+        },
+        {
+          "id": "finalize",
+          "name": "Finalize and Commit",
+          "action": "git_commit",
+          "messageTemplate": "feat({component-name}): Add {component-name} component from Figma\n\n- Generated React component\n- Added Storybook story\n- Added unit tests\n- Passed code review"
+        }
+      ]
+    },
+    "amplience": {
+      "name": "Amplience Content Type Workflow",
+      "description": "Creates Amplience content types with schemas and preview payloads",
+      "triggers": {
+        "keywords": [
+          "content type",
+          "amplience",
+          "cms schema",
+          "content model"
+        ]
+      },
+      "agents": [
+        "amplience",
+        "code-review"
+      ],
+      "stages": [
+        {
+          "id": "branch",
+          "name": "Create Feature Branch",
+          "action": "git_checkout",
+          "branchPattern": "feature/{ticket-id}-{content-type-name}"
+        },
+        {
+          "id": "amplience",
+          "name": "Create Content Type",
+          "agent": "amplience",
+          "commands": [
+            "content-type-create",
+            "schema-generate",
+            "payload-example"
+          ],
+          "inputFrom": "task",
+          "outputTo": "context"
+        },
+        {
+          "id": "code-review",
+          "name": "Review Schema",
+          "agent": "code-review",
+          "commands": [
+            "validate-standards"
+          ],
+          "inputFrom": "amplience"
+        },
+        {
+          "id": "finalize",
+          "name": "Finalize and Commit",
+          "action": "git_commit",
+          "messageTemplate": "feat(amplience): Add {content-type-name} content type\n\n- Created JSON schema\n- Added example payload\n- Validated against standards"
+        }
+      ]
+    },
+    "performance": {
+      "name": "Performance Optimization Workflow",
+      "description": "Analyzes HAR files and suggests performance optimizations",
+      "triggers": {
+        "keywords": [
+          "har",
+          "performance",
+          "optimize",
+          "slow",
+          "lighthouse"
+        ]
+      },
+      "agents": [
+        "performance",
+        "frontend",
+        "code-review"
+      ],
+      "stages": [
+        {
+          "id": "performance",
+          "name": "Analyze Performance",
+          "agent": "performance",
+          "commands": [
+            "har-analyze",
+            "performance-report",
+            "optimization-suggest"
+          ],
+          "inputFrom": "task",
+          "outputTo": "context"
+        },
+        {
+          "id": "frontend",
+          "name": "Implement Optimizations",
+          "agent": "frontend",
+          "inputFrom": "performance",
+          "condition": "optimizations_identified"
+        },
+        {
+          "id": "code-review",
+          "name": "Review Changes",
+          "agent": "code-review",
+          "commands": [
+            "review-code"
+          ],
+          "inputFrom": "frontend"
+        }
+      ]
+    },
+    "testing": {
+      "name": "Test Generation Workflow",
+      "description": "Generates comprehensive tests for existing components",
+      "triggers": {
+        "keywords": [
+          "test",
+          "coverage",
+          "unit test",
+          "integration test",
+          "playwright"
+        ]
+      },
+      "agents": [
+        "qa",
+        "code-review"
+      ],
+      "stages": [
+        {
+          "id": "qa",
+          "name": "Generate Tests",
+          "agent": "qa",
+          "commands": [
+            "test-generate",
+            "coverage-report"
+          ],
+          "inputFrom": "task",
+          "outputTo": "context"
+        },
+        {
+          "id": "code-review",
+          "name": "Review Tests",
+          "agent": "code-review",
+          "commands": [
+            "review-code"
+          ],
+          "inputFrom": "qa"
+        }
+      ]
+    }
+  },
+  "contextStorage": {
+    "path": "/tmp/agent-context.json",
+    "format": "json",
+    "schema": {
+      "workflow": "string",
+      "ticketId": "string",
+      "branch": "string",
+      "startedAt": "datetime",
+      "stages": {
+        "type": "object",
+        "additionalProperties": {
+          "status": "pending|in-progress|completed|failed",
+          "startedAt": "datetime",
+          "completedAt": "datetime",
+          "input": "object",
+          "output": "object",
+          "error": "string"
+        }
+      }
+    }
+  },
+  "defaults": {
+    "branchPrefix": "feature/",
+    "autoCommit": true,
+    "autoFix": true,
+    "continueOnError": false,
+    "maxRetries": 2
+  }
+}
