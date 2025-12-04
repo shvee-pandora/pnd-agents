@@ -1,3 +1,6 @@
 .vscode
 __pycache__
 .DSStore
+lib
+venv
+
