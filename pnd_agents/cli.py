@@ -83,6 +83,12 @@ AGENTS = {
         "role": "specialist",
         "default": True,
     },
+    "broken-experience-detector": {
+        "name": "Broken Experience Detector Agent",
+        "description": "Scan URLs for performance, accessibility, SEO, and UX issues",
+        "role": "specialist",
+        "default": True,
+    },
 }
 
 # Environment variables
@@ -255,7 +261,7 @@ def configure_env_vars(selected_agents: dict[str, bool]) -> dict[str, str]:
         print(f"      {var_info['description']}")
         
         value = prompt_input(
-            f"      Value",
+            "      Value",
             default=current_value,
             sensitive=var_info["sensitive"]
         )
@@ -581,6 +587,56 @@ def cmd_status(args):
     return 0
 
 
+def cmd_scan(args):
+    """Scan a URL for broken experiences."""
+    import asyncio
+    import sys
+    
+    # Add parent directory to path for imports
+    sys.path.insert(0, str(get_pnd_agents_path()))
+    
+    from agents.broken_experience_detector_agent import BrokenExperienceDetectorAgent
+    
+    url = args.url
+    output_format = args.format
+    
+    print(color(f"\nScanning: {url}", Colors.CYAN))
+    print(color("This may take 30-60 seconds...\n", Colors.YELLOW))
+    
+    try:
+        agent = BrokenExperienceDetectorAgent(headless=True)
+        report = asyncio.run(agent.scan_site(url))
+        
+        if output_format == "json":
+            import json
+            print(json.dumps(report.to_dict(), indent=2))
+        elif output_format == "markdown":
+            print(report.to_markdown())
+        else:  # both
+            print(color("=" * 60, Colors.CYAN))
+            print(color("MARKDOWN REPORT", Colors.BOLD))
+            print(color("=" * 60, Colors.CYAN))
+            print(report.to_markdown())
+            print(color("\n" + "=" * 60, Colors.CYAN))
+            print(color("JSON REPORT", Colors.BOLD))
+            print(color("=" * 60, Colors.CYAN))
+            import json
+            print(json.dumps(report.to_dict(), indent=2))
+        
+        # Print summary
+        print(color(f"\n{'=' * 60}", Colors.CYAN))
+        print(color(f"Scan Complete! Score: {report.score}/100", Colors.GREEN if report.score >= 70 else Colors.YELLOW if report.score >= 50 else Colors.RED))
+        print(color(f"{'=' * 60}", Colors.CYAN))
+        
+        return 0
+    except Exception as e:
+        print(color(f"\nError scanning URL: {e}", Colors.RED))
+        if os.environ.get("DEBUG"):
+            import traceback
+            traceback.print_exc()
+        return 1
+
+
 def cmd_uninstall(args):
     """Remove pnd-agents configuration."""
     print(color("\nUninstall PND Agents Configuration", Colors.BOLD))
@@ -629,6 +685,7 @@ Examples:
   pnd-agents config --show      Show current configuration
   pnd-agents status             Show installation status
   pnd-agents uninstall          Remove from Claude config
+  pnd-agents scan <url>         Scan URL for broken experiences
         """
     )
     
@@ -679,6 +736,20 @@ Examples:
     # Uninstall command
     uninstall_parser = subparsers.add_parser("uninstall", help="Remove from Claude config")
     uninstall_parser.set_defaults(func=cmd_uninstall)
+    
+    # Scan command
+    scan_parser = subparsers.add_parser("scan", help="Scan a URL for broken experiences")
+    scan_parser.add_argument(
+        "url",
+        help="URL to scan (e.g., 'https://us.pandora.net', 'http://localhost:3000')"
+    )
+    scan_parser.add_argument(
+        "--format",
+        choices=["json", "markdown", "both"],
+        default="both",
+        help="Output format (default: both)"
+    )
+    scan_parser.set_defaults(func=cmd_scan)
     
     args = parser.parse_args()
     
