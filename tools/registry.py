@@ -512,12 +512,12 @@ def register_tools(server: Server) -> None:
             elif name == "har_parse_file":
                 result = har_analyzer.parse_file(arguments["file_path"])
                 import json
-                return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                return [types.TextContent(type="text", text=json.dumps(result.to_dict(), indent=2))]
 
             elif name == "har_get_performance_metrics":
                 result = har_analyzer.get_performance_metrics(arguments["file_path"])
                 import json
-                return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                return [types.TextContent(type="text", text=json.dumps(result.to_dict(), indent=2))]
 
             # Commerce Agent tools
             elif name == "commerce_find_product_and_prepare_cart":
