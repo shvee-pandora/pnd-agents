@@ -52,6 +52,19 @@ class TimingBreakdown:
             self.blocked + self.dns + self.connect +
             self.ssl + self.send + self.wait + self.receive
         )
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to JSON-serializable dictionary."""
+        return {
+            "blocked": self.blocked,
+            "dns": self.dns,
+            "connect": self.connect,
+            "ssl": self.ssl,
+            "send": self.send,
+            "wait": self.wait,
+            "receive": self.receive,
+            "total": self.total
+        }
 
 
 @dataclass
@@ -84,6 +97,25 @@ class RequestEntry:
         """Extract domain from URL."""
         from urllib.parse import urlparse
         return urlparse(self.url).netloc
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to JSON-serializable dictionary."""
+        return {
+            "url": self.url,
+            "method": self.method,
+            "status": self.status,
+            "resource_type": self.resource_type.value,
+            "size": self.size,
+            "time": self.time,
+            "timings": self.timings.to_dict(),
+            "mime_type": self.mime_type,
+            "is_cached": self.is_cached,
+            "is_compressed": self.is_compressed,
+            "compression_ratio": self.compression_ratio,
+            "is_slow": self.is_slow,
+            "is_large": self.is_large,
+            "domain": self.domain
+        }
 
 
 @dataclass
@@ -102,6 +134,16 @@ class ResourceMetrics:
     def avg_time(self) -> float:
         """Average time in ms."""
         return self.total_time / self.count if self.count > 0 else 0
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to JSON-serializable dictionary."""
+        return {
+            "count": self.count,
+            "total_size": self.total_size,
+            "total_time": self.total_time,
+            "avg_size": self.avg_size,
+            "avg_time": self.avg_time
+        }
 
 
 @dataclass
@@ -142,6 +184,19 @@ class PerformanceSummary:
         elif self.total_requests <= self.REQUEST_TARGET * 1.5:
             return PerformanceStatus.NEEDS_IMPROVEMENT
         return PerformanceStatus.POOR
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to JSON-serializable dictionary."""
+        return {
+            "total_requests": self.total_requests,
+            "total_size": self.total_size,
+            "total_time": self.total_time,
+            "dom_content_loaded": self.dom_content_loaded,
+            "on_load": self.on_load,
+            "ttfb_status": self.ttfb_status.value,
+            "size_status": self.size_status.value,
+            "request_count_status": self.request_count_status.value
+        }
 
 
 @dataclass
@@ -154,6 +209,18 @@ class Recommendation:
     category: str  # images, javascript, css, caching, network
     affected_urls: List[str] = field(default_factory=list)
     expected_savings: str = ""
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to JSON-serializable dictionary."""
+        return {
+            "title": self.title,
+            "description": self.description,
+            "impact": self.impact,
+            "effort": self.effort,
+            "category": self.category,
+            "affected_urls": self.affected_urls,
+            "expected_savings": self.expected_savings
+        }
 
 
 @dataclass
@@ -167,6 +234,25 @@ class HARAnalysisReport:
     large_resources: List[RequestEntry]
     third_party: Dict[str, ResourceMetrics]
     recommendations: List[Recommendation]
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to JSON-serializable dictionary."""
+        return {
+            "url": self.url,
+            "timestamp": self.timestamp,
+            "summary": self.summary.to_dict(),
+            "by_type": {
+                resource_type.value: metrics.to_dict()
+                for resource_type, metrics in self.by_type.items()
+            },
+            "slow_requests": [req.to_dict() for req in self.slow_requests],
+            "large_resources": [res.to_dict() for res in self.large_resources],
+            "third_party": {
+                domain: metrics.to_dict()
+                for domain, metrics in self.third_party.items()
+            },
+            "recommendations": [rec.to_dict() for rec in self.recommendations]
+        }
 
 
 class HARAnalyzer:
