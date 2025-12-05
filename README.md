@@ -46,6 +46,9 @@ git clone https://github.com/shvee-pandora/pnd-agents.git
 cd pnd-agents
 pip install -e .
 
+# Install Playwright browser binaries (required for Broken Experience Detector)
+playwright install
+
 # Run the setup wizard
 pnd-agents setup
 ```
