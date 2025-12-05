@@ -536,12 +536,10 @@ def register_tools(server: Server) -> None:
             # Broken Experience Detector Agent tools
             elif name == "broken_experience_detector_scan_site":
                 import json
-                import asyncio
                 try:
                     bx_agent = BrokenExperienceDetectorAgent(headless=True)
-                    report = asyncio.get_event_loop().run_until_complete(
-                        bx_agent.scan_site(arguments["url"])
-                    )
+                    # Use await directly since call_tool is already async
+                    report = await bx_agent.scan_site(arguments["url"])
                     
                     output_format = arguments.get("output_format", "both")
                     
