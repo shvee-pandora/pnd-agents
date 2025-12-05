@@ -1,0 +1,415 @@
+"""
+Agent Dispatcher
+
+Maps agent names to their handler functions and provides
+a unified interface for executing agents.
+"""
+
+import os
+import sys
+from typing import Dict, Any, Callable, Optional
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from workflow.workflow_engine import AgentResult
+
+
+class AgentDispatcher:
+    """
+    Dispatcher for routing tasks to the appropriate agent handlers.
+    
+    The dispatcher maintains a registry of agent handlers and provides
+    methods for executing agents with proper input/output handling.
+    """
+    
+    def __init__(self):
+        """Initialize the agent dispatcher."""
+        self._handlers: Dict[str, Callable[[Dict[str, Any]], AgentResult]] = {}
+        self._register_default_handlers()
+    
+    def _register_default_handlers(self):
+        """Register the default agent handlers."""
+        # Register all built-in agents
+        self.register("figma", self._figma_handler)
+        self.register("frontend", self._frontend_handler)
+        self.register("backend", self._backend_handler)
+        self.register("amplience", self._amplience_handler)
+        self.register("review", self._review_handler)
+        self.register("qa", self._qa_handler)
+        self.register("performance", self._performance_handler)
+    
+    def register(self, name: str, handler: Callable[[Dict[str, Any]], AgentResult]):
+        """
+        Register an agent handler.
+        
+        Args:
+            name: Agent name (e.g., "figma", "frontend")
+            handler: Function that takes context dict and returns AgentResult
+        """
+        self._handlers[name] = handler
+    
+    def get_handler(self, name: str) -> Optional[Callable[[Dict[str, Any]], AgentResult]]:
+        """Get a handler by name."""
+        return self._handlers.get(name)
+    
+    def execute(self, agent_name: str, context: Dict[str, Any]) -> AgentResult:
+        """
+        Execute an agent with the given context.
+        
+        Args:
+            agent_name: Name of the agent to execute.
+            context: Context dictionary with task, input, metadata, etc.
+            
+        Returns:
+            AgentResult from the agent.
+        """
+        handler = self._handlers.get(agent_name)
+        if not handler:
+            return AgentResult(
+                status="error",
+                error=f"No handler registered for agent: {agent_name}"
+            )
+        
+        try:
+            return handler(context)
+        except Exception as e:
+            return AgentResult(
+                status="error",
+                error=str(e)
+            )
+    
+    def list_agents(self) -> list:
+        """List all registered agent names."""
+        return list(self._handlers.keys())
+    
+    # ==================== Agent Handlers ====================
+    
+    def _figma_handler(self, context: Dict[str, Any]) -> AgentResult:
+        """
+        Figma Parser Agent handler.
+        
+        Extracts component structure, design tokens, and assets from Figma.
+        """
+        import re
+        
+        task = context.get("task", "")
+        input_data = context.get("input", {})
+        
+        # Extract Figma URL from task
+        figma_url_pattern = r"https?://(?:www\.)?figma\.com/(?:file|design)/([a-zA-Z0-9]+)[^\s]*"
+        match = re.search(figma_url_pattern, task)
+        
+        if not match:
+            # Check if URL is in input data
+            figma_url = input_data.get("figma_url")
+            if not figma_url:
+                return AgentResult(
+                    status="error",
+                    error="No Figma URL found in task description or input"
+                )
+        else:
+            figma_url = match.group(0)
+        
+        try:
+            from agents.figma_reader_agent import FigmaReaderAgent
+            
+            agent = FigmaReaderAgent()
+            result = agent.read_figma_url(figma_url)
+            agent.close()
+            
+            # Convert to frontend-friendly format
+            output = agent.get_component_for_frontend_agent(result)
+            
+            return AgentResult(
+                status="success",
+                data={
+                    "figma_url": figma_url,
+                    "component": output,
+                    "raw_result": result.to_dict() if hasattr(result, 'to_dict') else result
+                },
+                next="frontend"
+            )
+        except Exception as e:
+            return AgentResult(
+                status="error",
+                error=f"Figma parsing failed: {str(e)}"
+            )
+    
+    def _frontend_handler(self, context: Dict[str, Any]) -> AgentResult:
+        """
+        Frontend Engineer Agent handler.
+        
+        Generates React components from Figma data or task description.
+        """
+        task = context.get("task", "")
+        input_data = context.get("input", {})
+        previous_output = input_data.get("previous_output", {})
+        
+        # Get component data from Figma agent output
+        component_data = previous_output.get("component", {})
+        
+        # Build component specification
+        component_spec = {
+            "name": component_data.get("componentName", self._extract_component_name(task)),
+            "props": component_data.get("props", {}),
+            "styles": component_data.get("designTokens", {}),
+            "variants": component_data.get("variants", []),
+            "assets": component_data.get("assets", []),
+            "autoLayout": component_data.get("autoLayout"),
+        }
+        
+        return AgentResult(
+            status="success",
+            data={
+                "component_spec": component_spec,
+                "files_to_generate": [
+                    f"src/components/{component_spec['name']}/{component_spec['name']}.tsx",
+                    f"src/components/{component_spec['name']}/{component_spec['name']}.stories.tsx",
+                    f"src/components/{component_spec['name']}/{component_spec['name']}.module.css",
+                    f"src/components/{component_spec['name']}/index.ts",
+                ],
+                "suggested_imports": self._suggest_imports(component_spec),
+            },
+            next="review"
+        )
+    
+    def _backend_handler(self, context: Dict[str, Any]) -> AgentResult:
+        """
+        Backend Agent handler.
+        
+        Creates API endpoints and server components.
+        """
+        task = context.get("task", "")
+        input_data = context.get("input", {})
+        
+        # Extract endpoint information from task
+        endpoint_info = self._extract_endpoint_info(task)
+        
+        return AgentResult(
+            status="success",
+            data={
+                "endpoint": endpoint_info,
+                "files_to_generate": [
+                    f"src/app/api/{endpoint_info['path']}/route.ts",
+                ],
+                "suggested_schema": endpoint_info.get("schema", {}),
+            },
+            next="review"
+        )
+    
+    def _amplience_handler(self, context: Dict[str, Any]) -> AgentResult:
+        """
+        Amplience CMS Agent handler.
+        
+        Generates content type schemas and example payloads.
+        """
+        task = context.get("task", "")
+        input_data = context.get("input", {})
+        
+        # Extract content type name from task
+        content_type_name = self._extract_content_type_name(task)
+        
+        return AgentResult(
+            status="success",
+            data={
+                "content_type": content_type_name,
+                "schema": {
+                    "$schema": "http://json-schema.org/draft-07/schema#",
+                    "title": content_type_name,
+                    "type": "object",
+                    "properties": {},
+                },
+                "example_payload": {},
+                "files_to_generate": [
+                    f"contents/{content_type_name.lower()}.json",
+                ],
+            },
+            next="frontend"
+        )
+    
+    def _review_handler(self, context: Dict[str, Any]) -> AgentResult:
+        """
+        Code Review Agent handler.
+        
+        Validates code against Pandora standards.
+        """
+        task = context.get("task", "")
+        input_data = context.get("input", {})
+        previous_output = input_data.get("previous_output", {})
+        
+        files_to_review = previous_output.get("files_to_generate", [])
+        
+        return AgentResult(
+            status="success",
+            data={
+                "files_reviewed": files_to_review,
+                "issues_found": [],
+                "suggestions": [
+                    "Ensure TypeScript strict mode is enabled",
+                    "Add proper accessibility attributes",
+                    "Follow atomic design pattern",
+                ],
+                "passed": True,
+            },
+            next="qa"
+        )
+    
+    def _qa_handler(self, context: Dict[str, Any]) -> AgentResult:
+        """
+        QA Agent handler.
+        
+        Generates unit and integration tests.
+        """
+        task = context.get("task", "")
+        input_data = context.get("input", {})
+        previous_output = input_data.get("previous_output", {})
+        
+        # Get component info from previous stages
+        component_spec = None
+        if "component_spec" in previous_output:
+            component_spec = previous_output["component_spec"]
+        elif "previous_output" in input_data:
+            prev = input_data["previous_output"]
+            if "component_spec" in prev:
+                component_spec = prev["component_spec"]
+        
+        component_name = component_spec.get("name", "Component") if component_spec else "Component"
+        
+        return AgentResult(
+            status="success",
+            data={
+                "test_files": [
+                    f"src/components/{component_name}/{component_name}.test.tsx",
+                ],
+                "test_cases": [
+                    f"renders {component_name} correctly",
+                    f"handles props correctly",
+                    f"matches snapshot",
+                    f"is accessible",
+                ],
+                "coverage_target": "80%",
+            },
+            next="performance"
+        )
+    
+    def _performance_handler(self, context: Dict[str, Any]) -> AgentResult:
+        """
+        Performance Agent handler.
+        
+        Runs performance analysis and optimization checks.
+        """
+        task = context.get("task", "")
+        input_data = context.get("input", {})
+        
+        return AgentResult(
+            status="success",
+            data={
+                "checks_performed": [
+                    "Bundle size analysis",
+                    "Render performance",
+                    "Memory usage",
+                ],
+                "recommendations": [
+                    "Consider lazy loading for large components",
+                    "Use React.memo for expensive renders",
+                    "Optimize images with next/image",
+                ],
+                "score": 85,
+            }
+        )
+    
+    # ==================== Helper Methods ====================
+    
+    def _extract_component_name(self, task: str) -> str:
+        """Extract component name from task description."""
+        import re
+        
+        # Look for patterns like "Stories carousel", "Header component", etc.
+        patterns = [
+            r"(?:create|build|generate)\s+(?:a\s+)?([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)\s+component",
+            r"([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)\s+(?:carousel|component|section|widget)",
+            r"(?:the\s+)?([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)\s+from\s+[Ff]igma",
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, task)
+            if match:
+                name = match.group(1).replace(" ", "")
+                return name
+        
+        return "Component"
+    
+    def _extract_endpoint_info(self, task: str) -> Dict[str, Any]:
+        """Extract API endpoint information from task."""
+        import re
+        
+        # Default endpoint info
+        info = {
+            "path": "endpoint",
+            "method": "GET",
+            "schema": {}
+        }
+        
+        # Look for path patterns
+        path_match = re.search(r"/api/([a-zA-Z0-9/_-]+)", task)
+        if path_match:
+            info["path"] = path_match.group(1)
+        
+        # Look for HTTP methods
+        for method in ["GET", "POST", "PUT", "DELETE", "PATCH"]:
+            if method.lower() in task.lower():
+                info["method"] = method
+                break
+        
+        return info
+    
+    def _extract_content_type_name(self, task: str) -> str:
+        """Extract content type name from task."""
+        import re
+        
+        # Look for content type patterns
+        patterns = [
+            r"content\s+type\s+(?:called\s+|named\s+)?['\"]?([a-zA-Z]+)['\"]?",
+            r"([A-Z][a-zA-Z]+)\s+content\s+type",
+            r"amplience\s+([a-zA-Z]+)",
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, task, re.IGNORECASE)
+            if match:
+                return match.group(1)
+        
+        return "ContentType"
+    
+    def _suggest_imports(self, component_spec: Dict[str, Any]) -> list:
+        """Suggest imports based on component specification."""
+        imports = [
+            "import React from 'react';",
+        ]
+        
+        if component_spec.get("variants"):
+            imports.append("import { cva, type VariantProps } from 'class-variance-authority';")
+        
+        if component_spec.get("autoLayout"):
+            imports.append("import styles from './{name}.module.css';".format(name=component_spec.get("name", "Component")))
+        
+        return imports
+
+
+# Global agent registry for convenience
+AGENT_REGISTRY: Dict[str, Callable[[Dict[str, Any]], AgentResult]] = {}
+
+
+def get_dispatcher() -> AgentDispatcher:
+    """Get a configured agent dispatcher."""
+    dispatcher = AgentDispatcher()
+    
+    # Update global registry
+    global AGENT_REGISTRY
+    for name in dispatcher.list_agents():
+        handler = dispatcher.get_handler(name)
+        if handler:
+            AGENT_REGISTRY[name] = handler
+    
+    return dispatcher

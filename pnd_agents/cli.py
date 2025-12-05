@@ -637,6 +637,109 @@ def cmd_scan(args):
         return 1
 
 
+def cmd_run_task(args):
+    """Run a task through the workflow engine."""
+    import sys
+    import os
+    
+    # Add parent directory to path for imports
+    pnd_agents_path = get_pnd_agents_path()
+    sys.path.insert(0, str(pnd_agents_path))
+    
+    try:
+        from agents.task_manager_agent import TaskManagerAgent
+    except ImportError as e:
+        print(color(f"Error importing TaskManagerAgent: {e}", Colors.RED))
+        return 1
+    
+    task = args.task
+    
+    print(color("\n" + "=" * 60, Colors.CYAN))
+    print(color("PND AGENTS - Workflow Engine", Colors.BOLD))
+    print(color("=" * 60, Colors.CYAN))
+    
+    # Create task manager
+    agent = TaskManagerAgent()
+    
+    if args.plan_only:
+        # Just show the plan without executing
+        plan = agent.analyze_task(task)
+        print(f"\nTask: \"{plan['task'][:80]}{'...' if len(plan['task']) > 80 else ''}\"")
+        print(f"Detected Type: {color(plan['detected_type'], Colors.YELLOW)}")
+        print(f"\nPipeline ({len(plan['pipeline'])} stages):")
+        for stage in plan['stages']:
+            print(f"  {stage['step']}. {color(stage['agent'].capitalize() + 'Agent', Colors.CYAN)} -> {stage['description']}")
+        return 0
+    
+    # Build metadata
+    metadata = {}
+    if args.ticket:
+        metadata['ticket_id'] = args.ticket
+    if args.branch:
+        metadata['branch'] = args.branch
+    
+    # Run the task
+    try:
+        context = agent.run_task(task, metadata=metadata, verbose=not args.quiet)
+        
+        if args.output:
+            # Write output to file
+            import json
+            with open(args.output, 'w') as f:
+                json.dump(agent.to_dict(context), f, indent=2)
+            print(color(f"\nOutput written to {args.output}", Colors.GREEN))
+        
+        if context.status == "completed":
+            print(color("\nWorkflow completed successfully!", Colors.GREEN))
+            return 0
+        else:
+            print(color(f"\nWorkflow ended with status: {context.status}", Colors.YELLOW))
+            return 1
+            
+    except Exception as e:
+        print(color(f"\nError running task: {e}", Colors.RED))
+        if os.environ.get("DEBUG"):
+            import traceback
+            traceback.print_exc()
+        return 1
+
+
+def cmd_analyze_task(args):
+    """Analyze a task and show the workflow plan."""
+    import sys
+    
+    # Add parent directory to path for imports
+    pnd_agents_path = get_pnd_agents_path()
+    sys.path.insert(0, str(pnd_agents_path))
+    
+    try:
+        from workflow.workflow_engine import WorkflowEngine
+    except ImportError as e:
+        print(color(f"Error importing WorkflowEngine: {e}", Colors.RED))
+        return 1
+    
+    task = args.task
+    engine = WorkflowEngine()
+    
+    plan = engine.get_workflow_plan(task)
+    
+    print(color("\n" + "=" * 60, Colors.CYAN))
+    print(color("TASK ANALYSIS", Colors.BOLD))
+    print(color("=" * 60, Colors.CYAN))
+    
+    print(f"\nTask: \"{plan['task'][:80]}{'...' if len(plan['task']) > 80 else ''}\"")
+    print(f"Detected Type: {color(plan['detected_type'], Colors.YELLOW)}")
+    print(f"\nWorkflow Pipeline:")
+    
+    for stage in plan['stages']:
+        agent_name = stage['agent'].capitalize() + 'Agent'
+        print(f"  {stage['step']}. {color(agent_name, Colors.CYAN)}")
+        print(f"     -> {stage['description']}")
+    
+    print(color("\n" + "=" * 60, Colors.CYAN))
+    return 0
+
+
 def cmd_uninstall(args):
     """Remove pnd-agents configuration."""
     print(color("\nUninstall PND Agents Configuration", Colors.BOLD))
@@ -686,6 +789,9 @@ Examples:
   pnd-agents status             Show installation status
   pnd-agents uninstall          Remove from Claude config
   pnd-agents scan <url>         Scan URL for broken experiences
+  pnd-agents run-task "Create Stories carousel from Figma: ..."
+  pnd-agents run-task "Build React component" --plan-only
+  pnd-agents analyze-task "Create API endpoint for products"
         """
     )
     
@@ -750,6 +856,44 @@ Examples:
         help="Output format (default: both)"
     )
     scan_parser.set_defaults(func=cmd_scan)
+    
+    # Run-task command
+    run_task_parser = subparsers.add_parser("run-task", help="Run a task through the workflow engine")
+    run_task_parser.add_argument(
+        "task",
+        help="Task description (e.g., 'Create the Stories carousel using Figma link: ...')"
+    )
+    run_task_parser.add_argument(
+        "--ticket",
+        help="Ticket ID (e.g., INS-2509)"
+    )
+    run_task_parser.add_argument(
+        "--branch",
+        help="Branch name to use"
+    )
+    run_task_parser.add_argument(
+        "--plan-only",
+        action="store_true",
+        help="Only show the workflow plan without executing"
+    )
+    run_task_parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress verbose output"
+    )
+    run_task_parser.add_argument(
+        "--output",
+        help="Output file path for workflow results (JSON)"
+    )
+    run_task_parser.set_defaults(func=cmd_run_task)
+    
+    # Analyze-task command
+    analyze_parser = subparsers.add_parser("analyze-task", help="Analyze a task and show the workflow plan")
+    analyze_parser.add_argument(
+        "task",
+        help="Task description to analyze"
+    )
+    analyze_parser.set_defaults(func=cmd_analyze_task)
     
     args = parser.parse_args()
     

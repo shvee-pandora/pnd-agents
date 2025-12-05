@@ -1,0 +1,143 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "PND Agents Workflow Rules Configuration",
+  "version": "2.0.0",
+  "workflows": {
+    "figma": ["figma", "frontend", "review", "qa", "performance"],
+    "frontend": ["frontend", "review", "qa", "performance"],
+    "backend": ["backend", "review", "qa"],
+    "amplience": ["amplience", "frontend", "review", "qa"],
+    "qa": ["qa", "review"],
+    "code_review": ["review"],
+    "performance": ["performance", "frontend", "review"],
+    "default": ["frontend", "review", "qa"]
+  },
+  "keywords": {
+    "figma": [
+      "figma",
+      "design",
+      "frame",
+      "component",
+      "ui spec",
+      "figma.com",
+      "from design",
+      "design file"
+    ],
+    "frontend": [
+      "react",
+      "component",
+      "tsx",
+      "ui",
+      "frontend",
+      "next.js",
+      "nextjs",
+      "jsx",
+      "styled",
+      "css"
+    ],
+    "backend": [
+      "api",
+      "endpoint",
+      "server",
+      "route",
+      "integration",
+      "backend",
+      "rest",
+      "graphql",
+      "database"
+    ],
+    "amplience": [
+      "content type",
+      "cms",
+      "schema",
+      "amplience",
+      "content model",
+      "dynamic content"
+    ],
+    "qa": [
+      "tests",
+      "unit tests",
+      "automation",
+      "coverage",
+      "playwright",
+      "jest",
+      "testing",
+      "test cases"
+    ],
+    "code_review": [
+      "review",
+      "lint",
+      "standards",
+      "refactor",
+      "code quality",
+      "eslint",
+      "prettier"
+    ],
+    "performance": [
+      "har",
+      "performance",
+      "optimize",
+      "slow",
+      "lighthouse",
+      "web vitals",
+      "speed"
+    ]
+  },
+  "agents": {
+    "figma": {
+      "name": "Figma Parser Agent",
+      "description": "Extract component structure from Figma design",
+      "handler": "figma_reader_agent.run",
+      "input": ["figma_url", "node_id"],
+      "output": ["component", "design_tokens", "assets", "variants"]
+    },
+    "frontend": {
+      "name": "Frontend Engineer Agent",
+      "description": "Generate React components",
+      "handler": "frontend_agent.create_component",
+      "input": ["component_spec", "design_tokens"],
+      "output": ["files", "imports", "styles"]
+    },
+    "backend": {
+      "name": "Backend Agent",
+      "description": "Create API endpoints and server components",
+      "handler": "backend_agent.create_endpoint",
+      "input": ["endpoint_spec"],
+      "output": ["route_file", "schema"]
+    },
+    "amplience": {
+      "name": "Amplience CMS Agent",
+      "description": "Generate Amplience content type schemas",
+      "handler": "amplience_agent.generate_schema",
+      "input": ["content_type_name", "fields"],
+      "output": ["schema", "example_payload"]
+    },
+    "review": {
+      "name": "Code Review Agent",
+      "description": "Validate code against standards",
+      "handler": "code_review_agent.run_review",
+      "input": ["files"],
+      "output": ["issues", "suggestions", "passed"]
+    },
+    "qa": {
+      "name": "QA Agent",
+      "description": "Generate unit and integration tests",
+      "handler": "qa_agent.run_tests",
+      "input": ["component_spec", "files"],
+      "output": ["test_files", "test_cases", "coverage"]
+    },
+    "performance": {
+      "name": "Performance Agent",
+      "description": "Run performance analysis and optimization checks",
+      "handler": "performance_agent.analyze",
+      "input": ["files", "har_file"],
+      "output": ["recommendations", "score"]
+    }
+  },
+  "defaults": {
+    "continueOnError": false,
+    "maxRetries": 2,
+    "timeout": 300000,
+    "contextFile": "/tmp/pnd_agent_context.json"
+  }
+}
