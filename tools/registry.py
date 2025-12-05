@@ -20,6 +20,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from agents.figma_reader_agent import FigmaReaderAgent
 from agents.commerce_agent import CommerceAgent
+from agents.broken_experience_detector_agent import BrokenExperienceDetectorAgent
 
 
 def register_tools(server: Server) -> None:
@@ -366,6 +367,28 @@ def register_tools(server: Server) -> None:
                     "required": ["goal"]
                 }
             ),
+
+            # Broken Experience Detector Agent Tools
+            types.Tool(
+                name="broken_experience_detector_scan_site",
+                description="Scan a website URL for broken experiences including performance issues, UI/UX problems, accessibility violations, SEO issues, broken links, missing images, and JavaScript errors. Returns a comprehensive JSON report with a score (0-100) and a human-readable markdown summary. Use this to detect issues on any Pandora environment (e.g., https://us.pandora.net) or localhost.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "url": {
+                            "type": "string",
+                            "description": "The URL to scan (e.g., 'https://us.pandora.net', 'http://localhost:3000')"
+                        },
+                        "output_format": {
+                            "type": "string",
+                            "description": "Output format: 'json' for machine-readable, 'markdown' for human-readable, 'both' for both formats (default: 'both')",
+                            "enum": ["json", "markdown", "both"],
+                            "default": "both"
+                        }
+                    },
+                    "required": ["url"]
+                }
+            ),
         ]
 
     # Register call_tool handler
@@ -509,6 +532,31 @@ def register_tools(server: Server) -> None:
                     return [types.TextContent(type="text", text=json.dumps(result.to_dict(), indent=2))]
                 except Exception as ce:
                     return [types.TextContent(type="text", text=f"Commerce Agent Error: {str(ce)}")]
+
+            # Broken Experience Detector Agent tools
+            elif name == "broken_experience_detector_scan_site":
+                import json
+                import asyncio
+                try:
+                    bx_agent = BrokenExperienceDetectorAgent(headless=True)
+                    report = asyncio.get_event_loop().run_until_complete(
+                        bx_agent.scan_site(arguments["url"])
+                    )
+                    
+                    output_format = arguments.get("output_format", "both")
+                    
+                    if output_format == "json":
+                        return [types.TextContent(type="text", text=json.dumps(report.to_dict(), indent=2))]
+                    elif output_format == "markdown":
+                        return [types.TextContent(type="text", text=report.to_markdown())]
+                    else:  # both
+                        result = {
+                            "json": report.to_dict(),
+                            "markdown": report.to_markdown()
+                        }
+                        return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as bx_error:
+                    return [types.TextContent(type="text", text=f"Broken Experience Detector Error: {str(bx_error)}")]
 
             else:
                 raise ValueError(f"Unknown tool: {name}")
