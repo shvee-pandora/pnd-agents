@@ -8,6 +8,7 @@ PG AI Squad is a comprehensive agent ecosystem designed to assist with building 
 
 ## Features
 
+- **Workflow Engine**: Automatic task type detection and multi-agent pipeline orchestration
 - **Task Orchestration**: Scrum Master Agent that decomposes tasks and coordinates other agents
 - **Frontend Development**: React/Next.js component generation following Pandora UI Toolkit patterns
 - **Figma Integration**: Extract component metadata directly from Figma designs via API
@@ -249,6 +250,134 @@ The agent includes mock product data for POC testing when API access is unavaila
 ### Integration with pandora-ecom-web
 
 The Commerce Agent integrates with pandora-ecom-web via the `/api/agentic-commerce` endpoint and the `/ai-demo` page. See the pandora-ecom-web repository for frontend integration details.
+
+## Workflow Engine
+
+The workflow engine automatically detects task types and orchestrates agents in a pipeline. When you give a task to the Task Manager, it analyzes the description, selects the appropriate workflow, and runs agents sequentially until completion.
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        TASK INPUT                               │
+│  "Create Stories carousel from Figma: https://figma.com/..."   │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    TASK TYPE DETECTION                          │
+│  Keywords: "figma", "carousel" → Detected: FIGMA workflow       │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    WORKFLOW PIPELINE                            │
+│                                                                 │
+│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐    │
+│  │  Figma   │──▶│ Frontend │──▶│  Review  │──▶│    QA    │    │
+│  │  Reader  │   │ Engineer │   │  Agent   │   │  Agent   │    │
+│  └──────────┘   └──────────┘   └──────────┘   └──────────┘    │
+│       │              │              │              │           │
+│       ▼              ▼              ▼              ▼           │
+│   Design         Component      Standards      Tests          │
+│   Tokens         Code           Report         Generated      │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    FINAL OUTPUT                                 │
+│  Complete component with tests, following Pandora standards     │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Task Type Detection
+
+The engine detects task types using keyword matching:
+
+| Task Type | Keywords |
+|-----------|----------|
+| Figma | figma, design, frame, component, ui spec |
+| Frontend | react, component, tsx, ui, frontend |
+| Backend | api, endpoint, server, route, integration |
+| Amplience | content type, cms, schema, amplience |
+| QA | tests, unit tests, automation, coverage |
+| Code Review | review, lint, standards, refactor |
+| Performance | performance, har, metrics, optimization |
+
+### Workflow Pipelines
+
+Different task types trigger different agent sequences:
+
+| Workflow | Pipeline |
+|----------|----------|
+| Figma | Figma Reader → Frontend → Code Review → QA → Performance |
+| Frontend | Frontend → Code Review → QA → Performance |
+| Backend | Backend → Code Review → QA |
+| Amplience | Amplience → Frontend → Code Review → QA |
+| Default | Frontend → Code Review → QA |
+
+### CLI Commands
+
+```bash
+# Run a task through the workflow engine
+pnd-agents run-task "Create Stories carousel from Figma: https://figma.com/..."
+
+# Run with ticket ID and branch
+pnd-agents run-task "Build product card component" --ticket INS-2509 --branch feature/product-card
+
+# Show workflow plan without executing
+pnd-agents run-task "Create API endpoint for products" --plan-only
+
+# Analyze a task to see which workflow would be used
+pnd-agents analyze-task "Create content type for homepage hero"
+
+# Save workflow output to file
+pnd-agents run-task "Build header component" --output /tmp/workflow-result.json
+```
+
+### Programmatic Usage
+
+```python
+from agents.task_manager_agent import TaskManagerAgent
+
+# Create the agent
+agent = TaskManagerAgent()
+
+# Analyze a task (without executing)
+plan = agent.analyze_task("Create Stories carousel from Figma: https://figma.com/...")
+print(f"Detected type: {plan['detected_type']}")
+print(f"Pipeline: {plan['pipeline']}")
+
+# Run a task
+context = agent.run_task(
+    "Create Stories carousel from Figma: https://figma.com/...",
+    metadata={"ticket_id": "INS-2509"},
+    verbose=True
+)
+
+# Check status
+print(f"Status: {context.status}")
+for stage in context.stages:
+    print(f"  {stage.agent_name}: {stage.status}")
+```
+
+### State Management
+
+The workflow engine persists state to `/tmp/pnd_agent_context.json`, enabling:
+
+- Resume interrupted workflows
+- Pass data between agents
+- Track progress and timing
+- Debug failed stages
+
+```python
+# Resume an interrupted task
+agent = TaskManagerAgent()
+context = agent.resume_task(verbose=True)
+
+# Clear saved state
+agent.clear_task()
+```
 
 ## Documentation
 

@@ -818,3 +818,64 @@ def read_figma(url_or_file_key: str, node_id: Optional[str] = None) -> Dict[str,
     """
     with FigmaReaderAgent() as agent:
         return agent.get_component_for_frontend_agent(url_or_file_key, node_id)
+
+
+def run(context: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Workflow-compatible run function for the Figma Reader Agent.
+    
+    This function is called by the workflow engine and returns
+    a standardized result format.
+    
+    Args:
+        context: Dictionary with task, input, metadata, etc.
+        
+    Returns:
+        Dictionary with status, data, next agent, and optional error.
+    """
+    task = context.get("task", "")
+    input_data = context.get("input", {})
+    
+    # Extract Figma URL from task or input
+    figma_url = None
+    
+    # Check input data first
+    if "figma_url" in input_data:
+        figma_url = input_data["figma_url"]
+    
+    # Then check task description for URL
+    if not figma_url:
+        import re
+        figma_url_pattern = r"https?://(?:www\.)?figma\.com/(?:file|design)/([a-zA-Z0-9]+)[^\s]*"
+        match = re.search(figma_url_pattern, task)
+        if match:
+            figma_url = match.group(0)
+    
+    if not figma_url:
+        return {
+            "status": "error",
+            "data": {},
+            "next": None,
+            "error": "No Figma URL found in task description or input"
+        }
+    
+    try:
+        with FigmaReaderAgent() as agent:
+            result = agent.get_component_for_frontend_agent(figma_url)
+            
+            return {
+                "status": "success",
+                "data": {
+                    "figma_url": figma_url,
+                    "component": result,
+                },
+                "next": "frontend",
+                "error": None
+            }
+    except Exception as e:
+        return {
+            "status": "error",
+            "data": {},
+            "next": None,
+            "error": f"Figma parsing failed: {str(e)}"
+        }
