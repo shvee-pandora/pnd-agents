@@ -38,6 +38,8 @@ class AgentDispatcher:
         self.register("review", self._review_handler)
         self.register("qa", self._qa_handler)
         self.register("performance", self._performance_handler)
+        self.register("unit_test", self._unit_test_handler)
+        self.register("sonar", self._sonar_handler)
     
     def register(self, name: str, handler: Callable[[Dict[str, Any]], AgentResult]):
         """
@@ -318,6 +320,157 @@ class AgentDispatcher:
                 "score": 85,
             }
         )
+    
+    def _unit_test_handler(self, context: Dict[str, Any]) -> AgentResult:
+        """
+        Unit Test Agent handler.
+        
+        Generates comprehensive unit tests with 100% coverage target.
+        """
+        task = context.get("task", "")
+        input_data = context.get("input", {})
+        previous_output = input_data.get("previous_output", {})
+        
+        try:
+            from agents.unit_test_agent import UnitTestAgent
+            
+            agent = UnitTestAgent()
+            
+            # Build context for the agent
+            agent_context = {
+                "task_description": task,
+                "input_data": {
+                    "files": previous_output.get("files_to_generate", []),
+                    "component_spec": previous_output.get("component_spec", {}),
+                }
+            }
+            
+            result = agent.run(agent_context)
+            
+            return AgentResult(
+                status=result.get("status", "success"),
+                data=result.get("data", {}),
+                next=result.get("next", "sonar"),
+                error=result.get("error")
+            )
+        except ImportError:
+            # Fallback if agent not available
+            component_spec = previous_output.get("component_spec", {})
+            component_name = component_spec.get("name", "Component")
+            
+            return AgentResult(
+                status="success",
+                data={
+                    "test_files": [
+                        f"src/components/{component_name}/__tests__/{component_name}.test.tsx",
+                    ],
+                    "test_cases": [
+                        f"should render {component_name} without crashing",
+                        f"should render {component_name} with props",
+                        f"should match snapshot for {component_name}",
+                        f"should handle user interactions in {component_name}",
+                        f"should be accessible in {component_name}",
+                        f"should cover all conditional branches - truthy path",
+                        f"should cover all conditional branches - falsy path",
+                        f"should handle edge cases and null values",
+                    ],
+                    "coverage_target": "100%",
+                    "recommendations": [
+                        "Run tests with coverage: npm test -- --coverage",
+                        "Target 100% coverage for all metrics",
+                        "Add data-testid attributes to components",
+                        "Mock external dependencies to isolate unit tests",
+                    ],
+                },
+                next="sonar"
+            )
+        except Exception as e:
+            return AgentResult(
+                status="error",
+                error=f"Unit test generation failed: {str(e)}"
+            )
+    
+    def _sonar_handler(self, context: Dict[str, Any]) -> AgentResult:
+        """
+        Sonar Validation Agent handler.
+        
+        Validates code against SonarCloud quality gates.
+        Target: 0 errors, 0 duplication, 100% coverage.
+        """
+        task = context.get("task", "")
+        input_data = context.get("input", {})
+        previous_output = input_data.get("previous_output", {})
+        
+        try:
+            from agents.sonar_validation_agent import SonarValidationAgent
+            
+            agent = SonarValidationAgent()
+            
+            # Build context for the agent
+            agent_context = {
+                "task_description": task,
+                "input_data": {
+                    "branch": input_data.get("branch", "master"),
+                    "repo_path": input_data.get("repo_path"),
+                }
+            }
+            
+            result = agent.run(agent_context)
+            
+            return AgentResult(
+                status=result.get("status", "success"),
+                data=result.get("data", {}),
+                next=result.get("next"),
+                error=result.get("error")
+            )
+        except ImportError:
+            # Fallback if agent not available - provide static validation checklist
+            return AgentResult(
+                status="success",
+                data={
+                    "quality_gate_status": "PENDING",
+                    "checklist": {
+                        "coverage": {
+                            "target": "100%",
+                            "checks": [
+                                "Line coverage must be 100%",
+                                "Branch coverage must be 100%",
+                                "All functions must be tested",
+                            ]
+                        },
+                        "issues": {
+                            "target": "0 issues",
+                            "checks": [
+                                "No blocker issues",
+                                "No critical issues",
+                                "No major bugs",
+                                "No vulnerabilities",
+                            ]
+                        },
+                        "duplication": {
+                            "target": "0% duplication",
+                            "checks": [
+                                "No duplicated code blocks",
+                                "Extract common code to shared utilities",
+                            ]
+                        },
+                    },
+                    "sonarcloud_url": "https://sonarcloud.io/summary/new_code?id=pandora-jewelry_spark_pandora-group&branch=master",
+                    "recommendations": [
+                        "Run SonarCloud analysis before creating PR",
+                        "Fix all blocker and critical issues first",
+                        "Ensure 100% test coverage for new code",
+                        "Remove any duplicated code blocks",
+                        "Review security hotspots",
+                    ],
+                },
+                next="review"
+            )
+        except Exception as e:
+            return AgentResult(
+                status="error",
+                error=f"Sonar validation failed: {str(e)}"
+            )
     
     # ==================== Helper Methods ====================
     

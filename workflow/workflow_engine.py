@@ -20,6 +20,8 @@ class TaskType(Enum):
     FRONTEND = "frontend"
     BACKEND = "backend"
     AMPLIENCE = "amplience"
+    UNIT_TEST = "unit_test"
+    SONAR = "sonar"
     QA = "qa"
     CODE_REVIEW = "code_review"
     PERFORMANCE = "performance"
@@ -44,9 +46,17 @@ TASK_KEYWORDS: Dict[TaskType, List[str]] = {
         "content type", "cms", "schema", "amplience",
         "content model", "dynamic content"
     ],
+    TaskType.UNIT_TEST: [
+        "unit test", "unit tests", "100% coverage", "jest test",
+        "jest tests", "vitest", "test coverage", "write tests", "generate tests"
+    ],
+    TaskType.SONAR: [
+        "sonar", "sonarcloud", "sonarqube", "quality gate",
+        "code quality", "duplication", "code smells", "vulnerabilities"
+    ],
     TaskType.QA: [
-        "tests", "unit tests", "automation", "coverage",
-        "playwright", "jest", "testing", "test cases"
+        "e2e", "integration tests", "automation", "playwright",
+        "acceptance tests", "test cases", "end to end"
     ],
     TaskType.CODE_REVIEW: [
         "review", "lint", "standards", "refactor",
@@ -511,7 +521,9 @@ class WorkflowEngine:
             "backend": "Create API endpoints and server components",
             "amplience": "Generate Amplience content type schemas",
             "review": "Validate code against standards",
-            "qa": "Generate unit and integration tests",
+            "unit_test": "Generate unit tests with 100% coverage target",
+            "sonar": "Validate against SonarCloud quality gates (0 errors, 0 duplication)",
+            "qa": "Generate E2E and integration tests",
             "performance": "Run performance analysis and optimization checks"
         }
         return descriptions.get(agent_name, f"Execute {agent_name} agent")

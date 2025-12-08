@@ -1,16 +1,18 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "description": "PND Agents Workflow Rules Configuration",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "workflows": {
-    "figma": ["figma", "frontend", "review", "qa", "performance"],
-    "frontend": ["frontend", "review", "qa", "performance"],
-    "backend": ["backend", "review", "qa"],
-    "amplience": ["amplience", "frontend", "review", "qa"],
-    "qa": ["qa", "review"],
-    "code_review": ["review"],
+    "figma": ["figma", "frontend", "review", "unit_test", "sonar", "performance"],
+    "frontend": ["frontend", "review", "unit_test", "sonar", "performance"],
+    "backend": ["backend", "review", "unit_test", "sonar"],
+    "amplience": ["amplience", "frontend", "review", "unit_test", "sonar"],
+    "qa": ["unit_test", "review", "sonar"],
+    "unit_test": ["unit_test", "sonar"],
+    "sonar": ["sonar", "review"],
+    "code_review": ["review", "sonar"],
     "performance": ["performance", "frontend", "review"],
-    "default": ["frontend", "review", "qa"]
+    "default": ["frontend", "review", "unit_test", "sonar"]
   },
   "keywords": {
     "figma": [
@@ -56,13 +58,33 @@
     ],
     "qa": [
       "tests",
-      "unit tests",
       "automation",
-      "coverage",
       "playwright",
-      "jest",
       "testing",
-      "test cases"
+      "test cases",
+      "e2e",
+      "integration tests"
+    ],
+    "unit_test": [
+      "unit tests",
+      "unit test",
+      "coverage",
+      "jest",
+      "vitest",
+      "100% coverage",
+      "test coverage",
+      "write tests"
+    ],
+    "sonar": [
+      "sonar",
+      "sonarcloud",
+      "sonarqube",
+      "code quality",
+      "quality gate",
+      "duplication",
+      "code smells",
+      "vulnerabilities",
+      "security hotspot"
     ],
     "code_review": [
       "review",
@@ -132,6 +154,20 @@
       "handler": "performance_agent.analyze",
       "input": ["files", "har_file"],
       "output": ["recommendations", "score"]
+    },
+    "unit_test": {
+      "name": "Unit Test Agent",
+      "description": "Generate comprehensive unit tests with 100% coverage target",
+      "handler": "unit_test_agent.run",
+      "input": ["files", "component_spec"],
+      "output": ["test_files", "test_cases", "coverage_report", "recommendations"]
+    },
+    "sonar": {
+      "name": "Sonar Validation Agent",
+      "description": "Validate code against SonarCloud quality gates (0 errors, 0 duplication, 100% coverage)",
+      "handler": "sonar_validation_agent.run",
+      "input": ["branch", "repo_path"],
+      "output": ["issues", "fix_plans", "coverage", "pr_checklist", "quality_gate_status"]
     }
   },
   "defaults": {
