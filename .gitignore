@@ -3,4 +3,5 @@ __pycache__
 .DSStore
 lib
 venv
+*.egg-info/
 
