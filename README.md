@@ -56,10 +56,31 @@ playwright install
 pnd-agents setup
 ```
 
+**Important:** The `pip install -e .` step is required to make the `pnd-agents` CLI command available. If you skip this step, the MCP tools will work but the CLI commands won't be available in your terminal.
+
 The setup wizard will:
 1. Let you choose which agents to enable
 2. Configure environment variables (Figma token, Amplience settings)
 3. Automatically update your Claude configuration
+
+### Troubleshooting: CLI Not Found
+
+If you see `pnd-agents: command not found`, try these solutions:
+
+1. **Verify installation:** Run `pip show pnd-agents` to check if the package is installed
+2. **Use module fallback:** Run `python -m pnd_agents` instead of `pnd-agents`
+3. **Check Python environment:** Make sure you're using the same Python that Claude uses:
+   ```bash
+   # Find which Python Claude is using (check your Claude config)
+   # Then install with that specific Python:
+   /usr/local/bin/python3 -m pip install -e .
+   ```
+4. **Check PATH:** The CLI script is installed in your Python's `bin` directory. Ensure it's in your PATH:
+   ```bash
+   # Find where pip installs scripts
+   python -m site --user-base
+   # Add the bin directory to your PATH if needed
+   ```
 
 ### Installation Options
 

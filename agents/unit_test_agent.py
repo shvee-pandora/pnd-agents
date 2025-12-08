@@ -441,24 +441,34 @@ class UnitTestAgent:
         return test_file
     
     def _generate_imports(self, analysis: Dict[str, Any], source_file: str) -> List[str]:
-        """Generate import statements for test file."""
+        """Generate import statements for test file.
+        
+        Note: Following pandora-group patterns:
+        - No @jest/globals import (Jest globals are available)
+        - @testing-library/jest-dom for DOM matchers
+        - Imports before mocks, mocks before describe blocks
+        """
         imports = []
         
-        # Test framework imports
-        if self.framework == TestFramework.JEST:
-            imports.append("import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';")
-        elif self.framework == TestFramework.VITEST:
-            imports.append("import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';")
+        # React import (needed for JSX)
+        if analysis["components"]:
+            imports.append("import React from 'react';")
+        
+        # Jest DOM matchers (pandora-group pattern)
+        imports.append("import '@testing-library/jest-dom';")
         
         # React testing library imports
         if analysis["components"]:
             imports.append("import { render, screen, fireEvent, waitFor } from '@testing-library/react';")
             imports.append("import userEvent from '@testing-library/user-event';")
-            imports.append("import { axe, toHaveNoViolations } from 'jest-axe';")
         
         # Hook testing imports
         if analysis["hooks"]:
             imports.append("import { renderHook, act } from '@testing-library/react';")
+        
+        # Vitest-specific imports (only for vitest framework)
+        if self.framework == TestFramework.VITEST:
+            imports.append("import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';")
         
         # Source file import
         source_path = Path(source_file)
@@ -470,23 +480,60 @@ class UnitTestAgent:
         return imports
     
     def _generate_mocks(self, analysis: Dict[str, Any]) -> List[str]:
-        """Generate mock statements for test file."""
+        """Generate mock statements for test file.
+        
+        Note: Following pandora-group patterns:
+        - Mocks at module level (top of file, after imports)
+        - Inline mock implementations for common Next.js modules
+        - jest.mock() calls MUST be hoisted - they run before imports
+        """
         mocks = []
         
-        # Mock common dependencies
-        common_mocks = [
-            "next/router",
-            "next/navigation",
-            "@/lib/api",
-            "@/hooks",
-        ]
+        # Common Next.js mocks with inline implementations (pandora-group pattern)
+        next_mocks = {
+            "next/navigation": """jest.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: jest.fn(),
+    replace: jest.fn(),
+    prefetch: jest.fn(),
+    back: jest.fn(),
+  }),
+  usePathname: () => '/',
+  useSearchParams: () => new URLSearchParams(),
+  useParams: () => ({}),
+}));""",
+            "next/router": """jest.mock('next/router', () => ({
+  useRouter: () => ({
+    push: jest.fn(),
+    replace: jest.fn(),
+    prefetch: jest.fn(),
+    query: {},
+    pathname: '/',
+  }),
+}));""",
+            "next/image": """jest.mock('next/image', () => ({
+  __esModule: true,
+  default: ({ src, alt, ...props }: any) => <img src={src} alt={alt} {...props} />,
+}));""",
+            "next/link": """jest.mock('next/link', () => ({
+  __esModule: true,
+  default: ({ children, href, ...props }: any) => <a href={href} {...props}>{children}</a>,
+}));""",
+        }
         
+        # Check which mocks are needed based on imports
         for dep in analysis["imports"]:
-            if any(mock in dep for mock in common_mocks):
-                if self.framework == TestFramework.JEST:
-                    mocks.append(f"jest.mock('{dep}');")
-                elif self.framework == TestFramework.VITEST:
-                    mocks.append(f"vi.mock('{dep}');")
+            for mock_key, mock_impl in next_mocks.items():
+                if mock_key in dep:
+                    mocks.append(mock_impl)
+                    break
+            else:
+                # Generic mock for other dependencies
+                if any(pattern in dep for pattern in ["@/lib/", "@/hooks/", "@/services/"]):
+                    if self.framework == TestFramework.JEST:
+                        mocks.append(f"jest.mock('{dep}');")
+                    elif self.framework == TestFramework.VITEST:
+                        mocks.append(f"vi.mock('{dep}');")
         
         return mocks
     

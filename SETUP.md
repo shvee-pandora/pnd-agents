@@ -253,12 +253,48 @@ The server should start without errors and wait for MCP client connections.
 
 #### "pnd-agents: command not found"
 
-The CLI wasn't installed properly. Try:
+This usually means the CLI wasn't installed in the Python environment you're using. Here are several solutions:
 
+**Solution 1: Install the package properly**
 ```bash
+cd /path/to/pnd-agents
 pip install -e .
-# Or check if it's in your PATH
-python -m pnd_agents.cli setup
+```
+
+**Solution 2: Use the module fallback**
+```bash
+# Instead of: pnd-agents setup
+# Use: python -m pnd_agents setup
+python -m pnd_agents setup
+python -m pnd_agents status
+python -m pnd_agents config --show
+```
+
+**Solution 3: Check Python environment (for Claude Code users)**
+
+Claude Code may use a different Python than your terminal. Check your Claude config to see which Python it uses, then install with that specific Python:
+```bash
+# Example: if Claude uses /usr/local/bin/python3
+/usr/local/bin/python3 -m pip install -e /path/to/pnd-agents
+```
+
+**Solution 4: Verify PATH includes pip scripts directory**
+```bash
+# Find where pip installs scripts
+python -m site --user-base
+# Add the bin directory to your PATH if needed
+export PATH="$(python -m site --user-base)/bin:$PATH"
+```
+
+**Verification:**
+```bash
+# Check if package is installed
+pip show pnd-agents
+
+# Test the CLI
+pnd-agents --help
+# Or fallback:
+python -m pnd_agents --help
 ```
 
 #### Claude Desktop Not Finding Agents
