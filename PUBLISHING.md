@@ -30,7 +30,7 @@ git push origin v1.1.0
 
 The Azure Pipeline will automatically:
 1. Build the wheel and sdist packages
-2. Publish to the `spark` Azure Artifacts feed
+2. Publish to the `BI-Databases` Azure Artifacts feed
 
 Monitor the pipeline at: https://dev.azure.com/pandora-jewelry/Spark/_build
 
@@ -41,7 +41,7 @@ Monitor the pipeline at: https://dev.azure.com/pandora-jewelry/Spark/_build
 ```bash
 # Install from Azure Artifacts (requires authentication)
 pip install pnd-agents \
-  --index-url "https://pkgs.dev.azure.com/pandora-jewelry/Spark/_packaging/spark/pypi/simple/" \
+  --index-url "https://pkgs.dev.azure.com/pandora-jewelry/_packaging/BI-Databases/pypi/simple/" \
   --extra-index-url "https://pypi.org/simple"
 ```
 
@@ -51,7 +51,7 @@ Create or edit `~/.config/pip/pip.conf` (Linux/macOS) or `%APPDATA%\pip\pip.ini`
 
 ```ini
 [global]
-index-url = https://pkgs.dev.azure.com/pandora-jewelry/Spark/_packaging/spark/pypi/simple/
+index-url = https://pkgs.dev.azure.com/pandora-jewelry/_packaging/BI-Databases/pypi/simple/
 extra-index-url = https://pypi.org/simple
 trusted-host = pkgs.dev.azure.com
 ```
@@ -90,7 +90,7 @@ pip install pnd-agents
 
 ```bash
 pip install pnd-agents \
-  --index-url "https://YOUR_USERNAME:YOUR_PAT@pkgs.dev.azure.com/pandora-jewelry/Spark/_packaging/spark/pypi/simple/"
+  --index-url "https://YOUR_USERNAME:YOUR_PAT@pkgs.dev.azure.com/pandora-jewelry/_packaging/BI-Databases/pypi/simple/"
 ```
 
 ## Post-Installation Setup

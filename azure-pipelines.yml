@@ -14,10 +14,10 @@ pool:
 
 variables:
   pythonVersion: '3.11'
-  # Azure Artifacts PyPI feed URL (project-scoped)
-  # Organization: pandora-jewelry, Project: Spark, Feed: spark
-  feedUrl: 'https://pkgs.dev.azure.com/pandora-jewelry/Spark/_packaging/spark/pypi/upload/'
-  feedIndexUrl: 'https://pkgs.dev.azure.com/pandora-jewelry/Spark/_packaging/spark/pypi/simple/'
+  # Azure Artifacts PyPI feed URL (organization-scoped)
+  # Organization: pandora-jewelry, Feed: BI-Databases
+  feedUrl: 'https://pkgs.dev.azure.com/pandora-jewelry/_packaging/BI-Databases/pypi/upload/'
+  feedIndexUrl: 'https://pkgs.dev.azure.com/pandora-jewelry/_packaging/BI-Databases/pypi/simple/'
 
 stages:
   - stage: Build
@@ -75,9 +75,9 @@ stages:
 
           - task: TwineAuthenticate@1
             inputs:
-              artifactFeed: 'Spark/spark'
+              artifactFeed: 'BI-Databases'
             displayName: 'Authenticate with Azure Artifacts'
 
           - script: |
-              twine upload -r spark --config-file $(PYPIRC_PATH) $(System.ArtifactsDirectory)/python-package/*
+              twine upload -r BI-Databases --config-file $(PYPIRC_PATH) $(System.ArtifactsDirectory)/python-package/*
             displayName: 'Upload to Azure Artifacts'
