@@ -1,0 +1,83 @@
+# Azure Pipelines configuration for publishing pnd-agents to Azure Artifacts
+# This pipeline builds and publishes the Python package to the internal PyPI feed
+
+trigger:
+  tags:
+    include:
+      - 'v*'  # Publish only on version tags (e.g., v1.0.0, v1.1.0)
+
+# Manual trigger also available
+pr: none
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  pythonVersion: '3.11'
+  # Azure Artifacts PyPI feed URL (project-scoped)
+  # Organization: pandora-jewelry, Project: Spark, Feed: spark
+  feedUrl: 'https://pkgs.dev.azure.com/pandora-jewelry/Spark/_packaging/spark/pypi/upload/'
+  feedIndexUrl: 'https://pkgs.dev.azure.com/pandora-jewelry/Spark/_packaging/spark/pypi/simple/'
+
+stages:
+  - stage: Build
+    displayName: 'Build Package'
+    jobs:
+      - job: BuildPackage
+        displayName: 'Build Python Package'
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '$(pythonVersion)'
+              addToPath: true
+            displayName: 'Use Python $(pythonVersion)'
+
+          - script: |
+              python -m pip install --upgrade pip
+              pip install build twine
+            displayName: 'Install build tools'
+
+          - script: |
+              python -m build
+            displayName: 'Build wheel and sdist'
+
+          - task: PublishBuildArtifacts@1
+            inputs:
+              pathToPublish: 'dist'
+              artifactName: 'python-package'
+            displayName: 'Publish build artifacts'
+
+  - stage: Publish
+    displayName: 'Publish to Azure Artifacts'
+    dependsOn: Build
+    condition: and(succeeded(), startsWith(variables['Build.SourceBranch'], 'refs/tags/v'))
+    jobs:
+      - job: PublishPackage
+        displayName: 'Publish to PyPI Feed'
+        steps:
+          - task: DownloadBuildArtifacts@1
+            inputs:
+              buildType: 'current'
+              downloadType: 'single'
+              artifactName: 'python-package'
+              downloadPath: '$(System.ArtifactsDirectory)'
+            displayName: 'Download build artifacts'
+
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '$(pythonVersion)'
+              addToPath: true
+            displayName: 'Use Python $(pythonVersion)'
+
+          - script: |
+              pip install twine
+            displayName: 'Install twine'
+
+          - task: TwineAuthenticate@1
+            inputs:
+              artifactFeed: 'Spark/spark'
+            displayName: 'Authenticate with Azure Artifacts'
+
+          - script: |
+              twine upload -r spark --config-file $(PYPIRC_PATH) $(System.ArtifactsDirectory)/python-package/*
+            displayName: 'Upload to Azure Artifacts'
