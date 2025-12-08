@@ -85,7 +85,9 @@ The setup wizard lets you choose which agents to enable:
 | Frontend Engineer | Yes | React/Next.js components, Storybook |
 | Figma Reader | Yes | Extracts design metadata from Figma API |
 | Code Review | Yes | Validates code against standards |
-| QA | Yes | Generates tests, validates acceptance criteria |
+| QA | Yes | Generates E2E and integration tests |
+| **Unit Test** | Yes | Generates unit tests with **100% coverage** target |
+| **Sonar Validation** | Yes | Validates against SonarCloud quality gates |
 | Amplience CMS | No | Content types, JSON schemas |
 | Performance | No | HAR analysis, Core Web Vitals |
 | Backend | No | API routes, Server Components |
@@ -119,6 +121,19 @@ To get a Figma token:
 AMPLIENCE_HUB_NAME=pandoragroup
 AMPLIENCE_BASE_URL=https://cdn.content.amplience.net
 ```
+
+### Optional for SonarCloud Integration
+
+```bash
+SONAR_TOKEN=your-sonarcloud-token
+```
+
+To get a SonarCloud token:
+1. Go to https://sonarcloud.io/account/security
+2. Generate a new token with "Analyze Projects" permission
+3. The Sonar Validation Agent will use this to fetch issues, coverage, and quality gate status
+
+Note: The Sonar Validation Agent can work without a token for basic validation, but API access enables fetching real-time data from https://sonarcloud.io/summary/new_code?id=pandora-jewelry_spark_pandora-group&branch=master
 
 ### Configuring Environment Variables
 
@@ -323,7 +338,96 @@ https://www.figma.com/design/ABC123/My-Design?node-id=123-456
 Review the code in src/components/Header for Pandora coding standards
 ```
 
-**Generate tests:**
+**Generate unit tests with 100% coverage:**
 ```
-Generate unit tests for the PageCover component
+Write unit tests for the Button component with 100% coverage
 ```
+
+**Validate code against SonarCloud before PR:**
+```
+Validate my code against SonarCloud quality gates before I create a PR
+```
+
+**Full workflow with Unit Test and Sonar:**
+```
+Create a Stories carousel from Figma, write unit tests with 100% coverage, and validate against SonarCloud
+```
+
+## Team Setup Guide
+
+This section provides step-by-step instructions for setting up pnd-agents for your team.
+
+### Step 1: Clone the Repository
+
+```bash
+git clone https://github.com/shvee-pandora/pnd-agents.git
+cd pnd-agents
+```
+
+### Step 2: Install Dependencies
+
+```bash
+pip install -e .
+```
+
+### Step 3: Run Setup Wizard
+
+```bash
+pnd-agents setup
+```
+
+The wizard will prompt you to:
+1. Select which agents to enable (Unit Test and Sonar Validation are enabled by default)
+2. Enter your Figma access token
+3. Optionally enter your SonarCloud token for API access
+
+### Step 4: Restart Claude
+
+After setup completes, restart Claude Desktop or Claude Code to load the new configuration.
+
+### Step 5: Verify Installation
+
+```bash
+pnd-agents status
+```
+
+In Claude, ask: "What pnd-agents tools do you have access to?"
+
+### Team Environment Variables
+
+For team-wide setup, create a shared `.env.example` file:
+
+```bash
+# Required for Figma integration
+FIGMA_ACCESS_TOKEN=your-figma-token
+
+# Optional for Amplience CMS
+AMPLIENCE_HUB_NAME=pandoragroup
+AMPLIENCE_BASE_URL=https://cdn.content.amplience.net
+
+# Optional for SonarCloud API access
+SONAR_TOKEN=your-sonarcloud-token
+```
+
+Each team member should copy this to `.env` and fill in their own tokens.
+
+### Workflow Pipelines
+
+The Task Manager automatically orchestrates agents based on task type:
+
+| Task Type | Pipeline |
+|-----------|----------|
+| Figma | Figma Reader → Frontend → Code Review → Unit Test → Sonar → Performance |
+| Frontend | Frontend → Code Review → Unit Test → Sonar → Performance |
+| Backend | Backend → Code Review → Unit Test → Sonar |
+| Unit Test | Unit Test → Sonar |
+| Sonar | Sonar → Code Review |
+
+### Quality Gates
+
+The Sonar Validation Agent enforces these quality gates:
+- **0 errors** - No bugs or vulnerabilities
+- **0 duplication** - No duplicated code blocks
+- **100% coverage** - All code paths tested
+
+When issues are found, the agent generates fix plans with step-by-step instructions.

@@ -28,7 +28,9 @@ PG AI Squad is a comprehensive agent ecosystem designed to assist with building 
 | Amplience CMS | Specialist | Creates content types, schemas, and example payloads |
 | Code Review | Validator | Validates code against Pandora standards |
 | Performance | Specialist | Analyzes HAR files, suggests optimizations |
-| QA | Validator | Generates tests, validates acceptance criteria |
+| QA | Validator | Generates E2E and integration tests, validates acceptance criteria |
+| **Unit Test** | Specialist | Generates comprehensive unit tests with **100% coverage** target |
+| **Sonar Validation** | Validator | Validates against SonarCloud quality gates (0 errors, 0 duplication, 100% coverage) |
 | Backend | Specialist | Creates API routes, Server Components, mock APIs |
 | Commerce | Specialist | Agentic commerce - finds products, filters by criteria, prepares cart metadata |
 
@@ -300,21 +302,25 @@ The engine detects task types using keyword matching:
 | Frontend | react, component, tsx, ui, frontend |
 | Backend | api, endpoint, server, route, integration |
 | Amplience | content type, cms, schema, amplience |
-| QA | tests, unit tests, automation, coverage |
+| Unit Test | unit tests, coverage, jest, vitest, 100% coverage |
+| Sonar | sonar, sonarcloud, quality gate, duplication, code smells |
+| QA | tests, automation, playwright, e2e, integration tests |
 | Code Review | review, lint, standards, refactor |
 | Performance | performance, har, metrics, optimization |
 
 ### Workflow Pipelines
 
-Different task types trigger different agent sequences:
+Different task types trigger different agent sequences (now includes Unit Test and Sonar Validation):
 
 | Workflow | Pipeline |
 |----------|----------|
-| Figma | Figma Reader → Frontend → Code Review → QA → Performance |
-| Frontend | Frontend → Code Review → QA → Performance |
-| Backend | Backend → Code Review → QA |
-| Amplience | Amplience → Frontend → Code Review → QA |
-| Default | Frontend → Code Review → QA |
+| Figma | Figma Reader → Frontend → Code Review → **Unit Test → Sonar** → Performance |
+| Frontend | Frontend → Code Review → **Unit Test → Sonar** → Performance |
+| Backend | Backend → Code Review → **Unit Test → Sonar** |
+| Amplience | Amplience → Frontend → Code Review → **Unit Test → Sonar** |
+| Unit Test | **Unit Test → Sonar** |
+| Sonar | **Sonar** → Code Review |
+| Default | Frontend → Code Review → **Unit Test → Sonar** |
 
 ### CLI Commands
 
@@ -377,6 +383,82 @@ context = agent.resume_task(verbose=True)
 
 # Clear saved state
 agent.clear_task()
+```
+
+## Unit Test Agent
+
+The Unit Test Agent is dedicated to generating comprehensive unit tests with a **100% coverage** target. It analyzes source code and generates tests that cover all functions, branches, and edge cases.
+
+### Features
+
+- Analyzes source files to identify testable elements (functions, components, hooks, classes)
+- Generates test cases for all code paths including branches
+- Supports Jest and Vitest frameworks
+- Generates accessibility tests using jest-axe
+- Provides coverage improvement recommendations
+
+### Usage
+
+```python
+from agents.unit_test_agent import UnitTestAgent, generate_tests
+
+# Generate tests for a source file
+result = generate_tests("src/components/Button/Button.tsx", framework="jest")
+print(result["testCode"])
+
+# Or use the agent directly
+agent = UnitTestAgent()
+test_file = agent.generate_test_file("src/components/Button/Button.tsx")
+print(f"Generated {len(test_file.test_cases)} test cases")
+```
+
+### CLI Usage
+
+```bash
+# Run unit test generation as part of workflow
+pnd-agents run-task "Write unit tests for the Button component with 100% coverage"
+```
+
+## Sonar Validation Agent
+
+The Sonar Validation Agent validates code against SonarCloud quality gates before PR creation. It ensures **0 errors, 0 duplication, and 100% coverage**.
+
+### Features
+
+- Fetches issues, duplications, and coverage from SonarCloud API
+- Analyzes pipeline configuration files (azure-pipelines.yml, sonar-project.properties)
+- Generates fix plans for each issue with step-by-step instructions
+- Creates PR checklists to ensure quality gate compliance
+- Targets: https://sonarcloud.io/summary/new_code?id=pandora-jewelry_spark_pandora-group&branch=master
+
+### Usage
+
+```python
+from agents.sonar_validation_agent import SonarValidationAgent, validate_for_pr
+
+# Validate code for PR readiness
+result = validate_for_pr(branch="feature/my-branch", project_key="pandora-jewelry_spark_pandora-group")
+print(f"Ready for PR: {result['readyForPR']}")
+print(result['checklist'])
+
+# Or use the agent directly
+agent = SonarValidationAgent()
+validation = agent.validate(branch="master")
+print(f"Quality Gate: {validation.quality_gate_status}")
+print(f"Issues: {len(validation.issues)}")
+```
+
+### Environment Variables
+
+```bash
+export SONAR_TOKEN="your-sonarcloud-token"  # Optional, for API access
+```
+
+### CLI Usage
+
+```bash
+# Run Sonar validation as part of workflow
+pnd-agents run-task "Validate code against SonarCloud quality gates"
 ```
 
 ## Documentation
