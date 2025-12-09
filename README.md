@@ -36,6 +36,8 @@ PG AI Squad is a comprehensive agent ecosystem designed to assist with building 
 
 ## Quick Start
 
+> **💡 Want to use these agents without cloning?** See the [Claude Usage Guide](CLAUDE_USAGE.md) for instructions on using these agents directly in Claude Desktop/Code without local installation.
+
 ### Prerequisites
 
 - Python 3.10+
@@ -463,6 +465,7 @@ pnd-agents run-task "Validate code against SonarCloud quality gates"
 
 ## Documentation
 
+- [Claude Usage Guide](CLAUDE_USAGE.md) - Using agents with Claude without cloning the repo
 - [Setup Guide](SETUP.md) - Detailed installation and configuration
 - [Architecture](ARCHITECTURE.md) - System architecture and design decisions
 - [Examples](examples/) - Example tasks demonstrating agent collaboration
