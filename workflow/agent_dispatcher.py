@@ -261,39 +261,77 @@ class AgentDispatcher:
         """
         QA Agent handler.
         
-        Generates unit and integration tests.
+        Validates implementation against test cases and acceptance criteria.
+        Gets test cases from user input or from previous workflow stages.
         """
         task = context.get("task", "")
         input_data = context.get("input", {})
         previous_output = input_data.get("previous_output", {})
         
-        # Get component info from previous stages
-        component_spec = None
-        if "component_spec" in previous_output:
-            component_spec = previous_output["component_spec"]
-        elif "previous_output" in input_data:
-            prev = input_data["previous_output"]
-            if "component_spec" in prev:
-                component_spec = prev["component_spec"]
-        
-        component_name = component_spec.get("name", "Component") if component_spec else "Component"
-        
-        return AgentResult(
-            status="success",
-            data={
-                "test_files": [
-                    f"src/components/{component_name}/{component_name}.test.tsx",
-                ],
-                "test_cases": [
-                    f"renders {component_name} correctly",
-                    f"handles props correctly",
-                    f"matches snapshot",
-                    f"is accessible",
-                ],
-                "coverage_target": "80%",
-            },
-            next="performance"
-        )
+        try:
+            from agents.qa_agent import QAAgent
+            
+            agent = QAAgent()
+            
+            agent_context = {
+                "task_description": task,
+                "input_data": {
+                    "test_cases": input_data.get("test_cases", []),
+                    "code_paths": previous_output.get("files_to_generate", []),
+                    "acceptance_criteria": input_data.get("acceptance_criteria", []),
+                    "previous_output": previous_output,
+                    "all_outputs": input_data.get("all_outputs", {}),
+                }
+            }
+            
+            result = agent.run(agent_context)
+            
+            return AgentResult(
+                status=result.get("status", "success"),
+                data=result.get("data", {}),
+                next=result.get("next", "sonar"),
+                error=result.get("error")
+            )
+        except ImportError:
+            component_spec = None
+            if "component_spec" in previous_output:
+                component_spec = previous_output["component_spec"]
+            elif "previous_output" in input_data:
+                prev = input_data["previous_output"]
+                if "component_spec" in prev:
+                    component_spec = prev["component_spec"]
+            
+            component_name = component_spec.get("name", "Component") if component_spec else "Component"
+            
+            return AgentResult(
+                status="success",
+                data={
+                    "validation_status": "PENDING",
+                    "scenarios": [
+                        {
+                            "name": "Functional Tests",
+                            "status": "pending",
+                            "test_cases": [
+                                f"renders {component_name} correctly",
+                                f"handles props correctly",
+                                f"matches snapshot",
+                                f"is accessible",
+                            ],
+                        }
+                    ],
+                    "recommendations": [
+                        "Run full test suite: npm test",
+                        "Check test coverage: npm test -- --coverage",
+                        "Validate all acceptance criteria manually",
+                    ],
+                },
+                next="sonar"
+            )
+        except Exception as e:
+            return AgentResult(
+                status="error",
+                error=f"QA validation failed: {str(e)}"
+            )
     
     def _performance_handler(self, context: Dict[str, Any]) -> AgentResult:
         """

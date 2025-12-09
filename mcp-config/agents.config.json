@@ -148,27 +148,58 @@
       "priority": 3
     },
     {
-      "id": "qa",
-      "name": "QA Agent",
-      "description": "Generates unit tests, integration tests, and Playwright E2E tests. Validates acceptance criteria and produces coverage reports.",
-      "role": "validator",
+      "id": "unit-test",
+      "name": "Unit Test Agent",
+      "description": "Standalone agent that writes comprehensive unit tests for any code with 100% coverage target. Can be used independently without Task Manager or as part of a workflow pipeline.",
+      "role": "specialist",
       "capabilities": [
         "unit-test-generation",
-        "integration-test-generation",
-        "e2e-test-generation",
         "coverage-analysis",
-        "acceptance-validation"
+        "test-code-generation",
+        "branch-coverage",
+        "snapshot-testing"
       ],
       "commands": [
-        "test-generate",
-        "coverage-report",
-        "acceptance-validate"
+        "generate-tests",
+        "analyze-coverage",
+        "generate-test-code"
       ],
       "skills": [
         "jest-testing",
-        "playwright-testing",
+        "vitest-testing",
         "react-testing-library",
-        "test-coverage"
+        "test-coverage",
+        "code-analysis"
+      ],
+      "tools": [
+        "filesystem",
+        "command-runner"
+      ],
+      "model": "sonnet",
+      "priority": 2
+    },
+    {
+      "id": "qa",
+      "name": "QA Agent",
+      "description": "Validates implementation against test cases and acceptance criteria. Gets test cases from user input or from previous workflow stages (like Unit Test Agent). Checks all scenarios work correctly.",
+      "role": "validator",
+      "capabilities": [
+        "implementation-validation",
+        "acceptance-validation",
+        "scenario-testing",
+        "test-case-validation",
+        "integration-test-validation"
+      ],
+      "commands": [
+        "validate-implementation",
+        "validate-acceptance",
+        "run-scenarios"
+      ],
+      "skills": [
+        "test-validation",
+        "acceptance-criteria",
+        "scenario-testing",
+        "quality-assurance"
       ],
       "tools": [
         "filesystem",

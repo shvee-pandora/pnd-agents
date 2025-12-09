@@ -155,10 +155,10 @@
     },
     "qa": {
       "name": "QA Agent",
-      "description": "Generate unit and integration tests",
-      "handler": "qa_agent.run_tests",
-      "input": ["component_spec", "files"],
-      "output": ["test_files", "test_cases", "coverage"]
+      "description": "Validate implementation against test cases and acceptance criteria. Gets test cases from user or previous workflow stages.",
+      "handler": "qa_agent.run",
+      "input": ["test_cases", "code_paths", "acceptance_criteria", "previous_output"],
+      "output": ["validation_status", "scenarios", "pass_rate", "issues_found", "recommendations"]
     },
     "performance": {
       "name": "Performance Agent",
