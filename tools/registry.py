@@ -21,6 +21,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from agents.figma_reader_agent import FigmaReaderAgent
 from agents.commerce_agent import CommerceAgent
 from agents.broken_experience_detector_agent import BrokenExperienceDetectorAgent
+from agents.task_manager_agent import TaskManagerAgent
+from agents.unit_test_agent import UnitTestAgent, generate_tests
+from agents.sonar_validation_agent import SonarValidationAgent, validate_for_pr
 
 
 def register_tools(server: Server) -> None:
@@ -389,6 +392,110 @@ def register_tools(server: Server) -> None:
                     "required": ["url"]
                 }
             ),
+
+            # Task Manager Agent Tools
+            types.Tool(
+                name="task_manager_run_task",
+                description="Run a task through the workflow engine. The Task Manager automatically detects the task type (figma, frontend, backend, etc.) and orchestrates the appropriate agents in sequence. Returns the workflow result with outputs from each agent stage.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "task_description": {
+                            "type": "string",
+                            "description": "Description of the task to run (e.g., 'Create Stories carousel from Figma: https://figma.com/...', 'Write unit tests for Button component')"
+                        },
+                        "ticket_id": {
+                            "type": "string",
+                            "description": "Optional Jira ticket ID (e.g., 'INS-2509')"
+                        },
+                        "branch": {
+                            "type": "string",
+                            "description": "Optional git branch name"
+                        }
+                    },
+                    "required": ["task_description"]
+                }
+            ),
+            types.Tool(
+                name="task_manager_analyze_task",
+                description="Analyze a task to determine which workflow and agents would be used, without actually executing it. Useful for planning and understanding the workflow pipeline.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "task_description": {
+                            "type": "string",
+                            "description": "Description of the task to analyze"
+                        }
+                    },
+                    "required": ["task_description"]
+                }
+            ),
+
+            # Unit Test Agent Tools
+            types.Tool(
+                name="unit_test_generate",
+                description="Generate comprehensive unit tests for a source file with 100% coverage target. Analyzes the source code and generates Jest/Vitest tests covering all functions, branches, and edge cases. Follows pandora-group test patterns.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "source_file": {
+                            "type": "string",
+                            "description": "Path to the source file to generate tests for (e.g., 'src/components/Button/Button.tsx')"
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "Optional source file content (if not provided, reads from file path)"
+                        },
+                        "framework": {
+                            "type": "string",
+                            "description": "Test framework to use: 'jest' or 'vitest' (default: 'jest')",
+                            "enum": ["jest", "vitest"],
+                            "default": "jest"
+                        }
+                    },
+                    "required": ["source_file"]
+                }
+            ),
+
+            # Sonar Validation Agent Tools
+            types.Tool(
+                name="sonar_validate",
+                description="Validate code against SonarCloud quality gates (0 errors, 0 duplication, 100% coverage). Fetches issues from https://sonarcloud.io/summary/new_code?id=pandora-jewelry_spark_pandora-group and generates fix plans for each issue.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "branch": {
+                            "type": "string",
+                            "description": "Branch to validate (default: 'master')",
+                            "default": "master"
+                        },
+                        "project_key": {
+                            "type": "string",
+                            "description": "SonarCloud project key (default: 'pandora-jewelry_spark_pandora-group')",
+                            "default": "pandora-jewelry_spark_pandora-group"
+                        }
+                    }
+                }
+            ),
+            types.Tool(
+                name="sonar_validate_for_pr",
+                description="Validate code for PR readiness against SonarCloud quality gates. Returns a checklist of items to fix before creating a PR, ensuring 0 errors, 0 duplication, and 100% coverage.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "branch": {
+                            "type": "string",
+                            "description": "Branch to validate for PR"
+                        },
+                        "project_key": {
+                            "type": "string",
+                            "description": "SonarCloud project key (default: 'pandora-jewelry_spark_pandora-group')",
+                            "default": "pandora-jewelry_spark_pandora-group"
+                        }
+                    },
+                    "required": ["branch"]
+                }
+            ),
         ]
 
     # Register call_tool handler
@@ -555,6 +662,89 @@ def register_tools(server: Server) -> None:
                         return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
                 except Exception as bx_error:
                     return [types.TextContent(type="text", text=f"Broken Experience Detector Error: {str(bx_error)}")]
+
+            # Task Manager Agent tools
+            elif name == "task_manager_run_task":
+                import json
+                try:
+                    task_manager = TaskManagerAgent()
+                    metadata = {}
+                    if arguments.get("ticket_id"):
+                        metadata["ticket_id"] = arguments["ticket_id"]
+                    if arguments.get("branch"):
+                        metadata["branch"] = arguments["branch"]
+                    
+                    context = task_manager.run_task(
+                        arguments["task_description"],
+                        metadata=metadata if metadata else None,
+                        verbose=False
+                    )
+                    
+                    # Convert context to dict for JSON serialization
+                    result = {
+                        "status": context.status,
+                        "task_id": context.task_id,
+                        "task_type": context.task_type,
+                        "stages": [
+                            {
+                                "agent_name": stage.agent_name,
+                                "status": stage.status,
+                                "started_at": stage.started_at,
+                                "completed_at": stage.completed_at,
+                            }
+                            for stage in context.stages
+                        ],
+                        "metadata": context.metadata,
+                    }
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as tm_error:
+                    return [types.TextContent(type="text", text=f"Task Manager Error: {str(tm_error)}")]
+
+            elif name == "task_manager_analyze_task":
+                import json
+                try:
+                    task_manager = TaskManagerAgent()
+                    plan = task_manager.analyze_task(arguments["task_description"])
+                    return [types.TextContent(type="text", text=json.dumps(plan, indent=2))]
+                except Exception as tm_error:
+                    return [types.TextContent(type="text", text=f"Task Manager Error: {str(tm_error)}")]
+
+            # Unit Test Agent tools
+            elif name == "unit_test_generate":
+                import json
+                try:
+                    result = generate_tests(
+                        arguments["source_file"],
+                        arguments.get("content"),
+                        arguments.get("framework", "jest")
+                    )
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as ut_error:
+                    return [types.TextContent(type="text", text=f"Unit Test Agent Error: {str(ut_error)}")]
+
+            # Sonar Validation Agent tools
+            elif name == "sonar_validate":
+                import json
+                try:
+                    agent = SonarValidationAgent()
+                    validation = agent.validate(
+                        branch=arguments.get("branch", "master"),
+                        project_key=arguments.get("project_key", "pandora-jewelry_spark_pandora-group")
+                    )
+                    return [types.TextContent(type="text", text=json.dumps(validation.to_dict(), indent=2))]
+                except Exception as sv_error:
+                    return [types.TextContent(type="text", text=f"Sonar Validation Error: {str(sv_error)}")]
+
+            elif name == "sonar_validate_for_pr":
+                import json
+                try:
+                    result = validate_for_pr(
+                        branch=arguments["branch"],
+                        project_key=arguments.get("project_key", "pandora-jewelry_spark_pandora-group")
+                    )
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as sv_error:
+                    return [types.TextContent(type="text", text=f"Sonar Validation Error: {str(sv_error)}")]
 
             else:
                 raise ValueError(f"Unknown tool: {name}")
