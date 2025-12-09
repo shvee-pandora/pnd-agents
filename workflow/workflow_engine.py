@@ -2,16 +2,36 @@
 Workflow Engine
 
 Orchestrates multi-agent pipelines by detecting task types,
-building workflow plans, and executing agents in sequence.
+building workflow plans, and executing agents in sequence or parallel.
+
+Supports:
+- Sequential execution (default)
+- Parallel execution for independent agents
+- Cross-agent communication via call_agent hook
+- Comprehensive logging and tracing
 """
 
 import json
+import logging
 import os
 import re
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Any, Optional, Callable
+from typing import Dict, List, Any, Optional, Callable, Union
 from dataclasses import dataclass, field, asdict
+
+# Configure logging
+logger = logging.getLogger("pnd_agents.workflow")
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter(
+        "[%(asctime)s] %(levelname)s - %(name)s - %(message)s",
+        datefmt="%H:%M:%S"
+    ))
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
 
 
 class TaskType(Enum):
@@ -182,6 +202,78 @@ class WorkflowContext:
             if stage and stage.status == "completed" and stage.output_data:
                 return stage.output_data
         return {}
+    
+    def add_trace_event(
+        self,
+        agent: str,
+        event_type: str,
+        status: str,
+        duration_ms: float = 0,
+        details: Optional[Dict[str, Any]] = None
+    ):
+        """Add a trace event to the workflow metadata."""
+        if "trace" not in self.metadata:
+            self.metadata["trace"] = []
+        
+        self.metadata["trace"].append({
+            "timestamp": datetime.utcnow().isoformat(),
+            "agent": agent,
+            "event_type": event_type,
+            "status": status,
+            "duration_ms": duration_ms,
+            "details": details or {}
+        })
+    
+    def get_summary(self) -> Dict[str, Any]:
+        """Generate a comprehensive summary of the workflow execution."""
+        agents_used = []
+        tasks_executed = []
+        files_changed = []
+        errors = []
+        recommendations = []
+        
+        for agent_name, stage in self.stages.items():
+            if stage.status in ["completed", "error", "failed"]:
+                agents_used.append(agent_name)
+                tasks_executed.append({
+                    "agent": agent_name,
+                    "status": stage.status,
+                    "duration_ms": stage.output_data.get("duration_ms", 0) if stage.output_data else 0
+                })
+                
+                if stage.output_data:
+                    files_changed.extend(stage.output_data.get("files_to_generate", []))
+                    files_changed.extend(stage.output_data.get("files_changed", []))
+                    recommendations.extend(stage.output_data.get("recommendations", []))
+                
+                if stage.error:
+                    errors.append({
+                        "agent": agent_name,
+                        "error": stage.error
+                    })
+        
+        total_duration = 0
+        if self.started_at and self.completed_at:
+            try:
+                start = datetime.fromisoformat(self.started_at)
+                end = datetime.fromisoformat(self.completed_at)
+                total_duration = (end - start).total_seconds() * 1000
+            except (ValueError, TypeError):
+                pass
+        
+        return {
+            "workflow_id": self.workflow_id,
+            "task_description": self.task_description,
+            "task_type": self.task_type.value,
+            "status": self.status,
+            "total_duration_ms": total_duration,
+            "agents_used": agents_used,
+            "tasks_executed": tasks_executed,
+            "files_changed": list(set(files_changed)),
+            "errors": errors,
+            "recommendations": list(set(recommendations)),
+            "trace": self.metadata.get("trace", [])
+        }
 
 
 class WorkflowEngine:
@@ -485,6 +577,266 @@ class WorkflowEngine:
         self.save_context(context)
         
         return context
+    
+    def run_workflow_parallel(
+        self,
+        context: WorkflowContext,
+        parallel_groups: Optional[List[List[str]]] = None,
+        on_stage_start: Optional[Callable[[str, WorkflowContext], None]] = None,
+        on_stage_complete: Optional[Callable[[str, AgentResult, WorkflowContext], None]] = None,
+        max_workers: int = 4
+    ) -> WorkflowContext:
+        """
+        Run a workflow with parallel execution support.
+        
+        Agents within the same group run in parallel, groups run sequentially.
+        If parallel_groups is None, falls back to sequential execution.
+        
+        Args:
+            context: The workflow context.
+            parallel_groups: List of agent groups. Agents in same group run in parallel.
+                            Example: [["figma"], ["frontend", "backend"], ["review"], ["unit_test", "performance"]]
+            on_stage_start: Callback when a stage starts.
+            on_stage_complete: Callback when a stage completes.
+            max_workers: Maximum number of parallel workers.
+            
+        Returns:
+            Updated WorkflowContext.
+        """
+        if not parallel_groups:
+            logger.info("No parallel groups specified, falling back to sequential execution")
+            return self.run_workflow(context, on_stage_start, on_stage_complete)
+        
+        context.status = "running"
+        context.add_trace_event("workflow", "start", "running", details={"parallel_groups": parallel_groups})
+        self.save_context(context)
+        
+        logger.info(f"Starting parallel workflow with {len(parallel_groups)} groups")
+        
+        current_input = {
+            "task": context.task_description,
+            "metadata": context.metadata
+        }
+        
+        all_outputs: Dict[str, Dict[str, Any]] = {}
+        
+        for group_idx, agent_group in enumerate(parallel_groups):
+            logger.info(f"Executing group {group_idx + 1}/{len(parallel_groups)}: {agent_group}")
+            context.add_trace_event(
+                "group", "start", "running",
+                details={"group_idx": group_idx, "agents": agent_group}
+            )
+            
+            if len(agent_group) == 1:
+                agent_name = agent_group[0]
+                if on_stage_start:
+                    on_stage_start(agent_name, context)
+                
+                agent_input = {**current_input, "all_outputs": all_outputs}
+                result = self.execute_agent(agent_name, context, agent_input)
+                
+                if on_stage_complete:
+                    on_stage_complete(agent_name, result, context)
+                
+                if result.status == "error":
+                    context.status = "failed"
+                    context.completed_at = datetime.utcnow().isoformat()
+                    context.add_trace_event(agent_name, "error", "failed", details={"error": result.error})
+                    self.save_context(context)
+                    return context
+                
+                all_outputs[agent_name] = result.data
+                if result.data:
+                    current_input = {
+                        **current_input,
+                        "previous_agent": agent_name,
+                        "previous_output": result.data
+                    }
+            else:
+                group_results: Dict[str, AgentResult] = {}
+                group_errors: List[str] = []
+                
+                with ThreadPoolExecutor(max_workers=min(max_workers, len(agent_group))) as executor:
+                    future_to_agent = {}
+                    
+                    for agent_name in agent_group:
+                        if on_stage_start:
+                            on_stage_start(agent_name, context)
+                        
+                        agent_input = {**current_input, "all_outputs": all_outputs}
+                        future = executor.submit(
+                            self._execute_agent_thread_safe,
+                            agent_name, context, agent_input
+                        )
+                        future_to_agent[future] = agent_name
+                    
+                    for future in as_completed(future_to_agent):
+                        agent_name = future_to_agent[future]
+                        try:
+                            result = future.result()
+                            group_results[agent_name] = result
+                            
+                            if on_stage_complete:
+                                on_stage_complete(agent_name, result, context)
+                            
+                            if result.status == "error":
+                                group_errors.append(f"{agent_name}: {result.error}")
+                            else:
+                                all_outputs[agent_name] = result.data
+                                
+                        except Exception as e:
+                            logger.error(f"Agent {agent_name} failed with exception: {e}")
+                            group_errors.append(f"{agent_name}: {str(e)}")
+                            group_results[agent_name] = AgentResult(
+                                status="error",
+                                error=str(e)
+                            )
+                
+                if group_errors:
+                    logger.warning(f"Group {group_idx + 1} had errors: {group_errors}")
+                    context.status = "failed"
+                    context.completed_at = datetime.utcnow().isoformat()
+                    context.add_trace_event(
+                        "group", "error", "failed",
+                        details={"group_idx": group_idx, "errors": group_errors}
+                    )
+                    self.save_context(context)
+                    return context
+                
+                merged_output = {}
+                for agent_name, result in group_results.items():
+                    if result.data:
+                        merged_output[agent_name] = result.data
+                
+                current_input = {
+                    **current_input,
+                    "previous_group": agent_group,
+                    "previous_outputs": merged_output
+                }
+            
+            context.add_trace_event(
+                "group", "complete", "success",
+                details={"group_idx": group_idx, "agents": agent_group}
+            )
+        
+        context.status = "completed"
+        context.completed_at = datetime.utcnow().isoformat()
+        context.add_trace_event("workflow", "complete", "success")
+        self.save_context(context)
+        
+        logger.info(f"Workflow completed successfully")
+        return context
+    
+    def _execute_agent_thread_safe(
+        self,
+        agent_name: str,
+        context: WorkflowContext,
+        input_data: Dict[str, Any]
+    ) -> AgentResult:
+        """
+        Thread-safe wrapper for execute_agent.
+        
+        Avoids concurrent writes to context file by not saving during execution.
+        """
+        import threading
+        
+        stage = context.stages.get(agent_name)
+        if stage:
+            stage.status = "in_progress"
+            stage.started_at = datetime.utcnow().isoformat()
+            stage.input_data = input_data
+        
+        context.current_agent = agent_name
+        
+        start_time = time.time()
+        
+        handler = self._agent_handlers.get(agent_name)
+        if not handler:
+            result = AgentResult(
+                status="skipped",
+                data={"message": f"No handler registered for agent: {agent_name}"},
+                error=None
+            )
+        else:
+            try:
+                call_agent_func = self._create_call_agent_func(context)
+                
+                result = handler({
+                    "task": context.task_description,
+                    "input": input_data,
+                    "metadata": context.metadata,
+                    "workflow_id": context.workflow_id,
+                    "agent_name": agent_name,
+                    "call_agent": call_agent_func
+                })
+            except Exception as e:
+                logger.error(f"Agent {agent_name} execution failed: {e}")
+                result = AgentResult(
+                    status="error",
+                    error=str(e)
+                )
+        
+        result.duration_ms = (time.time() - start_time) * 1000
+        
+        if stage:
+            stage.status = "completed" if result.status == "success" else result.status
+            stage.completed_at = datetime.utcnow().isoformat()
+            stage.output_data = result.data
+            if result.error:
+                stage.error = result.error
+        
+        context.add_trace_event(
+            agent_name, "execute", result.status,
+            duration_ms=result.duration_ms,
+            details={"has_data": bool(result.data), "has_error": bool(result.error)}
+        )
+        
+        return result
+    
+    def _create_call_agent_func(self, context: WorkflowContext) -> Callable[[str, Dict[str, Any]], AgentResult]:
+        """
+        Create a call_agent function for cross-agent communication.
+        
+        This allows agents to call other agents directly during execution.
+        """
+        def call_agent(agent_name: str, input_data: Dict[str, Any]) -> AgentResult:
+            logger.info(f"Cross-agent call: calling {agent_name}")
+            context.add_trace_event(
+                agent_name, "cross_agent_call", "started",
+                details={"caller": context.current_agent}
+            )
+            
+            handler = self._agent_handlers.get(agent_name)
+            if not handler:
+                return AgentResult(
+                    status="error",
+                    error=f"No handler registered for agent: {agent_name}"
+                )
+            
+            try:
+                result = handler({
+                    "task": context.task_description,
+                    "input": input_data,
+                    "metadata": context.metadata,
+                    "workflow_id": context.workflow_id,
+                    "agent_name": agent_name,
+                    "is_cross_agent_call": True
+                })
+                
+                context.add_trace_event(
+                    agent_name, "cross_agent_call", result.status,
+                    duration_ms=result.duration_ms
+                )
+                
+                return result
+            except Exception as e:
+                logger.error(f"Cross-agent call to {agent_name} failed: {e}")
+                return AgentResult(
+                    status="error",
+                    error=str(e)
+                )
+        
+        return call_agent
     
     def get_workflow_plan(self, task_description: str) -> Dict[str, Any]:
         """

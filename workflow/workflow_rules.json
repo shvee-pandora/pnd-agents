@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "description": "PND Agents Workflow Rules Configuration",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "workflows": {
     "figma": ["figma", "frontend", "review", "unit_test", "sonar", "performance"],
     "frontend": ["frontend", "review", "unit_test", "sonar", "performance"],
@@ -13,6 +13,18 @@
     "code_review": ["review", "sonar"],
     "performance": ["performance", "frontend", "review"],
     "default": ["frontend", "review", "unit_test", "sonar"]
+  },
+  "parallel_groups": {
+    "figma": [["figma"], ["frontend"], ["review"], ["unit_test", "performance"], ["sonar"]],
+    "frontend": [["frontend"], ["review"], ["unit_test", "performance"], ["sonar"]],
+    "backend": [["backend"], ["review"], ["unit_test"], ["sonar"]],
+    "amplience": [["amplience"], ["frontend"], ["review"], ["unit_test"], ["sonar"]],
+    "qa": [["unit_test"], ["review"], ["sonar"]],
+    "unit_test": [["unit_test"], ["sonar"]],
+    "sonar": [["sonar"], ["review"]],
+    "code_review": [["review"], ["sonar"]],
+    "performance": [["performance"], ["frontend"], ["review"]],
+    "default": [["frontend"], ["review"], ["unit_test"], ["sonar"]]
   },
   "keywords": {
     "figma": [
@@ -143,10 +155,10 @@
     },
     "qa": {
       "name": "QA Agent",
-      "description": "Generate unit and integration tests",
-      "handler": "qa_agent.run_tests",
-      "input": ["component_spec", "files"],
-      "output": ["test_files", "test_cases", "coverage"]
+      "description": "Validate implementation against test cases and acceptance criteria. Gets test cases from user or previous workflow stages.",
+      "handler": "qa_agent.run",
+      "input": ["test_cases", "code_paths", "acceptance_criteria", "previous_output"],
+      "output": ["validation_status", "scenarios", "pass_rate", "issues_found", "recommendations"]
     },
     "performance": {
       "name": "Performance Agent",

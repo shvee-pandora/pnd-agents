@@ -21,6 +21,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from agents.figma_reader_agent import FigmaReaderAgent
 from agents.commerce_agent import CommerceAgent
 from agents.broken_experience_detector_agent import BrokenExperienceDetectorAgent
+from agents.unit_test_agent import UnitTestAgent
+from agents.qa_agent import QAAgent
 
 
 def register_tools(server: Server) -> None:
@@ -389,6 +391,84 @@ def register_tools(server: Server) -> None:
                     "required": ["url"]
                 }
             ),
+
+            # Unit Test Agent Tools
+            types.Tool(
+                name="unit_test_generate",
+                description="Generate comprehensive unit tests for source files with 100% coverage target. Can be used independently without Task Manager. Analyzes source code and generates Jest/Vitest tests for React components, utility functions, hooks, and API routes following Pandora coding standards.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "source_file": {
+                            "type": "string",
+                            "description": "Path to the source file to generate tests for"
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "Optional source code content (if file path is not accessible)"
+                        },
+                        "framework": {
+                            "type": "string",
+                            "description": "Test framework to use (jest or vitest)",
+                            "enum": ["jest", "vitest"],
+                            "default": "jest"
+                        }
+                    },
+                    "required": ["source_file"]
+                }
+            ),
+            types.Tool(
+                name="unit_test_analyze",
+                description="Analyze a source file to identify testable elements including functions, components, hooks, classes, and branches. Returns analysis results for test planning.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "source_file": {
+                            "type": "string",
+                            "description": "Path to the source file to analyze"
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "Optional source code content (if file path is not accessible)"
+                        }
+                    },
+                    "required": ["source_file"]
+                }
+            ),
+
+            # QA Agent Tools
+            types.Tool(
+                name="qa_validate",
+                description="Validate implementation against test cases and acceptance criteria. Gets test cases from user input or validates against provided criteria. Returns validation status, pass rate, and recommendations.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "test_cases": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {"type": "string"},
+                                    "description": {"type": "string"},
+                                    "type": {"type": "string"}
+                                }
+                            },
+                            "description": "List of test cases to validate against"
+                        },
+                        "code_paths": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Paths to code files to validate"
+                        },
+                        "acceptance_criteria": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of acceptance criteria to validate"
+                        }
+                    },
+                    "required": []
+                }
+            ),
         ]
 
     # Register call_tool handler
@@ -555,6 +635,60 @@ def register_tools(server: Server) -> None:
                         return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
                 except Exception as bx_error:
                     return [types.TextContent(type="text", text=f"Broken Experience Detector Error: {str(bx_error)}")]
+
+            # Unit Test Agent tools
+            elif name == "unit_test_generate":
+                import json
+                try:
+                    from agents.unit_test_agent import UnitTestAgent, TestFramework
+                    
+                    framework_str = arguments.get("framework", "jest")
+                    framework = TestFramework.JEST if framework_str == "jest" else TestFramework.VITEST
+                    
+                    agent = UnitTestAgent(framework=framework)
+                    test_file = agent.generate_test_file(
+                        arguments["source_file"],
+                        arguments.get("content")
+                    )
+                    test_code = agent.generate_test_code(test_file)
+                    
+                    result = {
+                        "testFile": test_file.to_dict(),
+                        "testCode": test_code,
+                    }
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as ut_error:
+                    return [types.TextContent(type="text", text=f"Unit Test Agent Error: {str(ut_error)}")]
+
+            elif name == "unit_test_analyze":
+                import json
+                try:
+                    from agents.unit_test_agent import UnitTestAgent
+                    
+                    agent = UnitTestAgent()
+                    analysis = agent.analyze_file(
+                        arguments["source_file"],
+                        arguments.get("content")
+                    )
+                    return [types.TextContent(type="text", text=json.dumps(analysis, indent=2))]
+                except Exception as ut_error:
+                    return [types.TextContent(type="text", text=f"Unit Test Agent Error: {str(ut_error)}")]
+
+            # QA Agent tools
+            elif name == "qa_validate":
+                import json
+                try:
+                    from agents.qa_agent import QAAgent
+                    
+                    agent = QAAgent()
+                    result = agent.validate_implementation(
+                        test_cases=arguments.get("test_cases", []),
+                        code_paths=arguments.get("code_paths", []),
+                        acceptance_criteria=arguments.get("acceptance_criteria", []),
+                    )
+                    return [types.TextContent(type="text", text=json.dumps(result.to_dict(), indent=2))]
+                except Exception as qa_error:
+                    return [types.TextContent(type="text", text=f"QA Agent Error: {str(qa_error)}")]
 
             else:
                 raise ValueError(f"Unknown tool: {name}")
