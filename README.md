@@ -257,7 +257,14 @@ The Commerce Agent integrates with pandora-ecom-web via the `/api/agentic-commer
 
 ## Workflow Engine
 
-The workflow engine automatically detects task types and orchestrates agents in a pipeline. When you give a task to the Task Manager, it analyzes the description, selects the appropriate workflow, and runs agents sequentially until completion.
+The workflow engine automatically detects task types and orchestrates agents in a pipeline. When you give a task to the Task Manager, it analyzes the description, selects the appropriate workflow, and runs agents either sequentially or in parallel until completion.
+
+### Execution Modes
+
+The workflow engine supports two execution modes:
+
+1. **Sequential Execution** (default): Agents run one after another, passing outputs between stages
+2. **Parallel Execution**: Independent agents run simultaneously, improving performance for complex workflows
 
 ### How It Works
 
@@ -275,23 +282,53 @@ The workflow engine automatically detects task types and orchestrates agents in 
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    WORKFLOW PIPELINE                            │
+│                 PARALLEL WORKFLOW PIPELINE                      │
 │                                                                 │
-│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐    │
-│  │  Figma   │──▶│ Frontend │──▶│  Review  │──▶│    QA    │    │
-│  │  Reader  │   │ Engineer │   │  Agent   │   │  Agent   │    │
-│  └──────────┘   └──────────┘   └──────────┘   └──────────┘    │
-│       │              │              │              │           │
-│       ▼              ▼              ▼              ▼           │
-│   Design         Component      Standards      Tests          │
-│   Tokens         Code           Report         Generated      │
+│  Group 1:  ┌──────────┐                                        │
+│            │  Figma   │  (sequential)                          │
+│            │  Reader  │                                        │
+│            └──────────┘                                        │
+│                 │                                               │
+│  Group 2:  ┌──────────┐                                        │
+│            │ Frontend │  (sequential)                          │
+│            │ Engineer │                                        │
+│            └──────────┘                                        │
+│                 │                                               │
+│  Group 3:  ┌──────────┐                                        │
+│            │  Review  │  (sequential)                          │
+│            │  Agent   │                                        │
+│            └──────────┘                                        │
+│                 │                                               │
+│  Group 4:  ┌──────────┐   ┌──────────┐                        │
+│            │Unit Test │ + │ Perform. │  (parallel)             │
+│            │  Agent   │   │  Agent   │                        │
+│            └──────────┘   └──────────┘                        │
+│                 │                                               │
+│  Group 5:  ┌──────────┐                                        │
+│            │  Sonar   │  (sequential)                          │
+│            │  Agent   │                                        │
+│            └──────────┘                                        │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    FINAL OUTPUT                                 │
-│  Complete component with tests, following Pandora standards     │
+│                 COMPREHENSIVE SUMMARY                           │
+│  - Agents used, tasks executed, files changed                   │
+│  - Errors encountered, recommendations                          │
+│  - Execution trace with timestamps                              │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+### Cross-Agent Communication
+
+Agents can communicate with each other during execution using the `call_agent` hook:
+
+```python
+def my_handler(context):
+    call_agent = context.get("call_agent")
+    if call_agent:
+        sonar_result = call_agent("sonar", {"branch": "main"})
+    return AgentResult(status="success", data={...})
 ```
 
 ### Task Type Detection
@@ -356,17 +393,32 @@ plan = agent.analyze_task("Create Stories carousel from Figma: https://figma.com
 print(f"Detected type: {plan['detected_type']}")
 print(f"Pipeline: {plan['pipeline']}")
 
-# Run a task
+# Run a task (sequential execution)
 context = agent.run_task(
     "Create Stories carousel from Figma: https://figma.com/...",
     metadata={"ticket_id": "INS-2509"},
     verbose=True
 )
 
+# Run a task with parallel execution
+context = agent.run_task_parallel(
+    "Create Stories carousel from Figma: https://figma.com/...",
+    metadata={"ticket_id": "INS-2509"},
+    verbose=True,
+    max_workers=4  # Maximum parallel agents
+)
+
 # Check status
 print(f"Status: {context.status}")
-for stage in context.stages:
-    print(f"  {stage.agent_name}: {stage.status}")
+for agent_name, stage in context.stages.items():
+    print(f"  {agent_name}: {stage.status}")
+
+# Get comprehensive summary
+summary = context.get_summary()
+print(f"Agents used: {summary['agents_used']}")
+print(f"Files changed: {summary['files_changed']}")
+print(f"Errors: {summary['errors']}")
+print(f"Recommendations: {summary['recommendations']}")
 ```
 
 ### State Management
