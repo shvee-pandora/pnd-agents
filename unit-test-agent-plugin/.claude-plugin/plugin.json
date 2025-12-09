@@ -1,0 +1,22 @@
+{
+  "name": "pandora-unit-test-agent",
+  "description": "Comprehensive unit test agents for Pandora repositories: PWA (pandora-ecom-web), SFRA (pandora-sfra), and Pandora Group (pandora-group). Generates tests with full coverage for React/Jest, Mocha/Chai, and Next.js applications.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Pandora Digital"
+  },
+  "agents": [
+    "agents/pwa-unit-test.md",
+    "agents/sfra-unit-test.md",
+    "agents/pandora-group-unit-test.md",
+    "agents/unit-test-orchestrator.md"
+  ],
+  "commands": [
+    "commands/unit-test-pwa.md",
+    "commands/unit-test-sfra.md",
+    "commands/unit-test-pgroup.md"
+  ],
+  "skills": [
+    "skills/unit-test-generation/SKILL.md"
+  ]
+}
