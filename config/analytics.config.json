@@ -1,0 +1,36 @@
+{
+  "log_directory": "logs/agent-analytics",
+  "log_retention_days": 90,
+  "estimated_time_saved_per_task": 2.0,
+  "jira_comment_enabled": true,
+  "jira_custom_fields_enabled": true,
+  "auto_update_jira": true,
+  "reporting": {
+    "default_days": 14,
+    "sprint_duration_days": 14,
+    "include_trend_data": true,
+    "include_agent_breakdown": true
+  },
+  "metrics": {
+    "effectiveness_score": {
+      "iteration_penalty": 10,
+      "max_iteration_penalty": 30,
+      "error_penalty": 10,
+      "max_error_penalty": 40,
+      "human_review_penalty": 20
+    }
+  },
+  "agents": [
+    "Task Manager Agent",
+    "Figma Reader Agent",
+    "Frontend Engineer Agent",
+    "Code Review Agent",
+    "Unit Test Agent",
+    "Sonar Validation Agent",
+    "QA Agent",
+    "Performance Agent",
+    "Amplience CMS Agent",
+    "Commerce Agent",
+    "Broken Experience Detector Agent"
+  ]
+}

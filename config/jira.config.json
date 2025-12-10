@@ -1,0 +1,11 @@
+{
+  "base_url": "https://pandoradigital.atlassian.net",
+  "email": "",
+  "cloud_id": "25dcd511-f586-4aee-b787-a287b80ea767",
+  "project_key": "EPA",
+  "field_ai_used": "customfield_ai_used",
+  "field_agent_name": "customfield_agent_name",
+  "field_efficiency_score": "customfield_ai_efficiency_score",
+  "field_duration": "customfield_ai_duration",
+  "comment_template": "AI Agent Update - PG AI Squad\n\nAgent: {agent_name}\nTask: {task_name}\nStatus: {status}\n\nMetrics:\n- Duration: {duration}\n- Iterations: {iterations}\n- Errors: {errors}\n- Effectiveness Score: {effectiveness_score}%\n- Human Review Required: {requires_human_review}\n\nAI Productivity Tracker Agent v1.0"
+}

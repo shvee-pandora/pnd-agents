@@ -1,0 +1,25 @@
+{
+  "agent_id": "analytics",
+  "name": "Analytics & Reporting Agent",
+  "version": "1.0.0",
+  "description": "Tracks agent performance metrics, integrates with JIRA, and generates comprehensive reports for the PG AI Squad.",
+  "capabilities": [
+    "task-tracking",
+    "metrics-collection",
+    "jira-integration",
+    "report-generation",
+    "dashboard-data"
+  ],
+  "state": {
+    "active_tasks": {},
+    "last_report_generated": null,
+    "total_tasks_tracked": 0
+  },
+  "configuration": {
+    "log_retention_days": 90,
+    "estimated_time_saved_per_task": 2.0,
+    "jira_comment_enabled": true,
+    "jira_custom_fields_enabled": true,
+    "auto_update_jira": true
+  }
+}
