@@ -536,6 +536,134 @@ export SONAR_TOKEN="your-sonarcloud-token"  # Optional, for API access
 pnd-agents run-task "Validate code against SonarCloud quality gates"
 ```
 
+## Analytics & Reporting Agent
+
+The Analytics & Reporting Agent tracks metrics about agent performance, persists structured logs, updates JIRA issues, and generates reports. It provides MCP endpoints for Claude Desktop/Code integration.
+
+### Features
+
+- Tracks task events from all agents in the squad
+- Persists structured metrics to JSON files in `/logs/agent-analytics/`
+- Updates JIRA issues with AI agent metrics via Atlassian REST API v3
+- Provides MCP commands for Claude integration
+- Generates weekly/per-task dashboards and reports (JSON, Markdown, JIRA)
+
+### Metrics Tracked
+
+For each agent task:
+- `aiUsed`: Always true
+- `agentName`: Name of agent who completed task
+- `taskName`: Summary of the task
+- `startTime` / `endTime`: Timestamps
+- `duration`: Calculated time difference
+- `iterations`: How many attempts the agent made
+- `errors`: Errors encountered
+- `effectivenessScore`: Derived score based on retries & quality
+- `requiresHumanReview`: True if code review agent flagged issues
+- `confidenceScore`: Model confidence
+
+### Usage
+
+```python
+from agents.analytics_agent import AnalyticsAgent, record_event
+
+# Initialize the agent
+agent = AnalyticsAgent()
+
+# Track task start
+agent.on_task_started(
+    agent_name="Frontend Engineer Agent",
+    task_description="Create Header Component",
+    jira_task_id="EPA-123",
+)
+
+# Track task completion
+agent.on_task_completed(
+    agent_name="Frontend Engineer Agent",
+    jira_task_id="EPA-123",
+    metrics={
+        "duration": 208000,
+        "iterations": 4,
+        "errors": [],
+        "effectivenessScore": 92.0,
+    },
+)
+
+# Generate reports
+json_report = agent.generate_json_report(days=14)
+md_report = agent.generate_markdown_report(days=14)
+```
+
+### Using the Convenience Function
+
+Other agents can use the `record_event` function for lightweight tracking:
+
+```python
+from tools.analytics_store import record_event
+
+record_event(
+    event_type="task_started",
+    agent_name="Code Review Agent",
+    task_description="Review PR #42",
+    jira_task_id="EPA-456",
+)
+```
+
+### MCP Commands
+
+The following MCP commands are available for Claude Desktop/Code:
+
+| Command | Description |
+|---------|-------------|
+| `analytics_track_task_start` | Record the start of a task |
+| `analytics_track_task_end` | Record task completion |
+| `analytics_track_task_failure` | Record task failure |
+| `analytics_update_jira_task` | Update JIRA with AI metrics |
+| `analytics_generate_report` | Generate performance report |
+| `analytics_list` | List stored analytics |
+| `analytics_get_config` | Get current configuration |
+| `analytics_update_config` | Update configuration |
+
+### JIRA Integration
+
+Each task completion can result in a JIRA comment:
+
+```
+🤖 AI Agent Update – PG AI Squad
+
+Agent: Frontend Engineer Agent
+Task: Implement Header Component from Figma
+Status: Completed
+
+Metrics:
+- Duration: 3m 28s
+- Iterations: 4
+- Errors: 1 (auto-fixed)
+- Effectiveness Score: 92%
+- Human Review Required: No
+
+AI Productivity Tracker Agent v1.0
+```
+
+### Environment Variables
+
+```bash
+export JIRA_BASE_URL="https://your-instance.atlassian.net"
+export JIRA_EMAIL="your-email@example.com"
+export JIRA_API_TOKEN="your-api-token"
+```
+
+### Configuration
+
+Analytics configuration is stored in `config/analytics.config.json` and JIRA configuration in `config/jira.config.json`. See [examples/analytics/README.md](examples/analytics/README.md) for detailed configuration options.
+
+### CLI Usage
+
+```bash
+# Generate analytics reports
+python scripts/generate_report.py --format all --days 14 --output-dir ./reports
+```
+
 ## Documentation
 
 - [Claude Usage Guide](CLAUDE_USAGE.md) - Using agents with Claude without cloning the repo

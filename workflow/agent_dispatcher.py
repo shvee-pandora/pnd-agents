@@ -7,6 +7,7 @@ a unified interface for executing agents.
 
 import os
 import sys
+import time
 from typing import Dict, Any, Callable, Optional
 
 # Add parent directory to path for imports
@@ -73,9 +74,62 @@ class AgentDispatcher:
                 error=f"No handler registered for agent: {agent_name}"
             )
         
+        # Track task start with analytics
+        start_time = time.time()
+        task_description = context.get("task", "")
+        jira_task_id = context.get("metadata", {}).get("jira_task_id")
+        workflow_id = context.get("metadata", {}).get("workflow_id")
+        
         try:
-            return handler(context)
+            from tools.analytics_store import record_event
+            record_event(
+                event_type="task_started",
+                agent_name=agent_name,
+                task_description=task_description,
+                jira_task_id=jira_task_id,
+            )
+        except ImportError:
+            pass  # Analytics not available
+        
+        try:
+            result = handler(context)
+            
+            # Track task completion with analytics
+            duration_ms = (time.time() - start_time) * 1000
+            try:
+                from tools.analytics_store import record_event
+                event_type = "task_completed" if result.status == "success" else "task_failed"
+                record_event(
+                    event_type=event_type,
+                    agent_name=agent_name,
+                    task_description=task_description,
+                    jira_task_id=jira_task_id,
+                    metrics={
+                        "duration": duration_ms,
+                        "status": result.status,
+                    },
+                    errors=[result.error] if result.error else None,
+                )
+            except ImportError:
+                pass  # Analytics not available
+            
+            return result
         except Exception as e:
+            # Track task failure with analytics
+            duration_ms = (time.time() - start_time) * 1000
+            try:
+                from tools.analytics_store import record_event
+                record_event(
+                    event_type="task_failed",
+                    agent_name=agent_name,
+                    task_description=task_description,
+                    jira_task_id=jira_task_id,
+                    metrics={"duration": duration_ms},
+                    errors=[str(e)],
+                )
+            except ImportError:
+                pass  # Analytics not available
+            
             return AgentResult(
                 status="error",
                 error=str(e)
