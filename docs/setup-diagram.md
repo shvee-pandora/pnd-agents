@@ -168,13 +168,13 @@ Sonar Task:
 └─────────────────────────────────────────────────────────────────────┘
 
 📚 Full Documentation:
-   github.com/shvee-pandora/pnd-agents/blob/main/CLAUDE_USAGE.md
+   github.com/shvee-pandora/pnd-agents/blob/main/docs/claude-usage.md
 
 🔧 Setup Guide:
-   github.com/shvee-pandora/pnd-agents/blob/main/SETUP.md
+   github.com/shvee-pandora/pnd-agents/blob/main/docs/setup.md
 
 🏗️  Architecture:
-   github.com/shvee-pandora/pnd-agents/blob/main/ARCHITECTURE.md
+   github.com/shvee-pandora/pnd-agents/blob/main/docs/architecture.md
 
 💡 Examples:
    github.com/shvee-pandora/pnd-agents/tree/main/examples
