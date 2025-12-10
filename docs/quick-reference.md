@@ -205,9 +205,9 @@ All agents follow Pandora coding standards:
 - Ensure token has read access to file
 
 **Need help?**
-- [Full Documentation](https://github.com/shvee-pandora/pnd-agents/blob/main/CLAUDE_USAGE.md)
-- [Setup Guide](https://github.com/shvee-pandora/pnd-agents/blob/main/SETUP.md)
-- [Architecture](https://github.com/shvee-pandora/pnd-agents/blob/main/ARCHITECTURE.md)
+- [Full Documentation](https://github.com/shvee-pandora/pnd-agents/blob/main/docs/claude-usage.md)
+- [Setup Guide](https://github.com/shvee-pandora/pnd-agents/blob/main/docs/setup.md)
+- [Architecture](https://github.com/shvee-pandora/pnd-agents/blob/main/docs/architecture.md)
 
 ---
 
@@ -223,7 +223,7 @@ All agents follow Pandora coding standards:
 ## 📚 Learn More
 
 - **Repository**: [github.com/shvee-pandora/pnd-agents](https://github.com/shvee-pandora/pnd-agents)
-- **Full Guide**: [CLAUDE_USAGE.md](https://github.com/shvee-pandora/pnd-agents/blob/main/CLAUDE_USAGE.md)
+- **Full Guide**: [claude-usage.md](https://github.com/shvee-pandora/pnd-agents/blob/main/docs/claude-usage.md)
 - **Examples**: [examples/](https://github.com/shvee-pandora/pnd-agents/tree/main/examples)
 
 ---

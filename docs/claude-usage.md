@@ -376,9 +376,9 @@ pnd-agents setup
 
 - **Repository**: [github.com/shvee-pandora/pnd-agents](https://github.com/shvee-pandora/pnd-agents)
 - **Documentation**: 
-  - [Setup Guide](https://github.com/shvee-pandora/pnd-agents/blob/main/SETUP.md)
-  - [Architecture](https://github.com/shvee-pandora/pnd-agents/blob/main/ARCHITECTURE.md)
-  - [Publishing Guide](https://github.com/shvee-pandora/pnd-agents/blob/main/PUBLISHING.md)
+  - [Setup Guide](https://github.com/shvee-pandora/pnd-agents/blob/main/docs/setup.md)
+  - [Architecture](https://github.com/shvee-pandora/pnd-agents/blob/main/docs/architecture.md)
+  - [Publishing Guide](https://github.com/shvee-pandora/pnd-agents/blob/main/docs/publishing.md)
 - **Examples**: [github.com/shvee-pandora/pnd-agents/tree/main/examples](https://github.com/shvee-pandora/pnd-agents/tree/main/examples)
 
 ## Next Steps
@@ -423,4 +423,4 @@ Find gold earrings under 1000 EUR
 
 ---
 
-**Note**: This guide assumes you're using Claude Desktop or Claude Code with MCP support. For programmatic usage or custom integrations, see the [main README](https://github.com/shvee-pandora/pnd-agents/blob/main/README.md).
+**Note**: This guide assumes you're using Claude Desktop or Claude Code with MCP support. For programmatic usage or custom integrations, see the [main README](https://github.com/shvee-pandora/pnd-agents).

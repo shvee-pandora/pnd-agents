@@ -36,7 +36,7 @@ PG AI Squad is a comprehensive agent ecosystem designed to assist with building 
 
 ## Quick Start
 
-> **💡 Want to use these agents without cloning?** See the [Claude Usage Guide](CLAUDE_USAGE.md) for instructions on using these agents directly in Claude Desktop/Code without local installation.
+> **💡 Want to use these agents without cloning?** See the [Claude Usage Guide](docs/claude-usage.md) for instructions on using these agents directly in Claude Desktop/Code without local installation.
 
 ### Prerequisites
 
@@ -666,9 +666,15 @@ python scripts/generate_report.py --format all --days 14 --output-dir ./reports
 
 ## Documentation
 
-- [Claude Usage Guide](CLAUDE_USAGE.md) - Using agents with Claude without cloning the repo
-- [Setup Guide](SETUP.md) - Detailed installation and configuration
-- [Architecture](ARCHITECTURE.md) - System architecture and design decisions
+All documentation has been consolidated into the `/docs` folder for better organization:
+
+- [Documentation Index](docs/index.md) - Complete documentation overview and navigation
+- [Claude Usage Guide](docs/claude-usage.md) - Using agents with Claude without cloning the repo
+- [Setup Guide](docs/setup.md) - Detailed installation and configuration
+- [Architecture](docs/architecture.md) - System architecture and design decisions
+- [Agents Overview](docs/agents-overview.md) - Complete list of all agents with capabilities
+- [Quick Reference](docs/quick-reference.md) - One-page quick reference card
+- [Publishing Guide](docs/publishing.md) - Publishing to Azure Artifacts
 - [Examples](examples/) - Example tasks demonstrating agent collaboration
 
 ## Pandora Coding Standards
