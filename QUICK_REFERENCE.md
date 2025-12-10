@@ -1,48 +1,113 @@
 # PG AI Squad - Quick Reference Card
 
-## 🚀 Using with Claude (No Clone Required)
+## Two Usage Modes
 
-### Step 1: Configure Claude
+PG AI Squad can be used in two ways:
+- **Mode A**: With Claude Desktop/Claude Code (MCP integration)
+- **Mode B**: Without Claude - CLI only (VS Code terminal)
 
-Add to your Claude config file:
-- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Linux**: `~/.claude.json`
-- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+Both modes use the same installation. The difference is whether you run `setup` to configure Claude integration.
 
-```json
-{
-  "mcpServers": {
-    "pnd-agents": {
-      "command": "npx",
-      "args": ["-y", "github:shvee-pandora/pnd-agents"],
-      "env": {
-        "FIGMA_ACCESS_TOKEN": "your-figma-token",
-        "SONAR_TOKEN": "your-sonarcloud-token"
-      }
-    }
-  }
-}
+---
+
+## Mode A: With Claude Desktop/Claude Code
+
+### Step 1: Install
+
+```bash
+git clone https://github.com/shvee-pandora/pnd-agents.git
+cd pnd-agents
+pip3 install -e .
 ```
 
-### Step 2: Get API Tokens
+### Step 2: Run Setup Wizard
 
-**Figma Token** (required for Figma integration):
-- Go to [Figma Settings](https://www.figma.com/settings) → Account → Personal access tokens
-- Generate new token → Copy it
+```bash
+python3 -m pnd_agents setup
+```
 
-**SonarCloud Token** (optional):
-- Go to [SonarCloud Security](https://sonarcloud.io/account/security)
-- Generate token with "Analyze Projects" permission
+This will:
+- Let you choose which agents to enable
+- Configure environment variables (Figma token, etc.)
+- Automatically update your Claude configuration
 
 ### Step 3: Restart Claude
 
 Close and reopen Claude Desktop/Code completely.
 
-### Step 4: Verify
+### Step 4: Validate
 
 In Claude, ask:
 ```
 What pnd-agents tools do you have access to?
+```
+
+Then try a task:
+```
+Create a simple React component using pnd-agents
+```
+
+---
+
+## Mode B: Without Claude - CLI Only (VS Code)
+
+### Step 1: Install
+
+```bash
+git clone https://github.com/shvee-pandora/pnd-agents.git
+cd pnd-agents
+pip3 install -e .
+```
+
+### Step 2: Use from Any Directory
+
+```bash
+cd /path/to/your-project
+
+# Check installation
+python3 -m pnd_agents status
+
+# Analyze a task (shows workflow plan)
+python3 -m pnd_agents analyze-task "Create an Amplience schema"
+
+# Run a task
+python3 -m pnd_agents run-task "Create a React component"
+```
+
+### Step 3: (Optional) Add Alias
+
+```bash
+echo 'alias pnd-agents="python3 -m pnd_agents"' >> ~/.zshrc
+source ~/.zshrc
+
+# Then use:
+pnd-agents run-task "your task"
+```
+
+### Step 4: Validate
+
+```bash
+# Should complete without errors:
+python3 -m pnd_agents status
+python3 -m pnd_agents analyze-task "Create a React component"
+```
+
+---
+
+## API Tokens (Optional)
+
+**Figma Token** (for Figma integration):
+- Go to [Figma Settings](https://www.figma.com/settings) → Account → Personal access tokens
+- Generate new token → Copy it
+
+**SonarCloud Token** (for quality gate validation):
+- Go to [SonarCloud Security](https://sonarcloud.io/account/security)
+- Generate token with "Analyze Projects" permission
+
+Set tokens in your environment or `.env` file:
+```bash
+export FIGMA_ACCESS_TOKEN="your-figma-token"
+export SONAR_TOKEN="your-sonarcloud-token"
 ```
 
 ---
