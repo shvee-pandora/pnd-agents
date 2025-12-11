@@ -24,6 +24,9 @@ from agents.broken_experience_detector_agent import BrokenExperienceDetectorAgen
 from agents.unit_test_agent import UnitTestAgent
 from agents.qa_agent import QAAgent
 from agents.sonar_validation_agent import SonarValidationAgent, validate_for_pr
+from agents.analytics_agent import AnalyticsAgent
+from agents.task_manager_agent import TaskManagerAgent
+from tools.jira_client import JiraClient
 
 
 def register_tools(server: Server) -> None:
@@ -590,6 +593,293 @@ def register_tools(server: Server) -> None:
                     "required": []
                 }
             ),
+            # Analytics Agent Tools
+            types.Tool(
+                name="analytics_track_task_start",
+                description="Record the start of an AI agent task. Call this when an agent begins working on a task to track metrics.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "agent_name": {
+                            "type": "string",
+                            "description": "Name of the agent starting the task (e.g., 'Frontend Engineer Agent', 'Unit Test Agent')"
+                        },
+                        "task_description": {
+                            "type": "string",
+                            "description": "Description of the task being started"
+                        },
+                        "jira_task_id": {
+                            "type": "string",
+                            "description": "Optional JIRA issue key (e.g., 'EPA-123')"
+                        },
+                        "workflow_id": {
+                            "type": "string",
+                            "description": "Optional workflow ID for correlation"
+                        }
+                    },
+                    "required": ["agent_name", "task_description"]
+                }
+            ),
+            types.Tool(
+                name="analytics_track_task_end",
+                description="Record the completion of an AI agent task. Call this when an agent finishes a task to record metrics and optionally update JIRA.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "agent_name": {
+                            "type": "string",
+                            "description": "Name of the agent completing the task"
+                        },
+                        "jira_task_id": {
+                            "type": "string",
+                            "description": "Optional JIRA issue key (e.g., 'EPA-123')"
+                        },
+                        "duration": {
+                            "type": "number",
+                            "description": "Duration in milliseconds"
+                        },
+                        "iterations": {
+                            "type": "integer",
+                            "description": "Number of attempts/iterations made",
+                            "default": 1
+                        },
+                        "errors": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of error messages encountered (empty if none)"
+                        },
+                        "effectiveness_score": {
+                            "type": "number",
+                            "description": "Effectiveness score (0-100), calculated automatically if not provided"
+                        },
+                        "requires_human_review": {
+                            "type": "boolean",
+                            "description": "Whether the task requires human review",
+                            "default": False
+                        }
+                    },
+                    "required": ["agent_name"]
+                }
+            ),
+            types.Tool(
+                name="analytics_track_task_failure",
+                description="Record the failure of an AI agent task. Call this when an agent fails to complete a task.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "agent_name": {
+                            "type": "string",
+                            "description": "Name of the agent that failed"
+                        },
+                        "jira_task_id": {
+                            "type": "string",
+                            "description": "Optional JIRA issue key (e.g., 'EPA-123')"
+                        },
+                        "errors": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of error messages"
+                        }
+                    },
+                    "required": ["agent_name", "errors"]
+                }
+            ),
+            types.Tool(
+                name="analytics_generate_report",
+                description="Generate an analytics report for agent performance. Returns JSON or markdown format.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "days": {
+                            "type": "integer",
+                            "description": "Number of days to include in report",
+                            "default": 14
+                        },
+                        "agent_name": {
+                            "type": "string",
+                            "description": "Optional filter by specific agent name"
+                        },
+                        "format": {
+                            "type": "string",
+                            "description": "Output format (json or markdown)",
+                            "enum": ["json", "markdown"],
+                            "default": "json"
+                        }
+                    }
+                }
+            ),
+            types.Tool(
+                name="analytics_list",
+                description="List stored analytics data with optional filters. Shows completed, failed, and in-progress tasks.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "days": {
+                            "type": "integer",
+                            "description": "Number of days to include",
+                            "default": 7
+                        },
+                        "agent_name": {
+                            "type": "string",
+                            "description": "Optional filter by agent name"
+                        },
+                        "status": {
+                            "type": "string",
+                            "description": "Optional filter by status",
+                            "enum": ["started", "completed", "failed"]
+                        }
+                    }
+                }
+            ),
+            types.Tool(
+                name="analytics_update_jira_task",
+                description="Update a JIRA issue with AI agent metrics. Adds a formatted comment and updates custom fields.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "jira_task_id": {
+                            "type": "string",
+                            "description": "JIRA issue key (e.g., 'EPA-123')"
+                        },
+                        "agent_name": {
+                            "type": "string",
+                            "description": "Name of the agent that completed the task"
+                        },
+                        "task_name": {
+                            "type": "string",
+                            "description": "Name/description of the task"
+                        },
+                        "status": {
+                            "type": "string",
+                            "description": "Task status (Completed, Failed, etc.)"
+                        },
+                        "duration_ms": {
+                            "type": "number",
+                            "description": "Duration in milliseconds"
+                        },
+                        "iterations": {
+                            "type": "integer",
+                            "description": "Number of iterations/attempts",
+                            "default": 1
+                        },
+                        "errors": {
+                            "type": "integer",
+                            "description": "Number of errors encountered",
+                            "default": 0
+                        },
+                        "effectiveness_score": {
+                            "type": "number",
+                            "description": "Effectiveness score (0-100)"
+                        },
+                        "requires_human_review": {
+                            "type": "boolean",
+                            "description": "Whether human review is required",
+                            "default": False
+                        }
+                    },
+                    "required": ["jira_task_id", "agent_name", "status"]
+                }
+            ),
+            types.Tool(
+                name="analytics_get_config",
+                description="Get the current analytics configuration settings.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {}
+                }
+            ),
+            types.Tool(
+                name="analytics_update_config",
+                description="Update analytics configuration settings.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "log_directory": {
+                            "type": "string",
+                            "description": "Directory for analytics logs"
+                        },
+                        "retention_days": {
+                            "type": "integer",
+                            "description": "Number of days to retain logs"
+                        },
+                        "default_time_saved_hours": {
+                            "type": "number",
+                            "description": "Default hours saved per task"
+                        },
+                        "jira_enabled": {
+                            "type": "boolean",
+                            "description": "Whether JIRA integration is enabled"
+                        }
+                    }
+                }
+            ),
+
+            # Task Manager Agent Tools
+            types.Tool(
+                name="task_manager_analyze",
+                description="Analyze a task and return the workflow plan without executing. Shows which agents will be used and in what order.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "task_description": {
+                            "type": "string",
+                            "description": "Natural language task description (e.g., 'Create a ProductCard component from Figma design')"
+                        }
+                    },
+                    "required": ["task_description"]
+                }
+            ),
+            types.Tool(
+                name="task_manager_run",
+                description="Run a complete task workflow through the Task Manager Agent. Orchestrates multiple agents in sequence based on task type.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "task_description": {
+                            "type": "string",
+                            "description": "Natural language task description"
+                        },
+                        "jira_task_id": {
+                            "type": "string",
+                            "description": "Optional JIRA issue key for tracking"
+                        },
+                        "branch_name": {
+                            "type": "string",
+                            "description": "Optional Git branch name"
+                        },
+                        "parallel": {
+                            "type": "boolean",
+                            "description": "Run agents in parallel where possible (default: false)",
+                            "default": False
+                        }
+                    },
+                    "required": ["task_description"]
+                }
+            ),
+            types.Tool(
+                name="task_manager_status",
+                description="Get the status of the current or last task workflow.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {}
+                }
+            ),
+            types.Tool(
+                name="task_manager_resume",
+                description="Resume a previously interrupted task workflow.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {}
+                }
+            ),
+            types.Tool(
+                name="task_manager_clear",
+                description="Clear the current task context to start fresh.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {}
+                }
+            ),
         ]
 
     # Register call_tool handler
@@ -880,6 +1170,254 @@ def register_tools(server: Server) -> None:
                     return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
                 except Exception as sonar_error:
                     return [types.TextContent(type="text", text=f"Sonar PR Validation Error: {str(sonar_error)}")]
+
+            # Analytics Agent tools
+            elif name == "analytics_track_task_start":
+                import json
+                try:
+                    analytics_agent = AnalyticsAgent()
+                    metrics = analytics_agent.on_task_started(
+                        agent_name=arguments["agent_name"],
+                        task_description=arguments["task_description"],
+                        jira_task_id=arguments.get("jira_task_id"),
+                        workflow_id=arguments.get("workflow_id"),
+                    )
+                    result = {
+                        "status": "success",
+                        "message": f"Task started for {arguments['agent_name']}",
+                        "metrics": metrics.to_dict(),
+                    }
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as analytics_error:
+                    return [types.TextContent(type="text", text=f"Analytics Error: {str(analytics_error)}")]
+
+            elif name == "analytics_track_task_end":
+                import json
+                try:
+                    analytics_agent = AnalyticsAgent()
+                    metrics_input = {
+                        "duration": arguments.get("duration", 0),
+                        "iterations": arguments.get("iterations", 1),
+                        "errors": arguments.get("errors", []),
+                        "effectivenessScore": arguments.get("effectiveness_score"),
+                        "requiresHumanReview": arguments.get("requires_human_review", False),
+                        "confidenceScore": arguments.get("confidence_score", 1.0),
+                    }
+                    metrics = analytics_agent.on_task_completed(
+                        agent_name=arguments["agent_name"],
+                        jira_task_id=arguments.get("jira_task_id"),
+                        metrics=metrics_input,
+                    )
+                    result = {
+                        "status": "success",
+                        "message": f"Task completed for {arguments['agent_name']}",
+                        "metrics": metrics.to_dict(),
+                    }
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as analytics_error:
+                    return [types.TextContent(type="text", text=f"Analytics Error: {str(analytics_error)}")]
+
+            elif name == "analytics_track_task_failure":
+                import json
+                try:
+                    analytics_agent = AnalyticsAgent()
+                    metrics = analytics_agent.on_task_failed(
+                        agent_name=arguments["agent_name"],
+                        jira_task_id=arguments.get("jira_task_id"),
+                        errors=arguments.get("errors", []),
+                    )
+                    result = {
+                        "status": "success",
+                        "message": f"Task failure recorded for {arguments['agent_name']}",
+                        "metrics": metrics.to_dict(),
+                    }
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as analytics_error:
+                    return [types.TextContent(type="text", text=f"Analytics Error: {str(analytics_error)}")]
+
+            elif name == "analytics_generate_report":
+                import json
+                try:
+                    analytics_agent = AnalyticsAgent()
+                    output_format = arguments.get("format", "json")
+                    days = arguments.get("days", 14)
+                    
+                    if output_format == "markdown":
+                        report = analytics_agent.generate_markdown_report(days=days)
+                        return [types.TextContent(type="text", text=report)]
+                    else:
+                        report = analytics_agent.generate_json_report(days=days)
+                        return [types.TextContent(type="text", text=json.dumps(report, indent=2))]
+                except Exception as analytics_error:
+                    return [types.TextContent(type="text", text=f"Analytics Error: {str(analytics_error)}")]
+
+            elif name == "analytics_list":
+                import json
+                try:
+                    analytics_agent = AnalyticsAgent()
+                    analytics = analytics_agent.list_analytics(
+                        days=arguments.get("days", 7),
+                        agent_name=arguments.get("agent_name"),
+                        status=arguments.get("status"),
+                    )
+                    result = {
+                        "status": "success",
+                        "count": len(analytics),
+                        "tasks": analytics,
+                    }
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as analytics_error:
+                    return [types.TextContent(type="text", text=f"Analytics Error: {str(analytics_error)}")]
+
+            elif name == "analytics_update_jira_task":
+                import json
+                try:
+                    jira_client = JiraClient()
+                    
+                    duration_ms = arguments.get("duration_ms", 0)
+                    if duration_ms < 60000:
+                        duration_str = f"{duration_ms / 1000:.1f}s"
+                    else:
+                        minutes = duration_ms / 60000
+                        seconds = (duration_ms % 60000) / 1000
+                        duration_str = f"{minutes:.0f}m {seconds:.0f}s"
+                    
+                    errors_count = arguments.get("errors", 0)
+                    error_str = f"{errors_count} (auto-fixed)" if errors_count > 0 else "0"
+                    
+                    comment = f"""AI Agent Update - PG AI Squad
+
+Agent: {arguments['agent_name']}
+Task: {arguments.get('task_name', 'N/A')}
+Status: {arguments['status']}
+
+Metrics:
+- Duration: {duration_str}
+- Iterations: {arguments.get('iterations', 1)}
+- Errors: {error_str}
+- Effectiveness Score: {arguments.get('effectiveness_score', 'N/A')}%
+- Human Review Required: {'Yes' if arguments.get('requires_human_review') else 'No'}
+
+AI Productivity Tracker Agent v1.0"""
+                    
+                    jira_client.add_comment(arguments["jira_task_id"], comment)
+                    
+                    if arguments.get("effectiveness_score") is not None:
+                        jira_client.update_ai_fields(
+                            arguments["jira_task_id"],
+                            ai_used=True,
+                            agent_name=arguments["agent_name"],
+                            efficiency_score=arguments.get("effectiveness_score"),
+                            duration_ms=duration_ms,
+                        )
+                    
+                    result = {
+                        "status": "success",
+                        "message": f"JIRA issue {arguments['jira_task_id']} updated",
+                    }
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as jira_error:
+                    return [types.TextContent(type="text", text=f"JIRA Update Error: {str(jira_error)}")]
+
+            elif name == "analytics_get_config":
+                import json
+                try:
+                    analytics_agent = AnalyticsAgent()
+                    result = {
+                        "status": "success",
+                        "config": analytics_agent.config,
+                    }
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as analytics_error:
+                    return [types.TextContent(type="text", text=f"Analytics Error: {str(analytics_error)}")]
+
+            elif name == "analytics_update_config":
+                import json
+                try:
+                    analytics_agent = AnalyticsAgent()
+                    for key, value in arguments.items():
+                        if key in analytics_agent.config:
+                            analytics_agent.config[key] = value
+                    
+                    result = {
+                        "status": "success",
+                        "message": "Configuration updated",
+                        "config": analytics_agent.config,
+                    }
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as analytics_error:
+                    return [types.TextContent(type="text", text=f"Analytics Error: {str(analytics_error)}")]
+
+            # Task Manager Agent tools
+            elif name == "task_manager_analyze":
+                import json
+                try:
+                    task_manager = TaskManagerAgent()
+                    result = task_manager.analyze_task(arguments["task_description"])
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as tm_error:
+                    return [types.TextContent(type="text", text=f"Task Manager Error: {str(tm_error)}")]
+
+            elif name == "task_manager_run":
+                import json
+                try:
+                    task_manager = TaskManagerAgent()
+                    metadata = {}
+                    if arguments.get("jira_task_id"):
+                        metadata["jira_task_id"] = arguments["jira_task_id"]
+                    if arguments.get("branch_name"):
+                        metadata["branch_name"] = arguments["branch_name"]
+                    
+                    if arguments.get("parallel", False):
+                        context = task_manager.run_task_parallel(
+                            arguments["task_description"],
+                            metadata=metadata if metadata else None,
+                            verbose=False
+                        )
+                    else:
+                        context = task_manager.run_task(
+                            arguments["task_description"],
+                            metadata=metadata if metadata else None,
+                            verbose=False
+                        )
+                    result = task_manager.to_dict(context)
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as tm_error:
+                    return [types.TextContent(type="text", text=f"Task Manager Error: {str(tm_error)}")]
+
+            elif name == "task_manager_status":
+                import json
+                try:
+                    task_manager = TaskManagerAgent()
+                    status = task_manager.get_status()
+                    if status:
+                        return [types.TextContent(type="text", text=json.dumps(status, indent=2))]
+                    else:
+                        return [types.TextContent(type="text", text=json.dumps({"status": "no_task", "message": "No task found"}, indent=2))]
+                except Exception as tm_error:
+                    return [types.TextContent(type="text", text=f"Task Manager Error: {str(tm_error)}")]
+
+            elif name == "task_manager_resume":
+                import json
+                try:
+                    task_manager = TaskManagerAgent()
+                    context = task_manager.resume_task(verbose=False)
+                    if context:
+                        result = task_manager.to_dict(context)
+                        return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                    else:
+                        return [types.TextContent(type="text", text=json.dumps({"status": "no_task", "message": "No interrupted task found"}, indent=2))]
+                except Exception as tm_error:
+                    return [types.TextContent(type="text", text=f"Task Manager Error: {str(tm_error)}")]
+
+            elif name == "task_manager_clear":
+                import json
+                try:
+                    task_manager = TaskManagerAgent()
+                    task_manager.clear_task()
+                    return [types.TextContent(type="text", text=json.dumps({"status": "success", "message": "Task context cleared"}, indent=2))]
+                except Exception as tm_error:
+                    return [types.TextContent(type="text", text=f"Task Manager Error: {str(tm_error)}")]
 
             else:
                 raise ValueError(f"Unknown tool: {name}")
