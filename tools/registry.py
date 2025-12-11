@@ -731,6 +731,88 @@ def register_tools(server: Server) -> None:
                     }
                 }
             ),
+            types.Tool(
+                name="analytics_update_jira_task",
+                description="Update a JIRA issue with AI agent metrics. Adds a formatted comment and updates custom fields.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "jira_task_id": {
+                            "type": "string",
+                            "description": "JIRA issue key (e.g., 'EPA-123')"
+                        },
+                        "agent_name": {
+                            "type": "string",
+                            "description": "Name of the agent that completed the task"
+                        },
+                        "task_name": {
+                            "type": "string",
+                            "description": "Name/description of the task"
+                        },
+                        "status": {
+                            "type": "string",
+                            "description": "Task status (Completed, Failed, etc.)"
+                        },
+                        "duration_ms": {
+                            "type": "number",
+                            "description": "Duration in milliseconds"
+                        },
+                        "iterations": {
+                            "type": "integer",
+                            "description": "Number of iterations/attempts",
+                            "default": 1
+                        },
+                        "errors": {
+                            "type": "integer",
+                            "description": "Number of errors encountered",
+                            "default": 0
+                        },
+                        "effectiveness_score": {
+                            "type": "number",
+                            "description": "Effectiveness score (0-100)"
+                        },
+                        "requires_human_review": {
+                            "type": "boolean",
+                            "description": "Whether human review is required",
+                            "default": False
+                        }
+                    },
+                    "required": ["jira_task_id", "agent_name", "status"]
+                }
+            ),
+            types.Tool(
+                name="analytics_get_config",
+                description="Get the current analytics configuration settings.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {}
+                }
+            ),
+            types.Tool(
+                name="analytics_update_config",
+                description="Update analytics configuration settings.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "log_directory": {
+                            "type": "string",
+                            "description": "Directory for analytics logs"
+                        },
+                        "retention_days": {
+                            "type": "integer",
+                            "description": "Number of days to retain logs"
+                        },
+                        "default_time_saved_hours": {
+                            "type": "number",
+                            "description": "Default hours saved per task"
+                        },
+                        "jira_enabled": {
+                            "type": "boolean",
+                            "description": "Whether JIRA integration is enabled"
+                        }
+                    }
+                }
+            ),
 
             # Task Manager Agent Tools
             types.Tool(
@@ -1182,6 +1264,85 @@ def register_tools(server: Server) -> None:
                         "status": "success",
                         "count": len(analytics),
                         "tasks": analytics,
+                    }
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as analytics_error:
+                    return [types.TextContent(type="text", text=f"Analytics Error: {str(analytics_error)}")]
+
+            elif name == "analytics_update_jira_task":
+                import json
+                try:
+                    jira_client = JiraClient()
+                    
+                    duration_ms = arguments.get("duration_ms", 0)
+                    if duration_ms < 60000:
+                        duration_str = f"{duration_ms / 1000:.1f}s"
+                    else:
+                        minutes = duration_ms / 60000
+                        seconds = (duration_ms % 60000) / 1000
+                        duration_str = f"{minutes:.0f}m {seconds:.0f}s"
+                    
+                    errors_count = arguments.get("errors", 0)
+                    error_str = f"{errors_count} (auto-fixed)" if errors_count > 0 else "0"
+                    
+                    comment = f"""AI Agent Update - PG AI Squad
+
+Agent: {arguments['agent_name']}
+Task: {arguments.get('task_name', 'N/A')}
+Status: {arguments['status']}
+
+Metrics:
+- Duration: {duration_str}
+- Iterations: {arguments.get('iterations', 1)}
+- Errors: {error_str}
+- Effectiveness Score: {arguments.get('effectiveness_score', 'N/A')}%
+- Human Review Required: {'Yes' if arguments.get('requires_human_review') else 'No'}
+
+AI Productivity Tracker Agent v1.0"""
+                    
+                    jira_client.add_comment(arguments["jira_task_id"], comment)
+                    
+                    if arguments.get("effectiveness_score") is not None:
+                        jira_client.update_ai_fields(
+                            arguments["jira_task_id"],
+                            ai_used=True,
+                            agent_name=arguments["agent_name"],
+                            efficiency_score=arguments.get("effectiveness_score"),
+                            duration_ms=duration_ms,
+                        )
+                    
+                    result = {
+                        "status": "success",
+                        "message": f"JIRA issue {arguments['jira_task_id']} updated",
+                    }
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as jira_error:
+                    return [types.TextContent(type="text", text=f"JIRA Update Error: {str(jira_error)}")]
+
+            elif name == "analytics_get_config":
+                import json
+                try:
+                    analytics_agent = AnalyticsAgent()
+                    result = {
+                        "status": "success",
+                        "config": analytics_agent.config,
+                    }
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as analytics_error:
+                    return [types.TextContent(type="text", text=f"Analytics Error: {str(analytics_error)}")]
+
+            elif name == "analytics_update_config":
+                import json
+                try:
+                    analytics_agent = AnalyticsAgent()
+                    for key, value in arguments.items():
+                        if key in analytics_agent.config:
+                            analytics_agent.config[key] = value
+                    
+                    result = {
+                        "status": "success",
+                        "message": "Configuration updated",
+                        "config": analytics_agent.config,
                     }
                     return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
                 except Exception as analytics_error:
