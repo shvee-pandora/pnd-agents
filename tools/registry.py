@@ -23,6 +23,7 @@ from agents.commerce_agent import CommerceAgent
 from agents.broken_experience_detector_agent import BrokenExperienceDetectorAgent
 from agents.unit_test_agent import UnitTestAgent
 from agents.qa_agent import QAAgent
+from agents.sonar_validation_agent import SonarValidationAgent, validate_for_pr
 
 
 def register_tools(server: Server) -> None:
@@ -469,6 +470,126 @@ def register_tools(server: Server) -> None:
                     "required": []
                 }
             ),
+
+            # Sonar Validation Agent Tools
+            types.Tool(
+                name="sonar_validate",
+                description="Validate code against SonarCloud quality gates. Fetches issues, coverage, duplications, and generates fix plans. Returns comprehensive validation results with quality gate status, issues by severity/type, coverage metrics, and prioritized fix plans. Requires SONAR_TOKEN environment variable.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "branch": {
+                            "type": "string",
+                            "description": "Branch to validate (default: master)",
+                            "default": "master"
+                        },
+                        "project_key": {
+                            "type": "string",
+                            "description": "SonarCloud project key (default: pandora-jewelry_spark_pandora-group)",
+                            "default": "pandora-jewelry_spark_pandora-group"
+                        },
+                        "repo_path": {
+                            "type": "string",
+                            "description": "Optional path to repository for pipeline analysis"
+                        }
+                    },
+                    "required": []
+                }
+            ),
+            types.Tool(
+                name="sonar_get_issues",
+                description="Fetch issues from SonarCloud filtered by severity and type. Returns list of issues with file locations, messages, and rules.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "branch": {
+                            "type": "string",
+                            "description": "Branch to check (default: master)",
+                            "default": "master"
+                        },
+                        "project_key": {
+                            "type": "string",
+                            "description": "SonarCloud project key (default: pandora-jewelry_spark_pandora-group)",
+                            "default": "pandora-jewelry_spark_pandora-group"
+                        },
+                        "severities": {
+                            "type": "array",
+                            "items": {"type": "string", "enum": ["BLOCKER", "CRITICAL", "MAJOR", "MINOR", "INFO"]},
+                            "description": "Filter by severity levels (e.g., ['BLOCKER', 'CRITICAL'])"
+                        },
+                        "types": {
+                            "type": "array",
+                            "items": {"type": "string", "enum": ["BUG", "VULNERABILITY", "CODE_SMELL", "SECURITY_HOTSPOT"]},
+                            "description": "Filter by issue types (e.g., ['BUG', 'VULNERABILITY'])"
+                        }
+                    },
+                    "required": []
+                }
+            ),
+            types.Tool(
+                name="sonar_get_coverage",
+                description="Fetch code coverage metrics from SonarCloud including line coverage, branch coverage, and uncovered lines/conditions.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "branch": {
+                            "type": "string",
+                            "description": "Branch to check (default: master)",
+                            "default": "master"
+                        },
+                        "project_key": {
+                            "type": "string",
+                            "description": "SonarCloud project key (default: pandora-jewelry_spark_pandora-group)",
+                            "default": "pandora-jewelry_spark_pandora-group"
+                        }
+                    },
+                    "required": []
+                }
+            ),
+            types.Tool(
+                name="sonar_get_quality_gate",
+                description="Fetch quality gate status from SonarCloud including pass/fail status and condition details.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "branch": {
+                            "type": "string",
+                            "description": "Branch to check (default: master)",
+                            "default": "master"
+                        },
+                        "project_key": {
+                            "type": "string",
+                            "description": "SonarCloud project key (default: pandora-jewelry_spark_pandora-group)",
+                            "default": "pandora-jewelry_spark_pandora-group"
+                        }
+                    },
+                    "required": []
+                }
+            ),
+            types.Tool(
+                name="sonar_validate_for_pr",
+                description="Validate code for PR readiness. Returns validation results, a markdown checklist for PR, and whether the code is ready for PR based on quality gate status.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "branch": {
+                            "type": "string",
+                            "description": "Branch to validate (default: master)",
+                            "default": "master"
+                        },
+                        "project_key": {
+                            "type": "string",
+                            "description": "SonarCloud project key (default: pandora-jewelry_spark_pandora-group)",
+                            "default": "pandora-jewelry_spark_pandora-group"
+                        },
+                        "repo_path": {
+                            "type": "string",
+                            "description": "Optional path to repository for pipeline analysis"
+                        }
+                    },
+                    "required": []
+                }
+            ),
         ]
 
     # Register call_tool handler
@@ -689,6 +810,76 @@ def register_tools(server: Server) -> None:
                     return [types.TextContent(type="text", text=json.dumps(result.to_dict(), indent=2))]
                 except Exception as qa_error:
                     return [types.TextContent(type="text", text=f"QA Agent Error: {str(qa_error)}")]
+
+            # Sonar Validation Agent tools
+            elif name == "sonar_validate":
+                import json
+                try:
+                    project_key = arguments.get("project_key", "pandora-jewelry_spark_pandora-group")
+                    branch = arguments.get("branch", "master")
+                    repo_path = arguments.get("repo_path")
+                    
+                    agent = SonarValidationAgent(project_key=project_key)
+                    result = agent.validate(branch, repo_path)
+                    
+                    return [types.TextContent(type="text", text=json.dumps(result.to_dict(), indent=2))]
+                except Exception as sonar_error:
+                    return [types.TextContent(type="text", text=f"Sonar Validation Error: {str(sonar_error)}")]
+
+            elif name == "sonar_get_issues":
+                import json
+                try:
+                    project_key = arguments.get("project_key", "pandora-jewelry_spark_pandora-group")
+                    branch = arguments.get("branch", "master")
+                    severities = arguments.get("severities")
+                    types_filter = arguments.get("types")
+                    
+                    agent = SonarValidationAgent(project_key=project_key)
+                    issues = agent.fetch_issues(branch, severities, types_filter)
+                    
+                    issues_data = [issue.to_dict() for issue in issues]
+                    return [types.TextContent(type="text", text=json.dumps(issues_data, indent=2))]
+                except Exception as sonar_error:
+                    return [types.TextContent(type="text", text=f"Sonar Issues Error: {str(sonar_error)}")]
+
+            elif name == "sonar_get_coverage":
+                import json
+                try:
+                    project_key = arguments.get("project_key", "pandora-jewelry_spark_pandora-group")
+                    branch = arguments.get("branch", "master")
+                    
+                    agent = SonarValidationAgent(project_key=project_key)
+                    coverage = agent.fetch_coverage(branch)
+                    
+                    return [types.TextContent(type="text", text=json.dumps(coverage.to_dict(), indent=2))]
+                except Exception as sonar_error:
+                    return [types.TextContent(type="text", text=f"Sonar Coverage Error: {str(sonar_error)}")]
+
+            elif name == "sonar_get_quality_gate":
+                import json
+                try:
+                    project_key = arguments.get("project_key", "pandora-jewelry_spark_pandora-group")
+                    branch = arguments.get("branch", "master")
+                    
+                    agent = SonarValidationAgent(project_key=project_key)
+                    status = agent.fetch_project_status(branch)
+                    
+                    return [types.TextContent(type="text", text=json.dumps(status, indent=2))]
+                except Exception as sonar_error:
+                    return [types.TextContent(type="text", text=f"Sonar Quality Gate Error: {str(sonar_error)}")]
+
+            elif name == "sonar_validate_for_pr":
+                import json
+                try:
+                    project_key = arguments.get("project_key", "pandora-jewelry_spark_pandora-group")
+                    branch = arguments.get("branch", "master")
+                    repo_path = arguments.get("repo_path")
+                    
+                    result = validate_for_pr(branch, repo_path, project_key)
+                    
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as sonar_error:
+                    return [types.TextContent(type="text", text=f"Sonar PR Validation Error: {str(sonar_error)}")]
 
             else:
                 raise ValueError(f"Unknown tool: {name}")
