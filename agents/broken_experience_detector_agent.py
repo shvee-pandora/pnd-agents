@@ -650,13 +650,18 @@ class BrokenExperienceDetectorAgent:
                 ))
     
     async def _check_broken_images(self, report: ScanReport):
-        """Check for broken images."""
+        """Check for broken images with network failure evidence."""
         images = await self._page.query_selector_all("img")
         
         for img in images:
             try:
                 src = await img.get_attribute("src")
+                data_src = await img.get_attribute("data-src")
+                loading_attr = await img.get_attribute("loading")
+                
                 if not src:
+                    if data_src or loading_attr == "lazy":
+                        continue
                     report.broken_images.append(BrokenResource(
                         url="",
                         error="Missing src attribute",
@@ -664,22 +669,37 @@ class BrokenExperienceDetectorAgent:
                     ))
                     continue
                 
-                # Check if image loaded successfully
+                complete = await img.evaluate("el => el.complete")
                 natural_width = await img.evaluate("el => el.naturalWidth")
+                
                 if natural_width == 0:
-                    # Check if it's in our failed requests
                     full_url = urljoin(report.url, src)
                     status = None
-                    for req in self._network_requests:
+                    failed = False
+                    
+                    for req in self._failed_requests:
                         if req["url"] == full_url or req["url"] == src:
-                            status = req.get("status")
+                            failed = True
                             break
                     
-                    report.broken_images.append(BrokenResource(
-                        url=src,
-                        status_code=status,
-                        error="Image failed to load" if not status else None,
-                    ))
+                    if not failed:
+                        for req in self._network_requests:
+                            if req["url"] == full_url or req["url"] == src:
+                                status = req.get("status")
+                                break
+                    
+                    if failed or (status is not None and status >= 400):
+                        report.broken_images.append(BrokenResource(
+                            url=src,
+                            status_code=status,
+                            error="Image request failed" if failed else f"HTTP {status}",
+                        ))
+                    elif complete and not data_src and loading_attr != "lazy":
+                        report.broken_images.append(BrokenResource(
+                            url=src,
+                            status_code=status,
+                            error="Image loaded but has zero dimensions",
+                        ))
             except Exception:
                 pass
     
