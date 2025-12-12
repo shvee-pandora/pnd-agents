@@ -413,13 +413,13 @@ class BrokenExperienceDetectorAgent:
         r"amplience\.net",
     ]
     
-    def __init__(self, headless: bool = True, timeout: int = 30000):
+    def __init__(self, headless: bool = True, timeout: int = 60000):
         """
         Initialize the Broken Experience Detector Agent.
         
         Args:
             headless: Run browser in headless mode (default: True)
-            timeout: Page load timeout in milliseconds (default: 30000)
+            timeout: Page load timeout in milliseconds (default: 60000)
         """
         self.headless = headless
         self.timeout = timeout
@@ -531,20 +531,32 @@ class BrokenExperienceDetectorAgent:
         try:
             await self._init_browser()
             
-            # Navigate to the page
+            # Navigate to the page using domcontentloaded instead of networkidle
+            # networkidle can hang indefinitely on heavy e-commerce sites with analytics
+            page_load_partial = False
             try:
-                await self._page.goto(url, wait_until="networkidle", timeout=self.timeout)
+                await self._page.goto(url, wait_until="domcontentloaded", timeout=self.timeout)
             except Exception as e:
-                report.errors.append(Issue(
-                    category=IssueCategory.NETWORK.value,
-                    severity=IssueSeverity.CRITICAL.value,
-                    message=f"Failed to load page: {str(e)}",
-                    recommendation="Check if the URL is correct and the server is responding"
-                ))
-                return report
+                error_str = str(e).lower()
+                if "timeout" in error_str:
+                    page_load_partial = True
+                    report.warnings.append(Issue(
+                        category=IssueCategory.NETWORK.value,
+                        severity=IssueSeverity.WARNING.value,
+                        message=f"Page load timed out after {self.timeout/1000:.0f}s; analysis may be partial",
+                        recommendation="Investigate long-running requests and third-party scripts"
+                    ))
+                else:
+                    report.errors.append(Issue(
+                        category=IssueCategory.NETWORK.value,
+                        severity=IssueSeverity.CRITICAL.value,
+                        message=f"Failed to load page: {str(e)}",
+                        recommendation="Check if the URL is correct and the server is responding"
+                    ))
+                    return report
             
             # Wait a bit for any lazy-loaded content
-            await asyncio.sleep(2)
+            await asyncio.sleep(3 if page_load_partial else 2)
             
             # Run all checks
             await self._check_console_errors(report)
