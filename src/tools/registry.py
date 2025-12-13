@@ -26,7 +26,7 @@ from agents.qa_agent import QAAgent
 from agents.sonar_validation_agent import SonarValidationAgent, validate_for_pr
 from agents.analytics_agent import AnalyticsAgent
 from agents.task_manager_agent import TaskManagerAgent
-from tools.jira_client import JiraClient
+from tools.jira_client import JiraClient, JiraConfig
 
 
 def register_tools(server: Server) -> None:
@@ -733,7 +733,7 @@ def register_tools(server: Server) -> None:
             ),
             types.Tool(
                 name="analytics_update_jira_task",
-                description="Update a JIRA issue with AI agent metrics. Adds a formatted comment and updates custom fields.",
+                description="Update a JIRA issue with AI agent metrics. Adds a formatted comment and updates custom fields. Supports optional JIRA config overrides for different boards/instances.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -775,6 +775,14 @@ def register_tools(server: Server) -> None:
                             "type": "boolean",
                             "description": "Whether human review is required",
                             "default": False
+                        },
+                        "jira_base_url": {
+                            "type": "string",
+                            "description": "Override JIRA base URL (e.g., 'https://pandoradigital.atlassian.net'). If not provided, uses JIRA_BASE_URL env var."
+                        },
+                        "jira_email": {
+                            "type": "string",
+                            "description": "Override JIRA account email. If not provided, uses JIRA_EMAIL env var."
                         }
                     },
                     "required": ["jira_task_id", "agent_name", "status"]
@@ -1271,8 +1279,19 @@ def register_tools(server: Server) -> None:
 
             elif name == "analytics_update_jira_task":
                 import json
+                import os
                 try:
-                    jira_client = JiraClient()
+                    # Build JIRA config with optional overrides
+                    jira_base_url = arguments.get("jira_base_url") or os.environ.get("JIRA_BASE_URL", "")
+                    jira_email = arguments.get("jira_email") or os.environ.get("JIRA_EMAIL", "")
+                    jira_api_token = os.environ.get("JIRA_API_TOKEN", "")
+                    
+                    jira_config = JiraConfig(
+                        base_url=jira_base_url,
+                        email=jira_email,
+                        api_token=jira_api_token,
+                    )
+                    jira_client = JiraClient(config=jira_config)
                     
                     duration_ms = arguments.get("duration_ms", 0)
                     if duration_ms < 60000:
