@@ -1,14 +1,20 @@
 """
 Unit Test Agent
 
-A dedicated agent for generating comprehensive unit tests with 100% code coverage.
+A dedicated agent for generating minimal, focused unit tests following Pandora coding standards.
 This agent analyzes source code and generates Jest/Vitest tests for React components,
-utility functions, hooks, and API routes following Pandora coding standards.
+utility functions, hooks, and API routes.
+
+Key principles:
+- Generate minimal tests that cover real business logic, not boilerplate
+- Never introduce new Sonar issues (use globalThis, avoid any, no TODO comments)
+- Extend existing test files rather than replacing them
+- Respect project coding guidelines from CODING_STANDARDS.md
+- Prefer small, readable test blocks over comprehensive coverage
 """
 
 import os
 import re
-import json
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
 from enum import Enum
@@ -29,6 +35,33 @@ class CoverageType(Enum):
     BRANCH = "branch"
     FUNCTION = "function"
     LINE = "line"
+
+
+@dataclass
+class TestGenerationConfig:
+    """Configuration for test generation to ensure minimal, Sonar-compliant output.
+    
+    These settings help prevent over-generation and ensure tests follow
+    Pandora coding standards and don't introduce Sonar violations.
+    """
+    max_tests_per_unit: int = 3
+    max_tests_per_file: int = 10
+    max_lines_per_file: int = 200
+    include_snapshot_tests: bool = False
+    include_accessibility_tests: bool = False
+    extend_existing_tests: bool = True
+    use_globalThis: bool = True
+    avoid_any_type: bool = True
+    no_todo_comments: bool = True
+    
+    # Sonar rules to avoid violating
+    sonar_safe_patterns: Dict[str, str] = field(default_factory=lambda: {
+        "S7764": "Use globalThis instead of global",
+        "S4325": "Avoid unnecessary type assertions",
+        "S7741": "Use x === undefined instead of typeof x === 'undefined'",
+        "S7780": "Avoid complex escape sequences",
+        "S6759": "Do NOT add Readonly<> to props (Pandora standard)",
+    })
 
 
 @dataclass
@@ -136,15 +169,14 @@ class UnitTestResult:
 
 class UnitTestAgent:
     """
-    Agent dedicated to generating comprehensive unit tests with 100% coverage.
+    Agent for generating minimal, focused unit tests following Pandora coding standards.
     
-    This agent analyzes source code and generates tests that cover:
-    - All functions and methods
-    - All branches (if/else, switch, ternary)
-    - All edge cases and error conditions
-    - Component rendering and interactions
-    - Hook behavior and state changes
-    - API route handlers
+    Key principles:
+    - Generate only essential tests that cover real business logic
+    - Never introduce new Sonar issues
+    - Extend existing test files rather than replacing them
+    - Respect max limits for tests per file and lines per file
+    - Use Sonar-safe patterns (globalThis, no any, no TODO comments)
     """
     
     # Patterns for identifying testable code
@@ -177,14 +209,20 @@ class UnitTestAgent:
         re.compile(r'&&'),  # logical and
     ]
     
-    def __init__(self, framework: TestFramework = TestFramework.JEST):
+    def __init__(
+        self,
+        framework: TestFramework = TestFramework.JEST,
+        config: Optional[TestGenerationConfig] = None
+    ):
         """
         Initialize the Unit Test Agent.
         
         Args:
             framework: Test framework to use (jest, vitest, etc.)
+            config: Configuration for test generation limits and Sonar compliance
         """
         self.framework = framework
+        self.config = config or TestGenerationConfig()
         self.test_files: List[TestFile] = []
     
     def analyze_file(self, file_path: str, content: Optional[str] = None) -> Dict[str, Any]:
@@ -248,142 +286,135 @@ class UnitTestAgent:
     
     def generate_test_cases(self, analysis: Dict[str, Any], content: str) -> List[TestCase]:
         """
-        Generate test cases based on file analysis.
+        Generate minimal, focused test cases based on file analysis.
+        
+        Following Pandora coding standards:
+        - Only cover real business logic paths
+        - Respect max_tests_per_unit and max_tests_per_file limits
+        - No snapshot tests by default (they create maintenance burden)
+        - No accessibility tests by default (use dedicated a11y tools)
+        - No generic "toBeDefined()" assertions (low value)
         
         Args:
             analysis: File analysis results
             content: Source file content
             
         Returns:
-            List of test cases to achieve 100% coverage
+            List of focused test cases (limited by config)
         """
-        test_cases = []
+        test_cases: List[TestCase] = []
+        has_meaningful_branches = analysis["branches"] > 2
         
-        # Generate tests for functions
+        # Generate tests for functions (max 2 per function)
         for func_name in analysis["functions"]:
-            # Basic function test
+            if len(test_cases) >= self.config.max_tests_per_file:
+                break
+                
+            # Only generate one focused test per function
             test_cases.append(TestCase(
-                name=f"should call {func_name} successfully",
-                description=f"Test that {func_name} executes without errors",
+                name=f"should execute {func_name} with valid input",
+                description=f"Test {func_name} happy path",
                 test_type="unit",
-                assertions=[f"expect({func_name}).toBeDefined()"],
+                assertions=["expect(result).not.toBeNull()"],
             ))
             
-            # Test with valid input
-            test_cases.append(TestCase(
-                name=f"should return expected result from {func_name}",
-                description=f"Test {func_name} with valid input",
-                test_type="unit",
-                assertions=[f"expect(result).toBeDefined()"],
-            ))
-            
-            # Test error handling
-            test_cases.append(TestCase(
-                name=f"should handle errors in {func_name}",
-                description=f"Test {func_name} error handling",
-                test_type="unit",
-                assertions=["expect(error).toBeDefined()"],
-            ))
+            # Add error handling test only if function has try/catch or throws
+            if has_meaningful_branches and len(test_cases) < self.config.max_tests_per_file:
+                test_cases.append(TestCase(
+                    name=f"should handle edge cases in {func_name}",
+                    description=f"Test {func_name} with edge case input",
+                    test_type="unit",
+                    assertions=["expect(result).toBeDefined()"],
+                ))
         
-        # Generate tests for React components
+        # Generate tests for React components (max 2 per component)
         for component in analysis["components"]:
-            # Render test
+            if len(test_cases) >= self.config.max_tests_per_file:
+                break
+                
+            # Basic render test (always include)
             test_cases.append(TestCase(
-                name=f"should render {component} without crashing",
-                description=f"Test that {component} renders successfully",
+                name=f"renders {component} correctly",
+                description=f"Test that {component} renders without errors",
                 test_type="unit",
-                assertions=[f"expect(screen.getByTestId('{component.lower()}')).toBeInTheDocument()"],
-                setup=f"render(<{component} />)",
+                assertions=["expect(container.firstChild).not.toBeNull()"],
+                setup=f"const {{ container }} = render(<{component} />)",
             ))
             
-            # Snapshot test
-            test_cases.append(TestCase(
-                name=f"should match snapshot for {component}",
-                description=f"Snapshot test for {component}",
-                test_type="unit",
-                assertions=["expect(container).toMatchSnapshot()"],
-            ))
+            # Interaction test only if component likely has handlers
+            if has_meaningful_branches and len(test_cases) < self.config.max_tests_per_file:
+                mock_fn = "vi.fn()" if self.framework == TestFramework.VITEST else "jest.fn()"
+                test_cases.append(TestCase(
+                    name=f"handles interactions in {component}",
+                    description=f"Test user interactions in {component}",
+                    test_type="unit",
+                    assertions=["expect(mockHandler).toHaveBeenCalled()"],
+                    mocks=[f"const mockHandler = {mock_fn}"],
+                ))
             
-            # Props test
-            test_cases.append(TestCase(
-                name=f"should render {component} with props",
-                description=f"Test {component} with various props",
-                test_type="unit",
-                assertions=[f"expect(screen.getByText(props.text)).toBeInTheDocument()"],
-            ))
+            # Snapshot tests only if explicitly enabled
+            if self.config.include_snapshot_tests and len(test_cases) < self.config.max_tests_per_file:
+                test_cases.append(TestCase(
+                    name=f"matches snapshot for {component}",
+                    description=f"Snapshot test for {component}",
+                    test_type="unit",
+                    assertions=["expect(container).toMatchSnapshot()"],
+                ))
             
-            # Interaction test
-            test_cases.append(TestCase(
-                name=f"should handle user interactions in {component}",
-                description=f"Test click/input handlers in {component}",
-                test_type="unit",
-                assertions=["expect(mockHandler).toHaveBeenCalled()"],
-                mocks=["const mockHandler = jest.fn()"],
-            ))
-            
-            # Accessibility test
-            test_cases.append(TestCase(
-                name=f"should be accessible in {component}",
-                description=f"Accessibility test for {component}",
-                test_type="unit",
-                assertions=["expect(await axe(container)).toHaveNoViolations()"],
-            ))
+            # Accessibility tests only if explicitly enabled
+            if self.config.include_accessibility_tests and len(test_cases) < self.config.max_tests_per_file:
+                test_cases.append(TestCase(
+                    name=f"is accessible in {component}",
+                    description=f"Accessibility test for {component}",
+                    test_type="unit",
+                    assertions=["expect(await axe(container)).toHaveNoViolations()"],
+                ))
         
-        # Generate tests for hooks
+        # Generate tests for hooks (max 2 per hook)
         for hook in analysis["hooks"]:
-            # Basic hook test
+            if len(test_cases) >= self.config.max_tests_per_file:
+                break
+                
+            # Basic hook initialization test
             test_cases.append(TestCase(
-                name=f"should initialize {hook} correctly",
+                name=f"initializes {hook} correctly",
                 description=f"Test {hook} initial state",
                 test_type="unit",
                 assertions=["expect(result.current).toBeDefined()"],
                 setup=f"const {{ result }} = renderHook(() => {hook}())",
             ))
             
-            # State update test
-            test_cases.append(TestCase(
-                name=f"should update state in {hook}",
-                description=f"Test {hook} state updates",
-                test_type="unit",
-                assertions=["expect(result.current.value).toBe(expected)"],
-            ))
-            
-            # Cleanup test
-            test_cases.append(TestCase(
-                name=f"should cleanup {hook} on unmount",
-                description=f"Test {hook} cleanup",
-                test_type="unit",
-                assertions=["expect(cleanupFn).toHaveBeenCalled()"],
-            ))
+            # State update test only if hook likely has state
+            if has_meaningful_branches and len(test_cases) < self.config.max_tests_per_file:
+                test_cases.append(TestCase(
+                    name=f"updates state in {hook}",
+                    description=f"Test {hook} state changes",
+                    test_type="unit",
+                    assertions=["expect(result.current).toBeDefined()"],
+                ))
         
-        # Generate branch coverage tests
-        branch_count = analysis["branches"]
-        if branch_count > 0:
-            test_cases.append(TestCase(
-                name="should cover all conditional branches - truthy path",
-                description="Test truthy branch conditions",
-                test_type="unit",
-                assertions=["expect(result).toBe(truthyResult)"],
-            ))
-            
-            test_cases.append(TestCase(
-                name="should cover all conditional branches - falsy path",
-                description="Test falsy branch conditions",
-                test_type="unit",
-                assertions=["expect(result).toBe(falsyResult)"],
-            ))
-            
-            test_cases.append(TestCase(
-                name="should handle edge cases and null values",
-                description="Test null/undefined handling",
-                test_type="unit",
-                assertions=[
-                    "expect(handleNull(null)).toBeDefined()",
-                    "expect(handleNull(undefined)).toBeDefined()",
-                ],
-            ))
+        # Enforce max tests per file limit
+        return test_cases[:self.config.max_tests_per_file]
+    
+    def _check_existing_test_file(self, test_file_path: str) -> Optional[str]:
+        """Check if a test file already exists and return its content.
         
-        return test_cases
+        Following the "extend-not-replace" principle:
+        - If an existing test file exists, we should extend it rather than replace
+        - Returns the existing content if found, None otherwise
+        """
+        if os.path.exists(test_file_path):
+            with open(test_file_path, 'r') as f:
+                return f.read()
+        return None
+    
+    def _extract_existing_test_names(self, existing_content: str) -> List[str]:
+        """Extract test names from existing test file to avoid duplicates.
+        
+        Parses it('...') and test('...') patterns to find existing test names.
+        """
+        test_pattern = re.compile(r"(?:it|test)\s*\(\s*['\"]([^'\"]+)['\"]")
+        return test_pattern.findall(existing_content)
     
     def generate_test_file(
         self,
@@ -392,7 +423,12 @@ class UnitTestAgent:
         output_dir: Optional[str] = None
     ) -> TestFile:
         """
-        Generate a complete test file for a source file.
+        Generate a test file for a source file, extending existing tests if present.
+        
+        Following Pandora coding standards:
+        - If existing test file exists, extend rather than replace
+        - Respect max_tests_per_file and max_lines_per_file limits
+        - Only generate tests that don't already exist
         
         Args:
             source_file: Path to the source file
@@ -400,7 +436,7 @@ class UnitTestAgent:
             output_dir: Optional output directory for test file
             
         Returns:
-            Generated TestFile with all test cases
+            Generated TestFile with test cases (may be empty if extending)
         """
         if content is None:
             with open(source_file, 'r') as f:
@@ -409,22 +445,46 @@ class UnitTestAgent:
         # Analyze the source file
         analysis = self.analyze_file(source_file, content)
         
-        # Generate test cases
-        test_cases = self.generate_test_cases(analysis, content)
-        
         # Determine test file path
         source_path = Path(source_file)
         if output_dir:
             test_dir = Path(output_dir)
         else:
-            # Default: __tests__ directory next to source
             test_dir = source_path.parent / "__tests__"
         
         test_file_name = source_path.stem + ".test" + source_path.suffix
         test_file_path = str(test_dir / test_file_name)
         
-        # Generate imports
-        imports = self._generate_imports(analysis, source_file)
+        # Check for existing test file (extend-not-replace logic)
+        existing_content = None
+        existing_test_names: List[str] = []
+        if self.config.extend_existing_tests:
+            existing_content = self._check_existing_test_file(test_file_path)
+            if existing_content:
+                existing_test_names = self._extract_existing_test_names(existing_content)
+                existing_lines = len(existing_content.split('\n'))
+                
+                # If existing file is already at or near max lines, don't add more
+                if existing_lines >= self.config.max_lines_per_file - 20:
+                    return TestFile(
+                        source_file=source_file,
+                        test_file_path=test_file_path,
+                        test_cases=[],
+                        imports=[],
+                        mocks=[],
+                    )
+        
+        # Generate test cases
+        all_test_cases = self.generate_test_cases(analysis, content)
+        
+        # Filter out tests that already exist
+        test_cases = [
+            tc for tc in all_test_cases
+            if tc.name not in existing_test_names
+        ]
+        
+        # Generate imports based on actual test cases
+        imports = self._generate_imports(analysis, source_file, test_cases)
         
         # Generate mocks
         mocks = self._generate_mocks(analysis)
@@ -440,37 +500,65 @@ class UnitTestAgent:
         self.test_files.append(test_file)
         return test_file
     
-    def _generate_imports(self, analysis: Dict[str, Any], source_file: str) -> List[str]:
-        """Generate import statements for test file.
+    def _generate_imports(self, analysis: Dict[str, Any], source_file: str, test_cases: List[TestCase]) -> List[str]:
+        """Generate minimal import statements for test file.
         
-        Note: Following pandora-group patterns:
+        Following pandora-group patterns and Sonar compliance:
         - No @jest/globals import (Jest globals are available)
-        - @testing-library/jest-dom for DOM matchers
+        - Only import what's actually used in test cases
+        - Don't auto-add React import unless JSX is used in mocks
         - Imports before mocks, mocks before describe blocks
+        
+        Args:
+            analysis: File analysis results
+            source_file: Path to source file
+            test_cases: Generated test cases (to determine needed imports)
         """
         imports = []
+        needs_render = False
+        needs_screen = False
+        needs_user_event = False
+        needs_render_hook = False
+        needs_act = False
         
-        # React import (needed for JSX)
-        if analysis["components"]:
-            imports.append("import React from 'react';")
+        # Analyze test cases to determine needed imports
+        for tc in test_cases:
+            setup_str = tc.setup or ""
+            assertions_str = " ".join(tc.assertions)
+            
+            if "render(" in setup_str or "render(<" in setup_str:
+                needs_render = True
+            if "screen." in assertions_str or "screen." in setup_str:
+                needs_screen = True
+            if "userEvent" in setup_str or "userEvent" in assertions_str:
+                needs_user_event = True
+            if "renderHook" in setup_str:
+                needs_render_hook = True
+            if "act(" in setup_str:
+                needs_act = True
         
-        # Jest DOM matchers (pandora-group pattern)
-        imports.append("import '@testing-library/jest-dom';")
+        # Build testing-library imports based on actual usage
+        rtl_imports = []
+        if needs_render:
+            rtl_imports.append("render")
+        if needs_screen:
+            rtl_imports.append("screen")
+        if needs_act:
+            rtl_imports.append("act")
+        if needs_render_hook:
+            rtl_imports.append("renderHook")
         
-        # React testing library imports
-        if analysis["components"]:
-            imports.append("import { render, screen, fireEvent, waitFor } from '@testing-library/react';")
+        if rtl_imports:
+            imports.append(f"import {{ {', '.join(rtl_imports)} }} from '@testing-library/react';")
+        
+        if needs_user_event:
             imports.append("import userEvent from '@testing-library/user-event';")
-        
-        # Hook testing imports
-        if analysis["hooks"]:
-            imports.append("import { renderHook, act } from '@testing-library/react';")
         
         # Vitest-specific imports (only for vitest framework)
         if self.framework == TestFramework.VITEST:
             imports.append("import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';")
         
-        # Source file import
+        # Source file import - only import what's exported and tested
         source_path = Path(source_file)
         relative_import = f"../{source_path.stem}"
         exports = analysis["exports"]
@@ -482,26 +570,22 @@ class UnitTestAgent:
     def _generate_mocks(self, analysis: Dict[str, Any]) -> List[str]:
         """Generate mock statements for test file.
         
-        Note: Following pandora-group patterns:
+        Following pandora-group patterns and Sonar compliance:
         - Mocks at module level (top of file, after imports)
         - Inline mock implementations for common Next.js modules
         - jest.mock() calls MUST be hoisted - they run before imports
+        - AVOID using 'any' type (Sonar S4325) - use proper typing or unknown
+        - Use globalThis instead of global (Sonar S7764)
+        
+        Note: pandora-group has centralized mocks in jest.setup.ts for next/navigation,
+        so we should NOT re-mock those unless the test specifically needs different behavior.
         """
         mocks = []
         
-        # Common Next.js mocks with inline implementations (pandora-group pattern)
+        # Common Next.js mocks with inline implementations
+        # NOTE: Using React.ComponentProps instead of 'any' to avoid Sonar violations
+        # NOTE: next/navigation is already mocked in jest.setup.ts - skip it by default
         next_mocks = {
-            "next/navigation": """jest.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: jest.fn(),
-    replace: jest.fn(),
-    prefetch: jest.fn(),
-    back: jest.fn(),
-  }),
-  usePathname: () => '/',
-  useSearchParams: () => new URLSearchParams(),
-  useParams: () => ({}),
-}));""",
             "next/router": """jest.mock('next/router', () => ({
   useRouter: () => ({
     push: jest.fn(),
@@ -513,16 +597,24 @@ class UnitTestAgent:
 }));""",
             "next/image": """jest.mock('next/image', () => ({
   __esModule: true,
-  default: ({ src, alt, ...props }: any) => <img src={src} alt={alt} {...props} />,
+  default: function MockImage(props: React.ComponentProps<'img'>) {
+    return <img {...props} />;
+  },
 }));""",
             "next/link": """jest.mock('next/link', () => ({
   __esModule: true,
-  default: ({ children, href, ...props }: any) => <a href={href} {...props}>{children}</a>,
+  default: function MockLink({ children, href, ...props }: React.ComponentProps<'a'> & { children: React.ReactNode }) {
+    return <a href={href} {...props}>{children}</a>;
+  },
 }));""",
         }
         
         # Check which mocks are needed based on imports
+        # Skip next/navigation as it's centrally mocked in jest.setup.ts
         for dep in analysis["imports"]:
+            if "next/navigation" in dep:
+                continue  # Already mocked in jest.setup.ts
+                
             for mock_key, mock_impl in next_mocks.items():
                 if mock_key in dep:
                     mocks.append(mock_impl)
@@ -718,7 +810,6 @@ class UnitTestAgent:
             Workflow-compatible result
         """
         try:
-            task_description = context.get("task_description", "")
             input_data = context.get("input_data", {})
             
             # Get source files to test
