@@ -45,7 +45,7 @@ class TestGenerationConfig:
     Pandora coding standards and don't introduce Sonar violations.
     """
     max_tests_per_unit: int = 3
-    max_tests_per_file: int = 10
+    max_tests_per_file: int = 15
     max_lines_per_file: int = 200
     include_snapshot_tests: bool = False
     include_accessibility_tests: bool = False
