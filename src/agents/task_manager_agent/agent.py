@@ -21,13 +21,13 @@ from typing import Dict, List, Any, Optional, Callable
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from workflow.workflow_engine import (
+from workflows.workflow_engine import (
     WorkflowEngine,
     WorkflowContext,
     TaskType,
     AgentResult
 )
-from workflow.agent_dispatcher import AgentDispatcher, get_dispatcher
+from workflows.agent_dispatcher import AgentDispatcher, get_dispatcher
 
 logger = logging.getLogger("pnd_agents.task_manager")
 
@@ -68,8 +68,10 @@ class TaskManagerAgent:
                        uses default path.
         """
         if rules_file is None:
-            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            rules_file = os.path.join(base_dir, "workflow", "workflow_rules.json")
+            # Go up from src/agents to repo root, then into workflows/
+            src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            repo_root = os.path.dirname(src_dir)
+            rules_file = os.path.join(repo_root, "workflows", "workflow_rules.json")
         
         self.engine = WorkflowEngine(rules_file)
         self.dispatcher = get_dispatcher()

@@ -713,7 +713,7 @@ def cmd_analyze_task(args):
     sys.path.insert(0, str(pnd_agents_path))
     
     try:
-        from workflow.workflow_engine import WorkflowEngine
+        from workflows.workflow_engine import WorkflowEngine
     except ImportError as e:
         print(color(f"Error importing WorkflowEngine: {e}", Colors.RED))
         return 1
