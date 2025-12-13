@@ -13,7 +13,7 @@ from typing import Dict, Any, Callable, Optional
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from workflow.workflow_engine import AgentResult
+from workflows.workflow_engine import AgentResult
 
 
 class AgentDispatcher:
