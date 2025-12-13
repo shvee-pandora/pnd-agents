@@ -1,19 +1,29 @@
 """
 Sonar Validation Agent
 
-A dedicated agent for validating code against SonarCloud quality gates before PR creation.
-This agent reads pipeline files, checks the SonarCloud dashboard, and provides a plan
-to fix any issues to maintain 0 errors, 0 duplication, and 100% coverage.
+A dedicated agent for PREVENTING Sonar issues before they're introduced.
+
+Key capabilities:
+1. PRE-GENERATION: Warn agents about risky patterns BEFORE code generation
+2. POST-GENERATION: Validate generated code and refuse to return if issues exist
+3. AUTO-FIX: Apply safe automatic fixes for common Sonar violations
+
+This agent ensures agents never introduce new Sonar debt by catching issues
+at the planning stage, not after code is already written.
 """
 
 import os
 import re
-import json
 import httpx
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+
+from ..coding_standards import (
+    REPO_IGNORED_RULES,
+    TEST_GENERATION_LIMITS,
+)
 
 
 class SonarSeverity(Enum):
@@ -39,6 +49,72 @@ class QualityGateStatus(Enum):
     WARN = "WARN"
     ERROR = "ERROR"
     NONE = "NONE"
+
+
+@dataclass
+class SonarGuardrail:
+    """A guardrail rule to prevent Sonar issues before code generation.
+    
+    These rules are checked BEFORE code is generated to warn agents
+    about patterns that will trigger Sonar violations.
+    """
+    rule_id: str
+    description: str
+    detect_pattern: str
+    prevent_message: str
+    autofix: Optional[str] = None
+    applies_to: List[str] = field(default_factory=lambda: ["*.ts", "*.tsx", "*.js", "*.jsx"])
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "ruleId": self.rule_id,
+            "description": self.description,
+            "detectPattern": self.detect_pattern,
+            "preventMessage": self.prevent_message,
+            "autofix": self.autofix,
+            "appliesTo": self.applies_to,
+        }
+
+
+@dataclass
+class RepoPolicy:
+    """Per-repository policy configuration for Sonar validation.
+    
+    Different repos may have different rules they want to enforce or ignore.
+    For example, pandora-group ignores S6759 (Readonly props) because it
+    conflicts with their coding standard.
+    """
+    repo_name: str
+    enforced_rules: List[str] = field(default_factory=list)
+    ignored_rules: List[str] = field(default_factory=list)
+    max_test_cases_per_file: int = 10
+    max_lines_per_test_file: int = 200
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "repoName": self.repo_name,
+            "enforcedRules": self.enforced_rules,
+            "ignoredRules": self.ignored_rules,
+            "maxTestCasesPerFile": self.max_test_cases_per_file,
+            "maxLinesPerTestFile": self.max_lines_per_test_file,
+        }
+
+
+@dataclass
+class PreGenerationWarning:
+    """A warning issued before code generation to prevent Sonar issues."""
+    rule_id: str
+    message: str
+    do_instead: str
+    dont_do: str
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "ruleId": self.rule_id,
+            "message": self.message,
+            "doInstead": self.do_instead,
+            "dontDo": self.dont_do,
+        }
 
 
 @dataclass
@@ -179,16 +255,96 @@ class SonarValidationResult:
 
 class SonarValidationAgent:
     """
-    Agent for validating code against SonarCloud quality gates.
+    Agent for PREVENTING Sonar issues before they're introduced.
     
-    This agent:
-    - Reads pipeline configuration files
-    - Checks SonarCloud dashboard for issues
-    - Analyzes code for potential Sonar violations
-    - Provides fix plans to maintain 0 errors, 0 duplication, 100% coverage
+    Two-phase validation:
+    1. PRE-GENERATION: Warn agents about risky patterns before code generation
+    2. POST-GENERATION: Validate generated code and refuse if issues exist
+    
+    This agent ensures agents never introduce new Sonar debt.
     """
     
     SONARCLOUD_API_BASE = "https://sonarcloud.io/api"
+    
+    # Pre-generation guardrails - patterns to warn about BEFORE code is generated
+    # These are the most common issues introduced by AI agents
+    GUARDRAILS: List[SonarGuardrail] = [
+        SonarGuardrail(
+            rule_id="S7764",
+            description="Prefer globalThis over global",
+            detect_pattern=r"\bglobal\b(?!This)",
+            prevent_message="Use globalThis instead of global",
+            autofix="global -> globalThis",
+        ),
+        SonarGuardrail(
+            rule_id="S4325",
+            description="Avoid unnecessary type assertions",
+            detect_pattern=r"as\s+\w+(?:\s*\[\s*\])?(?:\s*\|\s*\w+)*\s*[;,)\]]",
+            prevent_message="Avoid type assertions (as X) - use type guards instead",
+            autofix=None,
+        ),
+        SonarGuardrail(
+            rule_id="S7741",
+            description="Compare with undefined directly",
+            detect_pattern=r"typeof\s+\w+\s*===?\s*['\"]undefined['\"]",
+            prevent_message="Use x === undefined instead of typeof x === 'undefined'",
+            autofix="typeof x === 'undefined' -> x === undefined",
+        ),
+        SonarGuardrail(
+            rule_id="S7780",
+            description="Avoid complex escape sequences",
+            detect_pattern=r"\\x[0-9a-fA-F]{2}|\\u[0-9a-fA-F]{4}",
+            prevent_message="Use String.raw or simpler escape sequences",
+            autofix=None,
+        ),
+        SonarGuardrail(
+            rule_id="S6759",
+            description="Mark props as read-only (SKIP for pandora-group)",
+            detect_pattern=r"type\s+\w*Props\s*=\s*\{",
+            prevent_message="DON'T add Readonly<> to props in pandora-group (conflicts with coding standard)",
+            autofix=None,
+        ),
+        SonarGuardrail(
+            rule_id="TODO",
+            description="No TODO comments in production code",
+            detect_pattern=r"//\s*TODO|/\*\s*TODO",
+            prevent_message="Never generate TODO comments - implement fully or skip",
+            autofix="Remove TODO comments entirely",
+        ),
+        SonarGuardrail(
+            rule_id="S1854",
+            description="Remove unused variable assignments",
+            detect_pattern=r"const\s+\w+\s*=\s*[^;]+;\s*(?://.*)?$(?!\s*\w+\s*\()",
+            prevent_message="Don't declare variables that aren't used",
+            autofix=None,
+        ),
+    ]
+    
+    # Per-repo policies - uses centralized REPO_IGNORED_RULES and TEST_GENERATION_LIMITS
+    # from coding_standards.py for consistency across all agents
+    REPO_POLICIES: Dict[str, RepoPolicy] = {
+        "pandora-group": RepoPolicy(
+            repo_name="pandora-group",
+            enforced_rules=["S7764", "S4325", "S7741", "TODO"],
+            ignored_rules=REPO_IGNORED_RULES.get("pandora-group", []),
+            max_test_cases_per_file=TEST_GENERATION_LIMITS["max_tests_per_file"],
+            max_lines_per_test_file=TEST_GENERATION_LIMITS["max_lines_per_file"],
+        ),
+        "pandora-ecom-web": RepoPolicy(
+            repo_name="pandora-ecom-web",
+            enforced_rules=["S7764", "S4325", "S7741", "TODO"],
+            ignored_rules=REPO_IGNORED_RULES.get("pandora-ecom-web", []),
+            max_test_cases_per_file=TEST_GENERATION_LIMITS["max_tests_per_file"],
+            max_lines_per_test_file=TEST_GENERATION_LIMITS["max_lines_per_file"],
+        ),
+        "default": RepoPolicy(
+            repo_name="default",
+            enforced_rules=["S7764", "S4325", "S7741", "TODO"],
+            ignored_rules=[],
+            max_test_cases_per_file=TEST_GENERATION_LIMITS["max_tests_per_file"],
+            max_lines_per_test_file=TEST_GENERATION_LIMITS["max_lines_per_file"],
+        ),
+    }
     
     # Common Sonar rules and their fixes
     RULE_FIXES = {
@@ -265,6 +421,174 @@ class SonarValidationAgent:
             headers=headers,
             timeout=30.0,
         )
+    
+    def get_repo_policy(self, repo_name: str) -> RepoPolicy:
+        """Get the policy for a specific repository.
+        
+        Args:
+            repo_name: Name of the repository
+            
+        Returns:
+            RepoPolicy for the repo, or default policy if not found
+        """
+        return self.REPO_POLICIES.get(repo_name, self.REPO_POLICIES["default"])
+    
+    def get_pre_generation_warnings(self, repo_name: str = "default") -> List[PreGenerationWarning]:
+        """Generate warnings to show agents BEFORE they generate code.
+        
+        This is the key method for PREVENTING Sonar issues. Call this before
+        any code generation to get a list of "Do/Don't" rules.
+        
+        Args:
+            repo_name: Name of the repository (for policy lookup)
+            
+        Returns:
+            List of PreGenerationWarning objects with Do/Don't guidance
+        """
+        policy = self.get_repo_policy(repo_name)
+        warnings = []
+        
+        for guardrail in self.GUARDRAILS:
+            # Skip rules that are ignored for this repo
+            if guardrail.rule_id in policy.ignored_rules:
+                continue
+            
+            # Only include enforced rules (or all if no specific enforcement)
+            if policy.enforced_rules and guardrail.rule_id not in policy.enforced_rules:
+                continue
+            
+            warnings.append(PreGenerationWarning(
+                rule_id=guardrail.rule_id,
+                message=guardrail.description,
+                do_instead=guardrail.prevent_message,
+                dont_do=f"Pattern to avoid: {guardrail.detect_pattern}",
+            ))
+        
+        return warnings
+    
+    def get_pre_generation_checklist(self, repo_name: str = "default") -> str:
+        """Generate a short checklist for agents to follow before generating code.
+        
+        This returns a concise "Do/Don't" list that agents should follow.
+        
+        Args:
+            repo_name: Name of the repository
+            
+        Returns:
+            Markdown checklist string
+        """
+        warnings = self.get_pre_generation_warnings(repo_name)
+        policy = self.get_repo_policy(repo_name)
+        
+        lines = [
+            "## Sonar Pre-Generation Checklist",
+            "",
+            "**DO:**",
+        ]
+        
+        for w in warnings:
+            lines.append(f"- {w.do_instead}")
+        
+        lines.extend([
+            "",
+            "**DON'T:**",
+        ])
+        
+        for w in warnings:
+            if "Pattern to avoid" not in w.dont_do:
+                lines.append(f"- {w.dont_do}")
+        
+        lines.extend([
+            "",
+            f"**Limits:** Max {policy.max_test_cases_per_file} tests/file, Max {policy.max_lines_per_test_file} lines/file",
+        ])
+        
+        return "\n".join(lines)
+    
+    def validate_generated_code(
+        self,
+        code: str,
+        repo_name: str = "default",
+        file_type: str = "ts"
+    ) -> Dict[str, Any]:
+        """Validate generated code against Sonar guardrails BEFORE returning it.
+        
+        This is the POST-GENERATION validation. If issues are found, the agent
+        should either auto-fix them or refuse to return the code.
+        
+        Args:
+            code: The generated code to validate
+            repo_name: Name of the repository
+            file_type: File type (ts, tsx, js, jsx)
+            
+        Returns:
+            Dict with:
+            - valid: bool - whether code passes validation
+            - issues: List of issues found
+            - fixed_code: Auto-fixed code (if possible)
+            - must_fix: List of issues that must be fixed before returning
+        """
+        policy = self.get_repo_policy(repo_name)
+        issues = []
+        must_fix = []
+        fixed_code = code
+        
+        for guardrail in self.GUARDRAILS:
+            # Skip ignored rules
+            if guardrail.rule_id in policy.ignored_rules:
+                continue
+            
+            # Check if pattern matches
+            pattern = re.compile(guardrail.detect_pattern, re.MULTILINE)
+            matches = pattern.findall(code)
+            
+            if matches:
+                issue = {
+                    "rule_id": guardrail.rule_id,
+                    "description": guardrail.description,
+                    "matches": len(matches),
+                    "autofix_available": guardrail.autofix is not None,
+                }
+                issues.append(issue)
+                
+                # Apply autofix if available
+                if guardrail.autofix:
+                    if guardrail.rule_id == "S7764":
+                        # Fix global -> globalThis
+                        fixed_code = re.sub(r'\bglobal\b(?!This)', 'globalThis', fixed_code)
+                    elif guardrail.rule_id == "S7741":
+                        # Fix typeof x === 'undefined' -> x === undefined
+                        fixed_code = re.sub(
+                            r"typeof\s+(\w+)\s*===?\s*['\"]undefined['\"]",
+                            r"\1 === undefined",
+                            fixed_code
+                        )
+                    elif guardrail.rule_id == "TODO":
+                        # Remove TODO comments
+                        fixed_code = re.sub(r'//\s*TODO[^\n]*\n?', '', fixed_code)
+                        fixed_code = re.sub(r'/\*\s*TODO[^*]*\*/', '', fixed_code)
+                else:
+                    # No autofix - must be manually fixed
+                    must_fix.append(issue)
+        
+        return {
+            "valid": len(must_fix) == 0,
+            "issues": issues,
+            "fixed_code": fixed_code if fixed_code != code else None,
+            "must_fix": must_fix,
+            "auto_fixed_count": len(issues) - len(must_fix),
+        }
+    
+    def should_refuse_code(self, validation_result: Dict[str, Any]) -> bool:
+        """Determine if the agent should refuse to return the generated code.
+        
+        Args:
+            validation_result: Result from validate_generated_code
+            
+        Returns:
+            True if code should be refused (has unfixable issues)
+        """
+        return len(validation_result.get("must_fix", [])) > 0
     
     def fetch_project_status(self, branch: str = "master") -> Dict[str, Any]:
         """
@@ -701,12 +1025,6 @@ class SonarValidationAgent:
         lines = ["## SonarCloud Pre-PR Checklist\n"]
         
         # Quality Gate Status
-        status_emoji = {
-            "OK": "pass",
-            "WARN": "warning",
-            "ERROR": "fail",
-        }.get(result.quality_gate_status, "unknown")
-        
         lines.append(f"### Quality Gate: {result.quality_gate_status}\n")
         
         # Issues to fix
@@ -747,7 +1065,6 @@ class SonarValidationAgent:
             Workflow-compatible result
         """
         try:
-            task_description = context.get("task_description", "")
             input_data = context.get("input_data", {})
             
             # Get branch to validate

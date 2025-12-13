@@ -413,13 +413,13 @@ class BrokenExperienceDetectorAgent:
         r"amplience\.net",
     ]
     
-    def __init__(self, headless: bool = True, timeout: int = 30000):
+    def __init__(self, headless: bool = True, timeout: int = 60000):
         """
         Initialize the Broken Experience Detector Agent.
         
         Args:
             headless: Run browser in headless mode (default: True)
-            timeout: Page load timeout in milliseconds (default: 30000)
+            timeout: Page load timeout in milliseconds (default: 60000)
         """
         self.headless = headless
         self.timeout = timeout
@@ -531,20 +531,32 @@ class BrokenExperienceDetectorAgent:
         try:
             await self._init_browser()
             
-            # Navigate to the page
+            # Navigate to the page using domcontentloaded instead of networkidle
+            # networkidle can hang indefinitely on heavy e-commerce sites with analytics
+            page_load_partial = False
             try:
-                await self._page.goto(url, wait_until="networkidle", timeout=self.timeout)
+                await self._page.goto(url, wait_until="domcontentloaded", timeout=self.timeout)
             except Exception as e:
-                report.errors.append(Issue(
-                    category=IssueCategory.NETWORK.value,
-                    severity=IssueSeverity.CRITICAL.value,
-                    message=f"Failed to load page: {str(e)}",
-                    recommendation="Check if the URL is correct and the server is responding"
-                ))
-                return report
+                error_str = str(e).lower()
+                if "timeout" in error_str:
+                    page_load_partial = True
+                    report.warnings.append(Issue(
+                        category=IssueCategory.NETWORK.value,
+                        severity=IssueSeverity.WARNING.value,
+                        message=f"Page load timed out after {self.timeout/1000:.0f}s; analysis may be partial",
+                        recommendation="Investigate long-running requests and third-party scripts"
+                    ))
+                else:
+                    report.errors.append(Issue(
+                        category=IssueCategory.NETWORK.value,
+                        severity=IssueSeverity.CRITICAL.value,
+                        message=f"Failed to load page: {str(e)}",
+                        recommendation="Check if the URL is correct and the server is responding"
+                    ))
+                    return report
             
             # Wait a bit for any lazy-loaded content
-            await asyncio.sleep(2)
+            await asyncio.sleep(3 if page_load_partial else 2)
             
             # Run all checks
             await self._check_console_errors(report)
@@ -638,13 +650,18 @@ class BrokenExperienceDetectorAgent:
                 ))
     
     async def _check_broken_images(self, report: ScanReport):
-        """Check for broken images."""
+        """Check for broken images with network failure evidence."""
         images = await self._page.query_selector_all("img")
         
         for img in images:
             try:
                 src = await img.get_attribute("src")
+                data_src = await img.get_attribute("data-src")
+                loading_attr = await img.get_attribute("loading")
+                
                 if not src:
+                    if data_src or loading_attr == "lazy":
+                        continue
                     report.broken_images.append(BrokenResource(
                         url="",
                         error="Missing src attribute",
@@ -652,22 +669,37 @@ class BrokenExperienceDetectorAgent:
                     ))
                     continue
                 
-                # Check if image loaded successfully
+                complete = await img.evaluate("el => el.complete")
                 natural_width = await img.evaluate("el => el.naturalWidth")
+                
                 if natural_width == 0:
-                    # Check if it's in our failed requests
                     full_url = urljoin(report.url, src)
                     status = None
-                    for req in self._network_requests:
+                    failed = False
+                    
+                    for req in self._failed_requests:
                         if req["url"] == full_url or req["url"] == src:
-                            status = req.get("status")
+                            failed = True
                             break
                     
-                    report.broken_images.append(BrokenResource(
-                        url=src,
-                        status_code=status,
-                        error="Image failed to load" if not status else None,
-                    ))
+                    if not failed:
+                        for req in self._network_requests:
+                            if req["url"] == full_url or req["url"] == src:
+                                status = req.get("status")
+                                break
+                    
+                    if failed or (status is not None and status >= 400):
+                        report.broken_images.append(BrokenResource(
+                            url=src,
+                            status_code=status,
+                            error="Image request failed" if failed else f"HTTP {status}",
+                        ))
+                    elif complete and not data_src and loading_attr != "lazy":
+                        report.broken_images.append(BrokenResource(
+                            url=src,
+                            status_code=status,
+                            error="Image loaded but has zero dimensions",
+                        ))
             except Exception:
                 pass
     

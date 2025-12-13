@@ -37,7 +37,7 @@ The Task Manager Agent serves as the orchestrator for multi-agent workflows, dec
 - `task-assign` - Route tasks to appropriate agents
 - `task-merge` - Combine outputs from multiple agents
 
-**Documentation:** [agents/task_manager/agents/task-manager-agent.md](../agents/task_manager/agents/task-manager-agent.md)
+**Documentation:** [agents/task_manager_agent/agents/task-manager-agent.md](../src/agents/task_manager_agent/agents/task-manager-agent.md)
 
 ---
 
@@ -57,7 +57,7 @@ The Frontend Engineer Agent generates React/Next.js components following Pandora
 - `story-create` - Create Storybook stories
 - `accessibility-validate` - Validate accessibility compliance
 
-**Documentation:** [agents/frontend/agents/frontend-engineer-agent.md](../agents/frontend/agents/frontend-engineer-agent.md)
+**Documentation:** [agents/frontend/agents/frontend-engineer-agent.md](../src/agents/frontend/agents/frontend-engineer-agent.md)
 
 ---
 
@@ -74,7 +74,7 @@ The Figma Reader Agent extracts design metadata, tokens, and component specifica
 **Commands:**
 - `figma-read` - Extract design data from Figma URL
 
-**Documentation:** [agents/figma_reader/agents/figma-reader-agent.md](../agents/figma_reader/agents/figma-reader-agent.md)
+**Documentation:** [agents/figma_reader_agent/agents/figma-reader-agent.md](../src/agents/figma_reader_agent/agents/figma-reader-agent.md)
 
 **Required Environment Variable:** `FIGMA_ACCESS_TOKEN`
 
@@ -95,7 +95,7 @@ The Amplience CMS Agent creates and manages content types, JSON schemas, and pay
 - `schema-generate` - Generate JSON schemas
 - `payload-example` - Create example payloads
 
-**Documentation:** [agents/amplience/agents/amplience-cms-agent.md](../agents/amplience/agents/amplience-cms-agent.md)
+**Documentation:** [agents/amplience/agents/amplience-cms-agent.md](../src/agents/amplience/agents/amplience-cms-agent.md)
 
 ---
 
@@ -115,7 +115,7 @@ The Code Review Agent validates generated code against Pandora coding standards,
 - `validate-standards` - Validate against specific standards
 - `pr-comment` - Generate PR review comments
 
-**Documentation:** [agents/code_review/agents/code-review-agent.md](../agents/code_review/agents/code-review-agent.md)
+**Documentation:** [agents/code_review/agents/code-review-agent.md](../src/agents/code_review/agents/code-review-agent.md)
 
 ---
 
@@ -130,7 +130,7 @@ The Unit Test Agent generates comprehensive unit tests targeting 100% code cover
 - Accessibility testing with jest-axe
 - Mock generation
 
-**Documentation:** Located in `agents/unit_test_agent.py`
+**Documentation:** Located in `src/agents/unit_test_agent/`
 
 ---
 
@@ -150,7 +150,7 @@ The Sonar Validation Agent enforces SonarCloud quality gates, ensuring zero erro
 - 0 code duplication
 - 100% test coverage
 
-**Documentation:** Located in `agents/sonar_validation_agent.py`
+**Documentation:** Located in `src/agents/sonar_validation_agent/`
 
 **Optional Environment Variable:** `SONAR_TOKEN`
 
@@ -172,7 +172,7 @@ The Performance Agent analyzes HAR files and provides optimization recommendatio
 - `performance-report` - Generate performance reports
 - `optimization-suggest` - Suggest optimizations
 
-**Documentation:** [agents/performance/agents/performance-agent.md](../agents/performance/agents/performance-agent.md)
+**Documentation:** [agents/performance/agents/performance-agent.md](../src/agents/performance/agents/performance-agent.md)
 
 ---
 
@@ -191,7 +191,7 @@ The QA Agent generates E2E tests, integration tests, and validates acceptance cr
 - `coverage-report` - Generate coverage reports
 - `acceptance-validate` - Validate acceptance criteria
 
-**Documentation:** [agents/qa/agents/qa-agent.md](../agents/qa/agents/qa-agent.md)
+**Documentation:** [agents/qa_agent/agents/qa-agent.md](../src/agents/qa_agent/agents/qa-agent.md)
 
 ---
 
@@ -210,7 +210,7 @@ The Backend Agent creates API routes, Server Components, and mock services follo
 - `server-component-create` - Create Server Components
 - `mock-api-create` - Create mock API services
 
-**Documentation:** [agents/backend/agents/backend-agent.md](../agents/backend/agents/backend-agent.md)
+**Documentation:** [agents/backend/agents/backend-agent.md](../src/agents/backend/agents/backend-agent.md)
 
 ---
 
@@ -224,7 +224,7 @@ The Commerce Agent provides AI-powered product search and cart preparation capab
 - Cart data preparation
 - Product recommendations
 
-**Documentation:** Located in `agents/commerce_agent.py`
+**Documentation:** Located in `src/agents/commerce_agent/`
 
 **Optional Environment Variables:**
 - `SFCC_OCAPI_INSTANCE`
@@ -257,7 +257,7 @@ The Analytics & Reporting Agent tracks task metrics, integrates with JIRA, and g
 - Confidence score
 - Human review requirements
 
-**Documentation:** [agents/analytics_agent/](../agents/analytics_agent/)
+**Documentation:** [agents/analytics_agent/](../src/agents/analytics_agent/)
 
 **Configuration Files:**
 - `config/analytics.config.json` - Analytics settings
@@ -275,7 +275,7 @@ The Broken Experience Detector Agent identifies UX issues, broken links, and acc
 - Accessibility problem detection
 - User experience analysis
 
-**Documentation:** [agents/broken_experience_detector/agents/broken-experience-detector-agent.md](../agents/broken_experience_detector/agents/broken-experience-detector-agent.md)
+**Documentation:** [agents/broken_experience_detector_agent/agents/broken-experience-detector-agent.md](../src/agents/broken_experience_detector_agent/agents/broken-experience-detector-agent.md)
 
 ---
 

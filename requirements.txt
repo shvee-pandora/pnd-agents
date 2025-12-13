@@ -1,7 +1,12 @@
 # PG AI Squad - Python Dependencies
+# Note: pyproject.toml is the canonical source for dependencies.
+# This file is provided for users who prefer `pip install -r requirements.txt`
 
 # Core
 python-dotenv>=1.0.0
+
+# MCP Server (Model Context Protocol)
+mcp>=1.0.0
 
 # Type hints and validation
 typing-extensions>=4.0.0

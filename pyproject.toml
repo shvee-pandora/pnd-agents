@@ -50,8 +50,8 @@ Repository = "https://github.com/shvee-pandora/pnd-agents"
 Documentation = "https://github.com/shvee-pandora/pnd-agents#readme"
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["pnd_agents*", "agents*", "tools*", "workflow*"]
+where = ["src", "."]
+include = ["pnd_agents*", "agents*", "tools*", "workflows*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.md", "*.json"]
