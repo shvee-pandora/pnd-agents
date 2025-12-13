@@ -20,6 +20,12 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 
+from ..coding_standards import (
+    SONAR_RULES,
+    DEFAULT_QUALITY_GATES,
+    TEST_GENERATION_LIMITS,
+)
+
 
 class TestFramework(Enum):
     """Supported test frameworks."""
@@ -43,10 +49,15 @@ class TestGenerationConfig:
     
     These settings help prevent over-generation and ensure tests follow
     Pandora coding standards and don't introduce Sonar violations.
+    
+    Coverage target is 100% to align with Sonar quality gates.
+    Values are sourced from centralized coding_standards module.
     """
-    max_tests_per_unit: int = 3
-    max_tests_per_file: int = 15
-    max_lines_per_file: int = 200
+    # Test generation limits (from centralized coding_standards)
+    max_tests_per_unit: int = TEST_GENERATION_LIMITS["max_tests_per_unit"]
+    max_tests_per_file: int = TEST_GENERATION_LIMITS["max_tests_per_file"]
+    max_lines_per_file: int = TEST_GENERATION_LIMITS["max_lines_per_file"]
+    
     include_snapshot_tests: bool = False
     include_accessibility_tests: bool = False
     extend_existing_tests: bool = True
@@ -54,13 +65,15 @@ class TestGenerationConfig:
     avoid_any_type: bool = True
     no_todo_comments: bool = True
     
-    # Sonar rules to avoid violating
+    # Coverage requirements (from centralized quality gates)
+    target_line_coverage: int = DEFAULT_QUALITY_GATES.min_line_coverage
+    target_branch_coverage: int = DEFAULT_QUALITY_GATES.min_branch_coverage
+    target_function_coverage: int = DEFAULT_QUALITY_GATES.min_function_coverage
+    
+    # Sonar rules to avoid violating (from centralized SONAR_RULES)
     sonar_safe_patterns: Dict[str, str] = field(default_factory=lambda: {
-        "S7764": "Use globalThis instead of global",
-        "S4325": "Avoid unnecessary type assertions",
-        "S7741": "Use x === undefined instead of typeof x === 'undefined'",
-        "S7780": "Avoid complex escape sequences",
-        "S6759": "Do NOT add Readonly<> to props (Pandora standard)",
+        rule_id: rule.prevent_message for rule_id, rule in SONAR_RULES.items()
+        if rule_id in ["S7764", "S4325", "S7741", "S7780", "S6759"]
     })
 
 

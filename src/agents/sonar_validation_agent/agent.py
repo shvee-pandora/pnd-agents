@@ -20,6 +20,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 
+from ..coding_standards import (
+    REPO_IGNORED_RULES,
+    TEST_GENERATION_LIMITS,
+)
+
 
 class SonarSeverity(Enum):
     """SonarCloud issue severity levels."""
@@ -315,28 +320,29 @@ class SonarValidationAgent:
         ),
     ]
     
-    # Per-repo policies - different repos have different rules
+    # Per-repo policies - uses centralized REPO_IGNORED_RULES and TEST_GENERATION_LIMITS
+    # from coding_standards.py for consistency across all agents
     REPO_POLICIES: Dict[str, RepoPolicy] = {
         "pandora-group": RepoPolicy(
             repo_name="pandora-group",
             enforced_rules=["S7764", "S4325", "S7741", "TODO"],
-            ignored_rules=["S6759"],  # Conflicts with "Don't wrap props with Readonly<>"
-            max_test_cases_per_file=10,
-            max_lines_per_test_file=200,
+            ignored_rules=REPO_IGNORED_RULES.get("pandora-group", []),
+            max_test_cases_per_file=TEST_GENERATION_LIMITS["max_tests_per_file"],
+            max_lines_per_test_file=TEST_GENERATION_LIMITS["max_lines_per_file"],
         ),
         "pandora-ecom-web": RepoPolicy(
             repo_name="pandora-ecom-web",
             enforced_rules=["S7764", "S4325", "S7741", "TODO"],
-            ignored_rules=[],
-            max_test_cases_per_file=15,
-            max_lines_per_test_file=250,
+            ignored_rules=REPO_IGNORED_RULES.get("pandora-ecom-web", []),
+            max_test_cases_per_file=TEST_GENERATION_LIMITS["max_tests_per_file"],
+            max_lines_per_test_file=TEST_GENERATION_LIMITS["max_lines_per_file"],
         ),
         "default": RepoPolicy(
             repo_name="default",
             enforced_rules=["S7764", "S4325", "S7741", "TODO"],
             ignored_rules=[],
-            max_test_cases_per_file=10,
-            max_lines_per_test_file=200,
+            max_test_cases_per_file=TEST_GENERATION_LIMITS["max_tests_per_file"],
+            max_lines_per_test_file=TEST_GENERATION_LIMITS["max_lines_per_file"],
         ),
     }
     

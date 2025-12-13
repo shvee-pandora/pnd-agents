@@ -53,6 +53,9 @@ Pragmatic code reviewer focused on catching real problems while minimizing noise
 
 ## Pandora Coding Standards (Selective Enforcement)
 
+**Source of Truth**: All coding standards and Sonar rules are defined in `src/agents/coding_standards.py`.
+This ensures consistency across Unit Test, Code Review, and Sonar Validation agents.
+
 Only enforce these rules when they represent real issues, not stylistic preferences:
 
 ### Rules to ENFORCE (from CODING_STANDARDS.md)
