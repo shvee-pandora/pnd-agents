@@ -204,29 +204,58 @@ report = analyzer.parse_file('performance.har')
 
 ```
 pnd-agents/
-├── agents/                    # Agent definitions
-│   ├── task_manager/          # Task Manager Agent
-│   ├── frontend/              # Frontend Engineer Agent
-│   ├── amplience/             # Amplience CMS Agent
-│   ├── code_review/           # Code Review Agent
-│   ├── performance/           # Performance Agent
-│   ├── qa/                    # QA Agent
-│   └── backend/               # Backend Agent
-├── tools/                     # Core tools
-│   ├── filesystem.py          # File system operations
-│   ├── command_runner.py      # Command execution
-│   ├── figma_parser.py        # Figma design parsing
-│   ├── amplience_api.py       # Amplience CMS integration
-│   └── har_analyzer.py        # HAR file analysis
-├── mcp-config/                # MCP configuration
-│   ├── claude.config.json     # Claude Desktop config
-│   └── agents.config.json     # Agent configuration
-├── examples/                  # Example tasks
+├── src/                           # Source code (Python packages)
+│   ├── pnd_agents/                # Main CLI package
+│   │   ├── cli.py                 # Command-line interface
+│   │   └── tools/                 # Compatibility shim for tools
+│   ├── agents/                    # Agent implementations
+│   │   ├── task_manager_agent/    # Task Manager (orchestrator)
+│   │   ├── frontend/              # Frontend Engineer Agent
+│   │   ├── figma_reader_agent/    # Figma Reader Agent
+│   │   ├── amplience/             # Amplience CMS Agent
+│   │   ├── code_review/           # Code Review Agent
+│   │   ├── unit_test_agent/       # Unit Test Agent
+│   │   ├── sonar_validation_agent/# Sonar Validation Agent
+│   │   ├── qa_agent/              # QA Agent
+│   │   ├── performance/           # Performance Agent
+│   │   ├── backend/               # Backend Agent
+│   │   ├── commerce_agent/        # Commerce Agent
+│   │   ├── broken_experience_detector_agent/  # Broken Experience Detector
+│   │   ├── analytics_agent/       # Analytics Agent
+│   │   └── coding_standards.py    # Shared coding standards
+│   ├── tools/                     # Core tools
+│   │   ├── filesystem.py          # File system operations
+│   │   ├── command_runner.py      # Command execution
+│   │   ├── figma_parser.py        # Figma design parsing
+│   │   ├── amplience_api.py       # Amplience CMS integration
+│   │   ├── har_analyzer.py        # HAR file analysis
+│   │   ├── jira_client.py         # Jira integration
+│   │   ├── analytics_store.py     # Analytics storage
+│   │   └── registry.py            # MCP tool registration
+│   ├── config/                    # Configuration files
+│   ├── mcp/                       # MCP server modules
+│   └── plugins/                   # Claude plugins
+│       └── unit-test-agent-plugin/# Unit test plugin for Claude Code
+├── workflows/                     # Workflow definitions
+│   ├── workflow_engine.py         # Workflow orchestration
+│   ├── agent_dispatcher.py        # Agent dispatch logic
+│   └── workflow_rules.json        # Workflow configuration
+├── docs/                          # Documentation
+│   ├── setup.md                   # Setup guide
+│   ├── architecture.md            # Architecture overview
+│   ├── claude-usage.md            # Claude usage guide
+│   └── agents-overview.md         # Agent documentation
+├── examples/                      # Example tasks
 │   ├── create-component-from-figma.md
 │   ├── create-amplience-content-type.md
 │   └── performance-optimization.md
-└── .claude-plugin/            # Plugin marketplace config
-    └── marketplace.json
+├── tests/                         # Test files
+├── mcp-config/                    # MCP configuration templates
+├── main.py                        # MCP server entry point
+├── pyproject.toml                 # Python package configuration
+├── requirements.txt               # Python dependencies
+├── INSTALLATION.md                # Installation guide
+└── .claude-plugin/                # Plugin marketplace config
 ```
 
 ## Agentic Commerce POC
