@@ -1,4 +1,15 @@
 import asyncio
+import os
+import sys
+
+# Ensure local src/ is on sys.path when running from a checkout
+# This allows 'from tools import ...' to work both when running
+# 'python main.py' directly and when pnd-agents is installed
+ROOT = os.path.dirname(__file__)
+SRC = os.path.join(ROOT, "src")
+if os.path.isdir(SRC) and SRC not in sys.path:
+    sys.path.insert(0, SRC)
+
 from mcp.server.stdio import stdio_server
 from mcp.server import Server
 from tools import register_tools
