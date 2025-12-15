@@ -135,11 +135,16 @@ def get_claude_config_path() -> Path:
 
 
 def get_pnd_agents_path() -> Path:
-    """Get the path to the pnd-agents installation."""
-    # Try to find the package location
+    """Get the path to the pnd-agents repo root (where main.py lives).
+    
+    Path structure: src/pnd_agents/cli.py
+    - parent = src/pnd_agents/
+    - parent.parent = src/
+    - parent.parent.parent = repo root (where main.py is)
+    """
     current_file = Path(__file__).resolve()
-    # Go up from pnd_agents/cli.py to the repo root
-    return current_file.parent.parent
+    # Go up from src/pnd_agents/cli.py to the repo root
+    return current_file.parent.parent.parent
 
 
 def print_banner():

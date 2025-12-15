@@ -18,8 +18,12 @@ import sys
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Callable
 
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add src/ directory to path for imports
+# Path: src/agents/task_manager_agent/agent.py
+# parent = src/agents/task_manager_agent/
+# parent.parent = src/agents/
+# parent.parent.parent = src/ (where we need to be for imports)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from workflows.workflow_engine import (
     WorkflowEngine,
@@ -68,9 +72,16 @@ class TaskManagerAgent:
                        uses default path.
         """
         if rules_file is None:
-            # Go up from src/agents to repo root, then into workflows/
-            src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            repo_root = os.path.dirname(src_dir)
+            # Go up from src/agents/task_manager_agent/ to repo root, then into workflows/
+            # Path: src/agents/task_manager_agent/agent.py
+            # parent = src/agents/task_manager_agent/
+            # parent.parent = src/agents/
+            # parent.parent.parent = src/
+            # parent.parent.parent.parent = repo root (where workflows/ is)
+            agent_dir = os.path.dirname(os.path.abspath(__file__))  # src/agents/task_manager_agent/
+            agents_dir = os.path.dirname(agent_dir)  # src/agents/
+            src_dir = os.path.dirname(agents_dir)  # src/
+            repo_root = os.path.dirname(src_dir)  # repo root
             rules_file = os.path.join(repo_root, "workflows", "workflow_rules.json")
         
         self.engine = WorkflowEngine(rules_file)
