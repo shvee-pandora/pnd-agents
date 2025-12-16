@@ -509,7 +509,8 @@ class WorkflowEngine:
         self,
         context: WorkflowContext,
         on_stage_start: Optional[Callable[[str, WorkflowContext], None]] = None,
-        on_stage_complete: Optional[Callable[[str, AgentResult, WorkflowContext], None]] = None
+        on_stage_complete: Optional[Callable[[str, AgentResult, WorkflowContext], None]] = None,
+        continue_on_error: bool = False
     ) -> WorkflowContext:
         """
         Run a complete workflow.
@@ -518,6 +519,8 @@ class WorkflowEngine:
             context: The workflow context.
             on_stage_start: Callback when a stage starts.
             on_stage_complete: Callback when a stage completes.
+            continue_on_error: If True, continue to next stages even if one fails.
+                              Failed stages are recorded but don't stop the workflow.
             
         Returns:
             Updated WorkflowContext.
@@ -530,6 +533,8 @@ class WorkflowEngine:
             "task": context.task_description,
             "metadata": context.metadata
         }
+        
+        had_error = False
         
         for agent_name in context.pipeline:
             # Call stage start callback
@@ -545,10 +550,15 @@ class WorkflowEngine:
             
             # Check for errors
             if result.status == "error":
-                context.status = "failed"
-                context.completed_at = datetime.utcnow().isoformat()
-                self.save_context(context)
-                return context
+                had_error = True
+                if not continue_on_error:
+                    context.status = "failed"
+                    context.completed_at = datetime.utcnow().isoformat()
+                    self.save_context(context)
+                    return context
+                # When continuing on error, don't update current_input from failed stage
+                # but still continue to next stage with original task context
+                continue
             
             # Prepare input for next agent
             if result.data:
@@ -572,7 +582,7 @@ class WorkflowEngine:
                 except ValueError:
                     pass  # Agent not in pipeline, continue normally
         
-        context.status = "completed"
+        context.status = "failed" if had_error else "completed"
         context.completed_at = datetime.utcnow().isoformat()
         self.save_context(context)
         
@@ -584,7 +594,8 @@ class WorkflowEngine:
         parallel_groups: Optional[List[List[str]]] = None,
         on_stage_start: Optional[Callable[[str, WorkflowContext], None]] = None,
         on_stage_complete: Optional[Callable[[str, AgentResult, WorkflowContext], None]] = None,
-        max_workers: int = 4
+        max_workers: int = 4,
+        continue_on_error: bool = False
     ) -> WorkflowContext:
         """
         Run a workflow with parallel execution support.
@@ -599,13 +610,15 @@ class WorkflowEngine:
             on_stage_start: Callback when a stage starts.
             on_stage_complete: Callback when a stage completes.
             max_workers: Maximum number of parallel workers.
+            continue_on_error: If True, continue to next stages even if one fails.
+                              Failed stages are recorded but don't stop the workflow.
             
         Returns:
             Updated WorkflowContext.
         """
         if not parallel_groups:
             logger.info("No parallel groups specified, falling back to sequential execution")
-            return self.run_workflow(context, on_stage_start, on_stage_complete)
+            return self.run_workflow(context, on_stage_start, on_stage_complete, continue_on_error)
         
         context.status = "running"
         context.add_trace_event("workflow", "start", "running", details={"parallel_groups": parallel_groups})
@@ -619,6 +632,7 @@ class WorkflowEngine:
         }
         
         all_outputs: Dict[str, Dict[str, Any]] = {}
+        had_error = False
         
         for group_idx, agent_group in enumerate(parallel_groups):
             logger.info(f"Executing group {group_idx + 1}/{len(parallel_groups)}: {agent_group}")
@@ -639,19 +653,22 @@ class WorkflowEngine:
                     on_stage_complete(agent_name, result, context)
                 
                 if result.status == "error":
-                    context.status = "failed"
-                    context.completed_at = datetime.utcnow().isoformat()
+                    had_error = True
                     context.add_trace_event(agent_name, "error", "failed", details={"error": result.error})
-                    self.save_context(context)
-                    return context
-                
-                all_outputs[agent_name] = result.data
-                if result.data:
-                    current_input = {
-                        **current_input,
-                        "previous_agent": agent_name,
-                        "previous_output": result.data
-                    }
+                    if not continue_on_error:
+                        context.status = "failed"
+                        context.completed_at = datetime.utcnow().isoformat()
+                        self.save_context(context)
+                        return context
+                    # Continue to next group without updating current_input from failed stage
+                else:
+                    all_outputs[agent_name] = result.data
+                    if result.data:
+                        current_input = {
+                            **current_input,
+                            "previous_agent": agent_name,
+                            "previous_output": result.data
+                        }
             else:
                 group_results: Dict[str, AgentResult] = {}
                 group_errors: List[str] = []
@@ -693,38 +710,42 @@ class WorkflowEngine:
                             )
                 
                 if group_errors:
+                    had_error = True
                     logger.warning(f"Group {group_idx + 1} had errors: {group_errors}")
-                    context.status = "failed"
-                    context.completed_at = datetime.utcnow().isoformat()
                     context.add_trace_event(
                         "group", "error", "failed",
                         details={"group_idx": group_idx, "errors": group_errors}
                     )
-                    self.save_context(context)
-                    return context
+                    if not continue_on_error:
+                        context.status = "failed"
+                        context.completed_at = datetime.utcnow().isoformat()
+                        self.save_context(context)
+                        return context
+                    # Continue to next group even with errors
                 
                 merged_output = {}
                 for agent_name, result in group_results.items():
                     if result.data:
                         merged_output[agent_name] = result.data
                 
-                current_input = {
-                    **current_input,
-                    "previous_group": agent_group,
-                    "previous_outputs": merged_output
-                }
+                if merged_output:
+                    current_input = {
+                        **current_input,
+                        "previous_group": agent_group,
+                        "previous_outputs": merged_output
+                    }
             
             context.add_trace_event(
-                "group", "complete", "success",
+                "group", "complete", "success" if not had_error else "completed_with_errors",
                 details={"group_idx": group_idx, "agents": agent_group}
             )
         
-        context.status = "completed"
+        context.status = "failed" if had_error else "completed"
         context.completed_at = datetime.utcnow().isoformat()
-        context.add_trace_event("workflow", "complete", "success")
+        context.add_trace_event("workflow", "complete", context.status)
         self.save_context(context)
         
-        logger.info(f"Workflow completed successfully")
+        logger.info(f"Workflow {'completed with errors' if had_error else 'completed successfully'}")
         return context
     
     def _execute_agent_thread_safe(

@@ -305,7 +305,9 @@ class TaskManagerAgent:
             if self._on_stage_complete:
                 self._on_stage_complete(agent_name, result, ctx)
         
-        context = self.engine.run_workflow(context, on_start, on_complete)
+        # Run workflow with continue_on_error=True so all stages are attempted
+        # even if earlier stages fail (e.g., figma parsing fails but frontend can still run)
+        context = self.engine.run_workflow(context, on_start, on_complete, continue_on_error=True)
         
         if verbose:
             self._print_summary(context)
@@ -360,12 +362,15 @@ class TaskManagerAgent:
             if self._on_stage_complete:
                 self._on_stage_complete(agent_name, result, ctx)
         
+        # Run workflow with continue_on_error=True so all stages are attempted
+        # even if earlier stages fail (e.g., figma parsing fails but frontend can still run)
         context = self.engine.run_workflow_parallel(
             context,
             parallel_groups=parallel_groups,
             on_stage_start=on_start,
             on_stage_complete=on_complete,
-            max_workers=max_workers
+            max_workers=max_workers,
+            continue_on_error=True
         )
         
         if verbose:
