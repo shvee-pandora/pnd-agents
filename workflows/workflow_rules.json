@@ -3,28 +3,28 @@
   "description": "PND Agents Workflow Rules Configuration",
   "version": "3.0.0",
   "workflows": {
-    "figma": ["figma", "frontend", "review", "unit_test", "sonar", "performance"],
-    "frontend": ["frontend", "review", "unit_test", "sonar", "performance"],
-    "backend": ["backend", "review", "unit_test", "sonar"],
-    "amplience": ["amplience", "frontend", "review", "unit_test", "sonar"],
+    "figma": ["figma", "frontend", "unit_test", "review", "sonar", "performance"],
+    "frontend": ["frontend", "unit_test", "review", "sonar", "performance"],
+    "backend": ["backend", "unit_test", "review", "sonar"],
+    "amplience": ["amplience", "frontend", "unit_test", "review", "sonar"],
     "qa": ["unit_test", "review", "sonar"],
     "unit_test": ["unit_test", "sonar"],
     "sonar": ["sonar", "review"],
     "code_review": ["review", "sonar"],
-    "performance": ["performance", "frontend", "review"],
-    "default": ["frontend", "review", "unit_test", "sonar"]
+    "performance": ["performance", "frontend", "unit_test", "review"],
+    "default": ["frontend", "unit_test", "review", "sonar"]
   },
   "parallel_groups": {
-    "figma": [["figma"], ["frontend"], ["review"], ["unit_test", "performance"], ["sonar"]],
-    "frontend": [["frontend"], ["review"], ["unit_test", "performance"], ["sonar"]],
-    "backend": [["backend"], ["review"], ["unit_test"], ["sonar"]],
-    "amplience": [["amplience"], ["frontend"], ["review"], ["unit_test"], ["sonar"]],
+    "figma": [["figma"], ["frontend"], ["unit_test", "performance"], ["review"], ["sonar"]],
+    "frontend": [["frontend"], ["unit_test", "performance"], ["review"], ["sonar"]],
+    "backend": [["backend"], ["unit_test"], ["review"], ["sonar"]],
+    "amplience": [["amplience"], ["frontend"], ["unit_test"], ["review"], ["sonar"]],
     "qa": [["unit_test"], ["review"], ["sonar"]],
     "unit_test": [["unit_test"], ["sonar"]],
     "sonar": [["sonar"], ["review"]],
     "code_review": [["review"], ["sonar"]],
-    "performance": [["performance"], ["frontend"], ["review"]],
-    "default": [["frontend"], ["review"], ["unit_test"], ["sonar"]]
+    "performance": [["performance"], ["frontend"], ["unit_test"], ["review"]],
+    "default": [["frontend"], ["unit_test"], ["review"], ["sonar"]]
   },
   "keywords": {
     "figma": [
