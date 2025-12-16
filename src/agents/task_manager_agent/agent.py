@@ -14,6 +14,7 @@ Supports:
 import json
 import logging
 import os
+import subprocess
 import sys
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Callable
@@ -110,6 +111,121 @@ class TaskManagerAgent:
         except Exception as e:
             logger.warning(f"Could not load parallel groups from rules file: {e}")
     
+    def _get_current_git_branch(self) -> Optional[str]:
+        """Get the current git branch name.
+        
+        Returns:
+            Branch name if in a git repo, None otherwise.
+        """
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=True,
+            )
+            return result.stdout.strip()
+        except subprocess.CalledProcessError:
+            return None
+        except FileNotFoundError:
+            # git not installed
+            return None
+    
+    def _git_branch_exists(self, branch_name: str) -> bool:
+        """Check if a git branch exists.
+        
+        Args:
+            branch_name: Name of the branch to check.
+            
+        Returns:
+            True if branch exists, False otherwise.
+        """
+        result = subprocess.run(
+            ["git", "rev-parse", "--verify", branch_name],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        return result.returncode == 0
+    
+    def _ensure_git_branch(self, metadata: Optional[Dict[str, Any]], verbose: bool = True) -> bool:
+        """Ensure we're on the correct git branch before making changes.
+        
+        If user is on main/master and a branch_name is provided in metadata,
+        automatically create and checkout the new branch.
+        
+        Args:
+            metadata: Optional metadata containing branch_name.
+            verbose: Whether to print status messages.
+            
+        Returns:
+            True if branch setup succeeded or was not needed, False on error.
+        """
+        if not metadata:
+            return True
+        
+        branch_name = metadata.get("branch_name")
+        if not branch_name:
+            return True
+        
+        current_branch = self._get_current_git_branch()
+        if current_branch is None:
+            # Not in a git repo, skip branch management
+            if verbose:
+                logger.warning("Not in a git repository, skipping branch management")
+            return True
+        
+        # If already on the target branch, nothing to do
+        if current_branch == branch_name:
+            if verbose:
+                print(f"[Git] Already on branch: {branch_name}")
+            return True
+        
+        # Only auto-create branch if on main/master
+        if current_branch not in ("main", "master"):
+            if verbose:
+                print(f"[Git] Currently on branch '{current_branch}', not main/master. Skipping auto-branch creation.")
+            return True
+        
+        # Check if branch already exists
+        if self._git_branch_exists(branch_name):
+            # Branch exists, checkout to it
+            if verbose:
+                print(f"[Git] Checking out existing branch: {branch_name}")
+            try:
+                subprocess.run(
+                    ["git", "checkout", branch_name],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                return True
+            except subprocess.CalledProcessError as e:
+                logger.error(f"Failed to checkout branch {branch_name}: {e.stderr}")
+                if verbose:
+                    print(f"[Git] ERROR: Failed to checkout branch {branch_name}")
+                return False
+        else:
+            # Create new branch
+            if verbose:
+                print(f"[Git] Creating and checking out new branch: {branch_name}")
+            try:
+                subprocess.run(
+                    ["git", "checkout", "-b", branch_name],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                return True
+            except subprocess.CalledProcessError as e:
+                logger.error(f"Failed to create branch {branch_name}: {e.stderr}")
+                if verbose:
+                    print(f"[Git] ERROR: Failed to create branch {branch_name}")
+                return False
+    
     def set_callbacks(
         self,
         on_stage_start: Optional[Callable[[str, WorkflowContext], None]] = None,
@@ -163,6 +279,10 @@ class TaskManagerAgent:
         Returns:
             WorkflowContext with results from all stages.
         """
+        # Ensure we're on the correct git branch before making changes
+        if not self._ensure_git_branch(metadata, verbose):
+            raise RuntimeError("Failed to setup git branch. Aborting to prevent changes on main branch.")
+        
         # Create workflow context
         context = self.engine.create_workflow(task_description, metadata)
         
@@ -213,6 +333,10 @@ class TaskManagerAgent:
         Returns:
             WorkflowContext with results from all stages.
         """
+        # Ensure we're on the correct git branch before making changes
+        if not self._ensure_git_branch(metadata, verbose):
+            raise RuntimeError("Failed to setup git branch. Aborting to prevent changes on main branch.")
+        
         context = self.engine.create_workflow(task_description, metadata)
         
         task_type_key = context.task_type.value
