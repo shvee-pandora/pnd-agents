@@ -738,3 +738,525 @@ def identify_ai_commits_in_range(
             }
             for c in commits
         ]
+
+
+# ==================== Confluence Publishing ====================
+
+@dataclass
+class ConfluenceConfig:
+    """Configuration for Confluence API connection."""
+    base_url: str = ""
+    email: str = ""
+    api_token: str = ""
+    default_space_key: str = ""
+
+    @classmethod
+    def from_env(cls) -> "ConfluenceConfig":
+        """Create config from environment variables."""
+        return cls(
+            base_url=os.environ.get("CONFLUENCE_BASE_URL", os.environ.get("JIRA_BASE_URL", "")),
+            email=os.environ.get("CONFLUENCE_EMAIL", os.environ.get("JIRA_EMAIL", "")),
+            api_token=os.environ.get("CONFLUENCE_API_TOKEN", os.environ.get("JIRA_API_TOKEN", "")),
+            default_space_key=os.environ.get("CONFLUENCE_SPACE_KEY", ""),
+        )
+
+
+class ConfluencePublisher:
+    """
+    Publishes content to Confluence pages.
+
+    Supports creating and updating pages with markdown content.
+    """
+
+    def __init__(self, config: Optional[ConfluenceConfig] = None):
+        """Initialize the Confluence publisher."""
+        self.config = config or ConfluenceConfig.from_env()
+        self._client: Optional[httpx.Client] = None
+
+    @property
+    def client(self) -> httpx.Client:
+        """Get or create Confluence HTTP client."""
+        if self._client is None:
+            self._client = httpx.Client(
+                base_url=f"{self.config.base_url.rstrip('/')}/wiki/api/v2/",
+                auth=(self.config.email, self.config.api_token),
+                headers={
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                },
+                timeout=30.0,
+            )
+        return self._client
+
+    def close(self):
+        """Close HTTP client."""
+        if self._client:
+            self._client.close()
+            self._client = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def _markdown_to_adf(self, markdown: str) -> Dict[str, Any]:
+        """
+        Convert markdown to Atlassian Document Format (ADF).
+
+        This is a simplified conversion that handles common markdown elements.
+        """
+        content = []
+        lines = markdown.split("\n")
+        i = 0
+
+        while i < len(lines):
+            line = lines[i]
+
+            # Skip empty lines
+            if not line.strip():
+                i += 1
+                continue
+
+            # Headers
+            if line.startswith("# "):
+                content.append({
+                    "type": "heading",
+                    "attrs": {"level": 1},
+                    "content": [{"type": "text", "text": line[2:].strip()}]
+                })
+            elif line.startswith("## "):
+                content.append({
+                    "type": "heading",
+                    "attrs": {"level": 2},
+                    "content": [{"type": "text", "text": line[3:].strip()}]
+                })
+            elif line.startswith("### "):
+                content.append({
+                    "type": "heading",
+                    "attrs": {"level": 3},
+                    "content": [{"type": "text", "text": line[4:].strip()}]
+                })
+            # Horizontal rule
+            elif line.strip() == "---":
+                content.append({"type": "rule"})
+            # Table
+            elif line.strip().startswith("|"):
+                table_rows = []
+                while i < len(lines) and lines[i].strip().startswith("|"):
+                    row_line = lines[i].strip()
+                    # Skip separator rows (|---|---|)
+                    if not all(c in "|-: " for c in row_line):
+                        cells = [c.strip() for c in row_line.split("|")[1:-1]]
+                        table_rows.append(cells)
+                    i += 1
+                i -= 1  # Adjust for outer loop increment
+
+                if table_rows:
+                    table_content = []
+                    for row_idx, row in enumerate(table_rows):
+                        cell_type = "tableHeader" if row_idx == 0 else "tableCell"
+                        row_content = {
+                            "type": "tableRow",
+                            "content": [
+                                {
+                                    "type": cell_type,
+                                    "content": [
+                                        {
+                                            "type": "paragraph",
+                                            "content": self._parse_inline_text(cell)
+                                        }
+                                    ]
+                                }
+                                for cell in row
+                            ]
+                        }
+                        table_content.append(row_content)
+
+                    content.append({
+                        "type": "table",
+                        "attrs": {"isNumberColumnEnabled": False, "layout": "default"},
+                        "content": table_content
+                    })
+            # Bullet list
+            elif line.strip().startswith("- "):
+                list_items = []
+                while i < len(lines) and lines[i].strip().startswith("- "):
+                    item_text = lines[i].strip()[2:]
+                    list_items.append({
+                        "type": "listItem",
+                        "content": [
+                            {
+                                "type": "paragraph",
+                                "content": self._parse_inline_text(item_text)
+                            }
+                        ]
+                    })
+                    i += 1
+                i -= 1  # Adjust for outer loop increment
+
+                content.append({
+                    "type": "bulletList",
+                    "content": list_items
+                })
+            # Regular paragraph
+            else:
+                content.append({
+                    "type": "paragraph",
+                    "content": self._parse_inline_text(line)
+                })
+
+            i += 1
+
+        return {
+            "type": "doc",
+            "version": 1,
+            "content": content
+        }
+
+    def _parse_inline_text(self, text: str) -> List[Dict[str, Any]]:
+        """Parse inline text with bold, italic, code formatting."""
+        result = []
+        current_text = ""
+        i = 0
+
+        while i < len(text):
+            # Bold text **text**
+            if text[i:i+2] == "**":
+                if current_text:
+                    result.append({"type": "text", "text": current_text})
+                    current_text = ""
+                end = text.find("**", i + 2)
+                if end != -1:
+                    result.append({
+                        "type": "text",
+                        "text": text[i+2:end],
+                        "marks": [{"type": "strong"}]
+                    })
+                    i = end + 2
+                    continue
+            # Inline code `code`
+            elif text[i] == "`":
+                if current_text:
+                    result.append({"type": "text", "text": current_text})
+                    current_text = ""
+                end = text.find("`", i + 1)
+                if end != -1:
+                    result.append({
+                        "type": "text",
+                        "text": text[i+1:end],
+                        "marks": [{"type": "code"}]
+                    })
+                    i = end + 1
+                    continue
+            # Italic text *text*
+            elif text[i] == "*" and (i == 0 or text[i-1] != "*") and (i + 1 < len(text) and text[i+1] != "*"):
+                if current_text:
+                    result.append({"type": "text", "text": current_text})
+                    current_text = ""
+                end = text.find("*", i + 1)
+                if end != -1 and text[end-1:end+1] != "**":
+                    result.append({
+                        "type": "text",
+                        "text": text[i+1:end],
+                        "marks": [{"type": "em"}]
+                    })
+                    i = end + 1
+                    continue
+
+            current_text += text[i]
+            i += 1
+
+        if current_text:
+            result.append({"type": "text", "text": current_text})
+
+        return result if result else [{"type": "text", "text": " "}]
+
+    def get_space_id(self, space_key: str) -> Optional[str]:
+        """Get space ID from space key."""
+        try:
+            response = self.client.get(
+                "spaces",
+                params={"keys": space_key, "limit": 1}
+            )
+            response.raise_for_status()
+            data = response.json()
+            results = data.get("results", [])
+            if results:
+                return results[0].get("id")
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get space ID for {space_key}: {e}")
+            return None
+
+    def find_page_by_title(self, space_id: str, title: str) -> Optional[Dict[str, Any]]:
+        """Find a page by title in a space."""
+        try:
+            response = self.client.get(
+                "pages",
+                params={
+                    "space-id": space_id,
+                    "title": title,
+                    "limit": 1
+                }
+            )
+            response.raise_for_status()
+            data = response.json()
+            results = data.get("results", [])
+            if results:
+                return results[0]
+            return None
+        except Exception as e:
+            logger.error(f"Failed to find page '{title}': {e}")
+            return None
+
+    def create_page(
+        self,
+        space_key: str,
+        title: str,
+        content: str,
+        parent_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Create a new Confluence page.
+
+        Args:
+            space_key: Confluence space key (e.g., "SHAM")
+            title: Page title
+            content: Markdown content
+            parent_id: Optional parent page ID
+
+        Returns:
+            Created page data including URL
+        """
+        space_id = self.get_space_id(space_key)
+        if not space_id:
+            raise ValueError(f"Space '{space_key}' not found")
+
+        # Convert markdown to ADF
+        adf_content = self._markdown_to_adf(content)
+
+        payload = {
+            "spaceId": space_id,
+            "status": "current",
+            "title": title,
+            "body": {
+                "representation": "atlas_doc_format",
+                "value": json.dumps(adf_content)
+            }
+        }
+
+        if parent_id:
+            payload["parentId"] = parent_id
+
+        try:
+            response = self.client.post("pages", json=payload)
+            response.raise_for_status()
+            page_data = response.json()
+
+            return {
+                "id": page_data.get("id"),
+                "title": page_data.get("title"),
+                "url": f"{self.config.base_url}/wiki{page_data.get('_links', {}).get('webui', '')}",
+                "status": "created"
+            }
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Failed to create page: {e.response.status_code} - {e.response.text}")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to create page: {e}")
+            raise
+
+    def update_page(
+        self,
+        page_id: str,
+        title: str,
+        content: str,
+        version: int
+    ) -> Dict[str, Any]:
+        """
+        Update an existing Confluence page.
+
+        Args:
+            page_id: Page ID to update
+            title: New page title
+            content: New markdown content
+            version: Current page version (will be incremented)
+
+        Returns:
+            Updated page data including URL
+        """
+        # Convert markdown to ADF
+        adf_content = self._markdown_to_adf(content)
+
+        payload = {
+            "id": page_id,
+            "status": "current",
+            "title": title,
+            "body": {
+                "representation": "atlas_doc_format",
+                "value": json.dumps(adf_content)
+            },
+            "version": {
+                "number": version + 1
+            }
+        }
+
+        try:
+            response = self.client.put(f"pages/{page_id}", json=payload)
+            response.raise_for_status()
+            page_data = response.json()
+
+            return {
+                "id": page_data.get("id"),
+                "title": page_data.get("title"),
+                "url": f"{self.config.base_url}/wiki{page_data.get('_links', {}).get('webui', '')}",
+                "status": "updated",
+                "version": version + 1
+            }
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Failed to update page: {e.response.status_code} - {e.response.text}")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to update page: {e}")
+            raise
+
+    def publish_or_update(
+        self,
+        space_key: str,
+        title: str,
+        content: str,
+        parent_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Create or update a Confluence page.
+
+        If a page with the same title exists in the space, it will be updated.
+        Otherwise, a new page will be created.
+
+        Args:
+            space_key: Confluence space key
+            title: Page title
+            content: Markdown content
+            parent_id: Optional parent page ID
+
+        Returns:
+            Page data including URL and status (created/updated)
+        """
+        space_id = self.get_space_id(space_key)
+        if not space_id:
+            raise ValueError(f"Space '{space_key}' not found")
+
+        # Check if page exists
+        existing_page = self.find_page_by_title(space_id, title)
+
+        if existing_page:
+            # Update existing page
+            return self.update_page(
+                page_id=existing_page["id"],
+                title=title,
+                content=content,
+                version=existing_page.get("version", {}).get("number", 1)
+            )
+        else:
+            # Create new page
+            return self.create_page(
+                space_key=space_key,
+                title=title,
+                content=content,
+                parent_id=parent_id
+            )
+
+
+# ==================== Combined Report + Publish Functions ====================
+
+def generate_and_publish_sprint_report(
+    sprint_id: Optional[int] = None,
+    board_id: Optional[int] = None,
+    space_key: Optional[str] = None,
+    page_title: Optional[str] = None,
+    parent_page_id: Optional[str] = None,
+    include_commits: bool = True
+) -> Dict[str, Any]:
+    """
+    Generate a sprint AI report and publish it to Confluence.
+
+    Args:
+        sprint_id: JIRA sprint ID
+        board_id: JIRA board ID (to find active sprint)
+        space_key: Confluence space key (uses CONFLUENCE_SPACE_KEY env var if not provided)
+        page_title: Page title (auto-generated from sprint name if not provided)
+        parent_page_id: Optional parent page ID
+        include_commits: Include Azure DevOps commit analysis
+
+    Returns:
+        Dictionary with report content and Confluence page URL
+    """
+    # Generate the report
+    with SprintAIReportGenerator() as generator:
+        if sprint_id:
+            sprint = generator.get_sprint_by_id(sprint_id)
+        elif board_id:
+            sprint = generator.get_active_sprint(board_id)
+        else:
+            raise ValueError("Either sprint_id or board_id must be provided")
+
+        if not sprint:
+            raise ValueError("Sprint not found")
+
+        report_content = generator.generate_report(
+            sprint_id=sprint.id,
+            include_commits=include_commits,
+            output_format="markdown"
+        )
+
+    # Determine space key
+    confluence_space = space_key or os.environ.get("CONFLUENCE_SPACE_KEY", "")
+    if not confluence_space:
+        raise ValueError("Confluence space key not provided. Set CONFLUENCE_SPACE_KEY env var or pass space_key parameter.")
+
+    # Determine page title
+    title = page_title or f"Sprint AI Report: {sprint.name}"
+
+    # Publish to Confluence
+    with ConfluencePublisher() as publisher:
+        result = publisher.publish_or_update(
+            space_key=confluence_space,
+            title=title,
+            content=report_content,
+            parent_id=parent_page_id
+        )
+
+    return {
+        "sprint_name": sprint.name,
+        "sprint_id": sprint.id,
+        "report_content": report_content,
+        "confluence_page": result
+    }
+
+
+def publish_to_confluence(
+    content: str,
+    space_key: str,
+    title: str,
+    parent_page_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Publish markdown content to a Confluence page.
+
+    Args:
+        content: Markdown content to publish
+        space_key: Confluence space key
+        title: Page title
+        parent_page_id: Optional parent page ID
+
+    Returns:
+        Dictionary with page URL and status
+    """
+    with ConfluencePublisher() as publisher:
+        return publisher.publish_or_update(
+            space_key=space_key,
+            title=title,
+            content=content,
+            parent_id=parent_page_id
+        )
