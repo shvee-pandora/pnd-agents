@@ -681,6 +681,208 @@ class DeliveryReportAgent:
         ])
         
         return "\n".join(lines)
+    
+    def generate_comparison_report(
+        self,
+        board_configs: List[Dict[str, Any]],
+        num_sprints: Optional[int] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        include_ai_metrics: bool = True
+    ) -> str:
+        """
+        Generate comparison report with full report per board plus cross-board comparison.
+        
+        Args:
+            board_configs: List of board configurations, each with:
+                - board_id: JIRA board ID
+                - name: Display name for the board (e.g., "Board 847 - Inspire")
+                - project_keys: Optional list of project keys to filter
+            num_sprints: Number of recent closed sprints per board
+            start_date: Filter sprints starting after this date (YYYY-MM-DD)
+            end_date: Filter sprints ending before this date (YYYY-MM-DD)
+            include_ai_metrics: Include AI contribution metrics
+        
+        Returns:
+            Formatted comparison report string
+        """
+        board_reports: List[MultiSprintVelocityReport] = []
+        
+        # Generate report for each board
+        for config in board_configs:
+            board_id = config["board_id"]
+            board_name = config.get("name", f"Board {board_id}")
+            project_keys = config.get("project_keys")
+            
+            # Get sprints for this board
+            sprints = self.get_closed_sprints(
+                board_id=board_id,
+                num_sprints=num_sprints,
+                start_date=start_date,
+                end_date=end_date
+            )
+            
+            # Get velocity data for each sprint
+            sprint_data: List[SprintVelocityData] = []
+            for sprint in sprints:
+                velocity_data = self.get_sprint_velocity_data(
+                    sprint=sprint,
+                    project_keys=project_keys,
+                    include_ai_metrics=include_ai_metrics
+                )
+                sprint_data.append(velocity_data)
+            
+            # Sort by start date
+            sprint_data.sort(key=lambda x: x.start_date)
+            
+            # Create report for this board
+            report = MultiSprintVelocityReport(
+                report_title=f"{board_name} - Velocity Report",
+                workspace_name=board_name,
+                project_keys=project_keys or [],
+                start_date=sprint_data[0].start_date if sprint_data else "",
+                end_date=sprint_data[-1].end_date if sprint_data else "",
+                sprints=sprint_data,
+            )
+            
+            # Calculate aggregated metrics
+            for sd in sprint_data:
+                report.total_delivered_sp += sd.delivered_story_points
+                report.total_committed_sp += sd.total_commitment
+                report.total_rollover_sp += sd.rollover_story_points
+                report.total_added_work += sd.added_work
+                report.total_removed_work += sd.removed_work
+                report.total_ai_assisted_issues += sd.ai_assisted_issues
+                report.total_ai_commits += sd.ai_commits_count
+                report.total_time_saved_hours += sd.time_saved_hours
+            
+            if sprint_data:
+                report.avg_velocity = round(report.total_delivered_sp / len(sprint_data), 1)
+                delivery_rates = [s.delivery_rate for s in sprint_data if s.total_commitment > 0]
+                report.avg_delivery_rate = round(sum(delivery_rates) / len(delivery_rates), 1) if delivery_rates else 0.0
+            
+            board_reports.append(report)
+        
+        # Format the comparison report
+        return self._format_comparison_report(board_reports)
+    
+    def _format_comparison_report(self, board_reports: List[MultiSprintVelocityReport]) -> str:
+        """Format comparison report with full report per board plus comparison table."""
+        lines = [
+            "# Cross-Board Delivery Report Comparison",
+            "",
+            f"**Boards Compared:** {len(board_reports)}",
+            "",
+        ]
+        
+        # Section for each board's full report
+        for i, report in enumerate(board_reports, 1):
+            lines.extend([
+                "---",
+                "",
+                f"# Section {i}: {report.workspace_name}",
+                "",
+            ])
+            
+            # Add the full report for this board (reuse existing formatting)
+            board_report_content = self._format_markdown_with_charts(report)
+            # Remove the title line since we already have a section header
+            board_lines = board_report_content.split("\n")
+            # Skip the first line (title) and the empty line after it
+            if board_lines and board_lines[0].startswith("# "):
+                board_lines = board_lines[2:]
+            lines.extend(board_lines)
+            lines.append("")
+        
+        # Cross-board comparison section
+        lines.extend([
+            "---",
+            "",
+            f"# Section {len(board_reports) + 1}: Cross-Board Comparison",
+            "",
+            "## Summary Comparison Table",
+            "",
+            "| Board | Sprints | Avg Velocity | Avg Delivery Rate | Total Delivered SP | Total Committed SP |",
+            "|-------|---------|--------------|-------------------|--------------------|--------------------|",
+        ])
+        
+        for report in board_reports:
+            lines.append(
+                f"| {report.workspace_name[:25]} | "
+                f"{len(report.sprints)} | "
+                f"**{report.avg_velocity:.1f}** SP/sprint | "
+                f"**{report.avg_delivery_rate:.1f}%** | "
+                f"{report.total_delivered_sp:.0f} | "
+                f"{report.total_committed_sp:.0f} |"
+            )
+        
+        lines.append("")
+        
+        # AI Contribution comparison (if any board has AI metrics)
+        has_ai_metrics = any(r.total_ai_commits > 0 or r.total_ai_assisted_issues > 0 for r in board_reports)
+        if has_ai_metrics:
+            lines.extend([
+                "## AI Contribution Comparison",
+                "",
+                "| Board | AI-Assisted Issues | AI Commits | Time Saved (hours) |",
+                "|-------|-------------------|------------|-------------------|",
+            ])
+            
+            for report in board_reports:
+                lines.append(
+                    f"| {report.workspace_name[:25]} | "
+                    f"{report.total_ai_assisted_issues} | "
+                    f"{report.total_ai_commits} | "
+                    f"**{report.total_time_saved_hours:.1f}** |"
+                )
+            
+            lines.append("")
+        
+        # Velocity comparison chart
+        lines.extend([
+            "## Velocity Comparison Chart",
+            "",
+            "```",
+        ])
+        
+        max_velocity = max(r.avg_velocity for r in board_reports) if board_reports else 1
+        chart_width = 40
+        
+        for report in board_reports:
+            board_label = report.workspace_name[:20].ljust(20)
+            velocity_width = int((report.avg_velocity / max_velocity) * chart_width) if max_velocity > 0 else 0
+            velocity_bar = "=" * velocity_width
+            lines.append(f"{board_label} |{velocity_bar.ljust(chart_width)}| {report.avg_velocity:.1f} SP/sprint")
+        
+        lines.extend([
+            "```",
+            "",
+        ])
+        
+        # Delivery rate comparison chart
+        lines.extend([
+            "## Delivery Rate Comparison Chart",
+            "",
+            "```",
+        ])
+        
+        for report in board_reports:
+            board_label = report.workspace_name[:20].ljust(20)
+            rate = report.avg_delivery_rate
+            bar_width = int(rate / 2.5)  # Scale to 40 chars for 100%
+            bar = "*" * bar_width
+            status = "OK" if rate >= 80 else "LOW"
+            lines.append(f"{board_label} |{bar.ljust(40)}| {rate:.1f}% [{status}]")
+        
+        lines.extend([
+            "```",
+            "",
+            "---",
+            "",
+            "*Generated by PND Agents Delivery Report Agent - Comparison Mode*",
+        ])
+        
+        return "\n".join(lines)
 
 
 # ==================== Delivery Report Agent Functions ====================
@@ -792,3 +994,47 @@ def generate_and_publish_delivery_report(
         "report_content": report_content,
         "confluence_page": result
     }
+
+
+def generate_delivery_report_comparison(
+    board_configs: List[Dict[str, Any]],
+    num_sprints: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    include_ai_metrics: bool = True
+) -> str:
+    """
+    Generate comparison report with full report per board plus cross-board comparison.
+    
+    Args:
+        board_configs: List of board configurations, each with:
+            - board_id: JIRA board ID (required)
+            - name: Display name for the board (e.g., "Board 847 - Inspire")
+            - project_keys: Optional list of project keys to filter
+        num_sprints: Number of recent closed sprints per board
+        start_date: Filter sprints starting after this date (YYYY-MM-DD)
+        end_date: Filter sprints ending before this date (YYYY-MM-DD)
+        include_ai_metrics: Include AI contribution metrics
+    
+    Returns:
+        Formatted comparison report string with:
+        - Section 1: Full report for Board 1 (charts, tables, AI metrics)
+        - Section 2: Full report for Board 2
+        - ...
+        - Final Section: Cross-board comparison table
+    
+    Example:
+        board_configs = [
+            {"board_id": 847, "name": "Board 847 - Inspire"},
+            {"board_id": 7151, "name": "Board 7151 - EPA"}
+        ]
+        result = generate_delivery_report_comparison(board_configs, num_sprints=3)
+    """
+    with DeliveryReportAgent() as agent:
+        return agent.generate_comparison_report(
+            board_configs=board_configs,
+            num_sprints=num_sprints,
+            start_date=start_date,
+            end_date=end_date,
+            include_ai_metrics=include_ai_metrics,
+        )
