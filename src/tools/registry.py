@@ -2028,6 +2028,22 @@ AI Productivity Tracker Agent v1.0"""
                 except Exception as compare_error:
                     return [types.TextContent(type="text", text=f"Delivery Report Compare Error: {str(compare_error)}")]
 
+            elif name == "unit_test_advisor":
+                import json
+                try:
+                    from agents.unit_test_advisor import UnitTestAdvisorAgent
+                    
+                    agent = UnitTestAdvisorAgent()
+                    result = agent.run({
+                        "task_description": arguments.get("task", "Analyze and provide recommendations"),
+                        "input_data": {
+                            "files": [arguments["source_file"]] if arguments.get("source_file") else [],
+                        }
+                    })
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as e:
+                    return [types.TextContent(type="text", text=f"UnitTestAdvisor Agent Error: {str(e)}")]
+
             else:
                 raise ValueError(f"Unknown tool: {name}")
 
