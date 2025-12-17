@@ -27,6 +27,7 @@ from agents.sonar_validation_agent import SonarValidationAgent, validate_for_pr
 from agents.analytics_agent import AnalyticsAgent
 from agents.task_manager_agent import TaskManagerAgent
 from tools.jira_client import JiraClient, JiraConfig
+from tools.sprint_ai_report import SprintAIReportGenerator, generate_sprint_report, identify_ai_commits_in_range
 
 
 def register_tools(server: Server) -> None:
@@ -888,6 +889,53 @@ def register_tools(server: Server) -> None:
                     "properties": {}
                 }
             ),
+            # Sprint AI Report Tools
+            types.Tool(
+                name="sprint_ai_report",
+                description="Generate a comprehensive sprint report showing AI contribution metrics. Fetches data from JIRA and Azure DevOps to identify AI-generated commits. Designed for scrum masters and non-technical stakeholders - no repo cloning required.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "sprint_id": {
+                            "type": "integer",
+                            "description": "JIRA sprint ID (e.g., 16597)"
+                        },
+                        "board_id": {
+                            "type": "integer",
+                            "description": "JIRA board ID to find active sprint (e.g., 795). Use if sprint_id not known."
+                        },
+                        "include_commits": {
+                            "type": "boolean",
+                            "description": "Include Azure DevOps commit analysis (default: true)",
+                            "default": True
+                        },
+                        "format": {
+                            "type": "string",
+                            "description": "Output format: markdown (for display) or json (for processing)",
+                            "enum": ["markdown", "json"],
+                            "default": "markdown"
+                        }
+                    }
+                }
+            ),
+            types.Tool(
+                name="sprint_ai_commits",
+                description="Identify AI-generated commits in a date range by detecting Claude Code signatures. Returns list of commits with author, date, type, and linked JIRA issues.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "start_date": {
+                            "type": "string",
+                            "description": "Start date in ISO format (YYYY-MM-DD)"
+                        },
+                        "end_date": {
+                            "type": "string",
+                            "description": "End date in ISO format (YYYY-MM-DD)"
+                        }
+                    },
+                    "required": ["start_date", "end_date"]
+                }
+            ),
         ]
 
     # Register call_tool handler
@@ -1437,6 +1485,44 @@ AI Productivity Tracker Agent v1.0"""
                     return [types.TextContent(type="text", text=json.dumps({"status": "success", "message": "Task context cleared"}, indent=2))]
                 except Exception as tm_error:
                     return [types.TextContent(type="text", text=f"Task Manager Error: {str(tm_error)}")]
+
+            # Sprint AI Report Tools
+            elif name == "sprint_ai_report":
+                import json
+                try:
+                    sprint_id = arguments.get("sprint_id")
+                    board_id = arguments.get("board_id")
+                    include_commits = arguments.get("include_commits", True)
+                    output_format = arguments.get("format", "markdown")
+
+                    if not sprint_id and not board_id:
+                        return [types.TextContent(type="text", text="Error: Either sprint_id or board_id must be provided")]
+
+                    report = generate_sprint_report(
+                        sprint_id=sprint_id,
+                        board_id=board_id,
+                        include_commits=include_commits,
+                        output_format=output_format
+                    )
+                    return [types.TextContent(type="text", text=report)]
+                except Exception as report_error:
+                    return [types.TextContent(type="text", text=f"Sprint Report Error: {str(report_error)}")]
+
+            elif name == "sprint_ai_commits":
+                import json
+                try:
+                    start_date = arguments["start_date"]
+                    end_date = arguments["end_date"]
+
+                    commits = identify_ai_commits_in_range(start_date, end_date)
+                    result = {
+                        "status": "success",
+                        "count": len(commits),
+                        "commits": commits
+                    }
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as commits_error:
+                    return [types.TextContent(type="text", text=f"AI Commits Error: {str(commits_error)}")]
 
             else:
                 raise ValueError(f"Unknown tool: {name}")

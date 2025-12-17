@@ -1,0 +1,740 @@
+"""
+Sprint AI Report Tool
+
+Generates scrum-master friendly reports combining:
+- JIRA sprint data (issues, PRs, status)
+- Azure DevOps commits (metadata, AI signatures)
+- Analytics metrics (effectiveness, time saved)
+
+This tool allows non-coders to get AI contribution reports without cloning repos.
+"""
+
+import base64
+import json
+import logging
+import os
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+import httpx
+
+logger = logging.getLogger("pnd_agents.sprint_ai_report")
+
+
+# ==================== Configuration ====================
+
+@dataclass
+class SprintReportConfig:
+    """Configuration for Sprint AI Report generation."""
+
+    # JIRA settings
+    jira_base_url: str = ""
+    jira_email: str = ""
+    jira_api_token: str = ""
+
+    # Azure DevOps settings
+    azure_org: str = ""
+    azure_project: str = ""
+    azure_repo: str = ""
+    azure_pat: str = ""  # Personal Access Token
+
+    # Report settings
+    time_saved_per_ai_commit_hours: float = 2.0
+
+    @classmethod
+    def from_env(cls) -> "SprintReportConfig":
+        """Create config from environment variables."""
+        return cls(
+            jira_base_url=os.environ.get("JIRA_BASE_URL", ""),
+            jira_email=os.environ.get("JIRA_EMAIL", ""),
+            jira_api_token=os.environ.get("JIRA_API_TOKEN", ""),
+            azure_org=os.environ.get("AZURE_DEVOPS_ORG", "pandora-jewelry"),
+            azure_project=os.environ.get("AZURE_DEVOPS_PROJECT", "Spark"),
+            azure_repo=os.environ.get("AZURE_DEVOPS_REPO", "pandora-group"),
+            azure_pat=os.environ.get("AZURE_DEVOPS_PAT", ""),
+            time_saved_per_ai_commit_hours=float(
+                os.environ.get("AI_TIME_SAVED_PER_COMMIT", "2.0")
+            ),
+        )
+
+
+# ==================== Data Models ====================
+
+@dataclass
+class SprintInfo:
+    """Sprint metadata from JIRA."""
+    id: int
+    name: str
+    state: str
+    start_date: str
+    end_date: str
+    goal: str = ""
+
+
+@dataclass
+class SprintIssue:
+    """Issue data from JIRA sprint."""
+    key: str
+    summary: str
+    status: str
+    status_category: str  # To Do, In Progress, Done
+    assignee: str
+    issue_type: str
+    story_points: Optional[float] = None
+    has_pr: bool = False
+    pr_count: int = 0
+
+
+@dataclass
+class AICommit:
+    """AI-generated commit data from Azure DevOps."""
+    commit_id: str
+    message: str
+    author: str
+    author_email: str
+    date: str
+    ai_model: str = "Claude"
+    linked_issue: Optional[str] = None
+
+
+@dataclass
+class SprintAIReport:
+    """Complete sprint AI report data."""
+    # Sprint info
+    sprint_name: str
+    sprint_id: int
+    start_date: str
+    end_date: str
+
+    # Issue metrics
+    total_issues: int = 0
+    completed_issues: int = 0
+    in_progress_issues: int = 0
+    todo_issues: int = 0
+
+    # AI metrics
+    total_commits: int = 0
+    ai_commits_count: int = 0
+    ai_contribution_percent: float = 0.0
+    issues_with_ai_commits: List[str] = field(default_factory=list)
+    time_saved_hours: float = 0.0
+
+    # Breakdown
+    ai_commits: List[Dict[str, Any]] = field(default_factory=list)
+    issues_by_status: Dict[str, List[str]] = field(default_factory=dict)
+    ai_by_author: Dict[str, int] = field(default_factory=dict)
+    ai_by_type: Dict[str, int] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "sprint_name": self.sprint_name,
+            "sprint_id": self.sprint_id,
+            "start_date": self.start_date,
+            "end_date": self.end_date,
+            "total_issues": self.total_issues,
+            "completed_issues": self.completed_issues,
+            "in_progress_issues": self.in_progress_issues,
+            "todo_issues": self.todo_issues,
+            "total_commits": self.total_commits,
+            "ai_commits_count": self.ai_commits_count,
+            "ai_contribution_percent": self.ai_contribution_percent,
+            "issues_with_ai_commits": self.issues_with_ai_commits,
+            "time_saved_hours": self.time_saved_hours,
+            "ai_commits": self.ai_commits,
+            "issues_by_status": self.issues_by_status,
+            "ai_by_author": self.ai_by_author,
+            "ai_by_type": self.ai_by_type,
+        }
+
+
+# ==================== AI Signature Detection ====================
+
+AI_SIGNATURES = [
+    "Generated with [Claude Code]",
+    "Co-Authored-By: Claude",
+    "Co-Authored-By:.*Anthropic",
+    "pnd-agents",
+]
+
+AI_MODEL_PATTERNS = {
+    "Claude Opus 4.5": "Opus 4.5",
+    "Claude Sonnet": "Sonnet",
+    "Claude": "Claude",
+}
+
+
+def is_ai_commit(message: str) -> bool:
+    """Check if commit message indicates AI generation."""
+    if not message:
+        return False
+    message_lower = message.lower()
+    return any(sig.lower() in message_lower for sig in AI_SIGNATURES)
+
+
+def extract_ai_model(message: str) -> str:
+    """Extract AI model name from commit message."""
+    for pattern, model in AI_MODEL_PATTERNS.items():
+        if pattern in message:
+            return model
+    return "Claude"
+
+
+def extract_issue_key(message: str) -> Optional[str]:
+    """Extract JIRA issue key from commit message (e.g., INS-1234)."""
+    import re
+    match = re.search(r'([A-Z]+-\d+)', message)
+    return match.group(1) if match else None
+
+
+def categorize_commit(message: str) -> str:
+    """Categorize commit by type based on conventional commit prefix."""
+    message_lower = message.lower()
+    if message_lower.startswith("feat"):
+        return "Feature"
+    elif message_lower.startswith("fix"):
+        return "Bug Fix"
+    elif message_lower.startswith("test"):
+        return "Unit Tests"
+    elif message_lower.startswith("refactor"):
+        return "Refactoring"
+    elif message_lower.startswith("docs"):
+        return "Documentation"
+    elif "sonar" in message_lower or "coverage" in message_lower:
+        return "Code Quality"
+    else:
+        return "Other"
+
+
+# ==================== Sprint AI Report Generator ====================
+
+class SprintAIReportGenerator:
+    """
+    Generates comprehensive sprint reports combining JIRA, Azure DevOps, and analytics.
+
+    Designed for scrum masters and non-technical stakeholders.
+    """
+
+    def __init__(self, config: Optional[SprintReportConfig] = None):
+        """Initialize the report generator."""
+        self.config = config or SprintReportConfig.from_env()
+        self._jira_client: Optional[httpx.Client] = None
+        self._azure_client: Optional[httpx.Client] = None
+
+    @property
+    def jira_client(self) -> httpx.Client:
+        """Get or create JIRA HTTP client."""
+        if self._jira_client is None:
+            self._jira_client = httpx.Client(
+                base_url=f"{self.config.jira_base_url.rstrip('/')}/rest/",
+                auth=(self.config.jira_email, self.config.jira_api_token),
+                headers={
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                },
+                timeout=30.0,
+            )
+        return self._jira_client
+
+    @property
+    def azure_client(self) -> httpx.Client:
+        """Get or create Azure DevOps HTTP client."""
+        if self._azure_client is None:
+            # Azure DevOps uses Basic Auth with empty username and PAT as password
+            credentials = base64.b64encode(f":{self.config.azure_pat}".encode()).decode()
+            self._azure_client = httpx.Client(
+                base_url=f"https://dev.azure.com/{self.config.azure_org}/{self.config.azure_project}/_apis/",
+                headers={
+                    "Authorization": f"Basic {credentials}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                },
+                timeout=60.0,
+            )
+        return self._azure_client
+
+    def close(self):
+        """Close HTTP clients."""
+        if self._jira_client:
+            self._jira_client.close()
+        if self._azure_client:
+            self._azure_client.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    # ==================== JIRA Operations ====================
+
+    def get_active_sprint(self, board_id: int) -> Optional[SprintInfo]:
+        """Get the active sprint for a board."""
+        try:
+            response = self.jira_client.get(
+                f"agile/1.0/board/{board_id}/sprint",
+                params={"state": "active"}
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            sprints = data.get("values", [])
+            if sprints:
+                s = sprints[0]
+                return SprintInfo(
+                    id=s["id"],
+                    name=s["name"],
+                    state=s["state"],
+                    start_date=s.get("startDate", ""),
+                    end_date=s.get("endDate", ""),
+                    goal=s.get("goal", ""),
+                )
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get active sprint: {e}")
+            raise
+
+    def get_sprint_by_id(self, sprint_id: int) -> Optional[SprintInfo]:
+        """Get sprint by ID."""
+        try:
+            response = self.jira_client.get(f"agile/1.0/sprint/{sprint_id}")
+            response.raise_for_status()
+            s = response.json()
+
+            return SprintInfo(
+                id=s["id"],
+                name=s["name"],
+                state=s["state"],
+                start_date=s.get("startDate", ""),
+                end_date=s.get("endDate", ""),
+                goal=s.get("goal", ""),
+            )
+        except Exception as e:
+            logger.error(f"Failed to get sprint {sprint_id}: {e}")
+            raise
+
+    def get_sprint_issues(self, sprint_id: int) -> List[SprintIssue]:
+        """Get all issues in a sprint."""
+        try:
+            response = self.jira_client.get(
+                f"agile/1.0/sprint/{sprint_id}/issue",
+                params={"maxResults": 200}
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            issues = []
+            for issue_data in data.get("issues", []):
+                fields = issue_data.get("fields", {})
+                status = fields.get("status", {})
+                status_category = status.get("statusCategory", {})
+
+                # Check for PR info in development field
+                dev_info = fields.get("customfield_10000", "")
+                has_pr = "pullrequest" in str(dev_info).lower() if dev_info else False
+
+                issues.append(SprintIssue(
+                    key=issue_data.get("key", ""),
+                    summary=fields.get("summary", ""),
+                    status=status.get("name", ""),
+                    status_category=status_category.get("name", ""),
+                    assignee=fields.get("assignee", {}).get("displayName", "Unassigned") if fields.get("assignee") else "Unassigned",
+                    issue_type=fields.get("issuetype", {}).get("name", ""),
+                    story_points=fields.get("customfield_10022"),  # Story points field
+                    has_pr=has_pr,
+                ))
+
+            return issues
+        except Exception as e:
+            logger.error(f"Failed to get sprint issues: {e}")
+            raise
+
+    # ==================== Azure DevOps Operations ====================
+
+    def get_commits_by_date_range(
+        self,
+        start_date: str,
+        end_date: str,
+        branch: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get commits from Azure DevOps in a date range.
+
+        Args:
+            start_date: ISO format date (YYYY-MM-DD)
+            end_date: ISO format date (YYYY-MM-DD)
+            branch: Branch name (default: None = all branches)
+
+        Returns:
+            List of commit data
+        """
+        if not self.config.azure_pat:
+            logger.warning("Azure DevOps PAT not configured - skipping commit analysis")
+            return []
+
+        try:
+            params = {
+                "searchCriteria.fromDate": start_date,
+                "searchCriteria.toDate": end_date,
+                "$top": 500,
+                "api-version": "7.0",
+            }
+            # Only filter by branch if explicitly specified
+            if branch:
+                params["searchCriteria.itemVersion.version"] = branch
+
+            response = self.azure_client.get(
+                f"git/repositories/{self.config.azure_repo}/commits",
+                params=params
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            return data.get("value", [])
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Azure DevOps API error: {e.response.status_code} - {e.response.text}")
+            return []
+        except Exception as e:
+            logger.error(f"Failed to get Azure commits: {e}")
+            return []
+
+    def get_commit_details(self, commit_id: str) -> Optional[Dict[str, Any]]:
+        """Get detailed commit information including full message."""
+        if not self.config.azure_pat:
+            return None
+
+        try:
+            response = self.azure_client.get(
+                f"git/repositories/{self.config.azure_repo}/commits/{commit_id}",
+                params={"api-version": "7.0"}
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Failed to get commit {commit_id}: {e}")
+            return None
+
+    def identify_ai_commits(
+        self,
+        start_date: str,
+        end_date: str
+    ) -> List[AICommit]:
+        """
+        Identify AI-generated commits in a date range.
+
+        Returns commits with Claude Code signature.
+        Note: Azure DevOps list API only returns first line of commit message,
+        so we need to fetch full details for each commit to check for AI signature.
+        """
+        commits = self.get_commits_by_date_range(start_date, end_date)
+        ai_commits = []
+
+        for commit in commits:
+            comment = commit.get("comment", "")
+            commit_id = commit.get("commitId", "")
+
+            # Check main message first (in case full message is in list)
+            if is_ai_commit(comment):
+                ai_commits.append(AICommit(
+                    commit_id=commit_id[:8],
+                    message=comment.split("\n")[0][:100],
+                    author=commit.get("author", {}).get("name", ""),
+                    author_email=commit.get("author", {}).get("email", ""),
+                    date=commit.get("author", {}).get("date", "")[:10],
+                    ai_model=extract_ai_model(comment),
+                    linked_issue=extract_issue_key(comment),
+                ))
+                continue
+
+            # Azure DevOps list API only returns first line of commit message
+            # Fetch full details for commits that might be AI-related:
+            # - Conventional commit prefixes (feat, fix, test, etc.)
+            # - JIRA issue keys (INS-, EPA-, etc.)
+            # - Keywords suggesting component/test work
+            comment_lower = comment.lower()
+            might_be_ai = (
+                any(comment_lower.startswith(prefix) for prefix in ["feat", "fix", "test", "refactor", "docs", "chore"]) or
+                "component" in comment_lower or
+                "unit test" in comment_lower or
+                "react |" in comment_lower or
+                "amp |" in comment_lower or
+                comment_lower.startswith("add ") or
+                comment_lower.startswith("create ") or
+                comment_lower.startswith("implement ")
+            )
+            if might_be_ai:
+                details = self.get_commit_details(commit_id)
+                if details:
+                    full_comment = details.get("comment", "")
+                    if is_ai_commit(full_comment):
+                        ai_commits.append(AICommit(
+                            commit_id=commit_id[:8],
+                            message=comment.split("\n")[0][:100],
+                            author=commit.get("author", {}).get("name", ""),
+                            author_email=commit.get("author", {}).get("email", ""),
+                            date=commit.get("author", {}).get("date", "")[:10],
+                            ai_model=extract_ai_model(full_comment),
+                            linked_issue=extract_issue_key(comment),
+                        ))
+
+        return ai_commits
+
+    # ==================== Report Generation ====================
+
+    def generate_report(
+        self,
+        sprint_id: Optional[int] = None,
+        board_id: Optional[int] = None,
+        include_commits: bool = True,
+        output_format: str = "markdown"
+    ) -> str:
+        """
+        Generate comprehensive sprint AI report.
+
+        Args:
+            sprint_id: JIRA sprint ID (if known)
+            board_id: JIRA board ID (to find active sprint)
+            include_commits: Whether to fetch Azure DevOps commits
+            output_format: "markdown" or "json"
+
+        Returns:
+            Formatted report string
+        """
+        # Get sprint info
+        if sprint_id:
+            sprint = self.get_sprint_by_id(sprint_id)
+        elif board_id:
+            sprint = self.get_active_sprint(board_id)
+        else:
+            raise ValueError("Either sprint_id or board_id must be provided")
+
+        if not sprint:
+            return "Sprint not found"
+
+        # Get sprint issues
+        issues = self.get_sprint_issues(sprint.id)
+
+        # Initialize report
+        report = SprintAIReport(
+            sprint_name=sprint.name,
+            sprint_id=sprint.id,
+            start_date=sprint.start_date[:10] if sprint.start_date else "",
+            end_date=sprint.end_date[:10] if sprint.end_date else "",
+            total_issues=len(issues),
+        )
+
+        # Categorize issues
+        for issue in issues:
+            cat = issue.status_category
+            if cat == "Done":
+                report.completed_issues += 1
+                report.issues_by_status.setdefault("Done", []).append(issue.key)
+            elif cat == "In Progress":
+                report.in_progress_issues += 1
+                report.issues_by_status.setdefault("In Progress", []).append(issue.key)
+            else:
+                report.todo_issues += 1
+                report.issues_by_status.setdefault("To Do", []).append(issue.key)
+
+        # Get AI commits if configured
+        if include_commits and self.config.azure_pat:
+            ai_commits = self.identify_ai_commits(
+                report.start_date,
+                report.end_date
+            )
+
+            # Get total commit count
+            all_commits = self.get_commits_by_date_range(
+                report.start_date,
+                report.end_date
+            )
+            report.total_commits = len(all_commits)
+            report.ai_commits_count = len(ai_commits)
+
+            if report.total_commits > 0:
+                report.ai_contribution_percent = round(
+                    (report.ai_commits_count / report.total_commits) * 100, 1
+                )
+
+            # Process AI commits
+            for ac in ai_commits:
+                report.ai_commits.append({
+                    "id": ac.commit_id,
+                    "message": ac.message,
+                    "author": ac.author,
+                    "date": ac.date,
+                    "model": ac.ai_model,
+                    "issue": ac.linked_issue,
+                    "type": categorize_commit(ac.message),
+                })
+
+                if ac.linked_issue:
+                    if ac.linked_issue not in report.issues_with_ai_commits:
+                        report.issues_with_ai_commits.append(ac.linked_issue)
+
+                # Count by author
+                report.ai_by_author[ac.author] = report.ai_by_author.get(ac.author, 0) + 1
+
+                # Count by type
+                commit_type = categorize_commit(ac.message)
+                report.ai_by_type[commit_type] = report.ai_by_type.get(commit_type, 0) + 1
+
+            # Calculate time saved
+            report.time_saved_hours = round(
+                report.ai_commits_count * self.config.time_saved_per_ai_commit_hours, 1
+            )
+
+        # Format output
+        if output_format == "json":
+            return json.dumps(report.to_dict(), indent=2)
+        else:
+            return self._format_markdown(report)
+
+    def _format_markdown(self, report: SprintAIReport) -> str:
+        """Format report as markdown for scrum masters."""
+        lines = [
+            f"# Sprint AI Report: {report.sprint_name}",
+            "",
+            f"**Period:** {report.start_date} to {report.end_date}",
+            "",
+            "---",
+            "",
+            "## Executive Summary",
+            "",
+            "| Metric | Value |",
+            "|--------|-------|",
+            f"| Total Issues | {report.total_issues} |",
+            f"| Completed | {report.completed_issues} ({self._percent(report.completed_issues, report.total_issues)}%) |",
+            f"| In Progress | {report.in_progress_issues} |",
+            f"| To Do | {report.todo_issues} |",
+            "",
+        ]
+
+        if report.total_commits > 0:
+            lines.extend([
+                "## AI Contribution",
+                "",
+                "| Metric | Value |",
+                "|--------|-------|",
+                f"| Total Commits | {report.total_commits} |",
+                f"| AI-Generated Commits | {report.ai_commits_count} |",
+                f"| AI Contribution | **{report.ai_contribution_percent}%** |",
+                f"| Issues with AI Commits | {len(report.issues_with_ai_commits)} |",
+                f"| Estimated Time Saved | **{report.time_saved_hours} hours** |",
+                "",
+            ])
+
+            if report.ai_by_type:
+                lines.extend([
+                    "### AI Commits by Type",
+                    "",
+                    "| Type | Count |",
+                    "|------|-------|",
+                ])
+                for commit_type, count in sorted(report.ai_by_type.items(), key=lambda x: -x[1]):
+                    lines.append(f"| {commit_type} | {count} |")
+                lines.append("")
+
+            if report.ai_by_author:
+                lines.extend([
+                    "### AI Commits by Author",
+                    "",
+                    "| Author | AI Commits |",
+                    "|--------|------------|",
+                ])
+                for author, count in sorted(report.ai_by_author.items(), key=lambda x: -x[1]):
+                    lines.append(f"| {author} | {count} |")
+                lines.append("")
+
+            if report.issues_with_ai_commits:
+                lines.extend([
+                    "### Issues with AI-Generated Code",
+                    "",
+                ])
+                for issue_key in report.issues_with_ai_commits:
+                    lines.append(f"- {issue_key}")
+                lines.append("")
+
+            if report.ai_commits:
+                lines.extend([
+                    "### AI Commit Details",
+                    "",
+                    "| Date | Hash | Author | Type | Message |",
+                    "|------|------|--------|------|---------|",
+                ])
+                for commit in report.ai_commits[:20]:  # Limit to 20
+                    lines.append(
+                        f"| {commit['date']} | `{commit['id']}` | {commit['author']} | {commit['type']} | {commit['message'][:50]}... |"
+                    )
+                if len(report.ai_commits) > 20:
+                    lines.append(f"| ... | ... | ... | ... | *({len(report.ai_commits) - 20} more commits)* |")
+                lines.append("")
+        else:
+            lines.extend([
+                "## AI Contribution",
+                "",
+                "*Commit analysis not available. Configure Azure DevOps PAT to enable.*",
+                "",
+            ])
+
+        lines.extend([
+            "---",
+            "",
+            "*Generated by PND Agents Sprint AI Report Tool*",
+        ])
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _percent(part: int, total: int) -> int:
+        """Calculate percentage safely."""
+        if total == 0:
+            return 0
+        return round((part / total) * 100)
+
+
+# ==================== Convenience Functions ====================
+
+def generate_sprint_report(
+    sprint_id: Optional[int] = None,
+    board_id: Optional[int] = None,
+    include_commits: bool = True,
+    output_format: str = "markdown"
+) -> str:
+    """
+    Generate a sprint AI report.
+
+    Convenience function for MCP tool registration.
+    """
+    with SprintAIReportGenerator() as generator:
+        return generator.generate_report(
+            sprint_id=sprint_id,
+            board_id=board_id,
+            include_commits=include_commits,
+            output_format=output_format,
+        )
+
+
+def identify_ai_commits_in_range(
+    start_date: str,
+    end_date: str
+) -> List[Dict[str, Any]]:
+    """
+    Identify AI commits in a date range.
+
+    Convenience function for MCP tool registration.
+    """
+    with SprintAIReportGenerator() as generator:
+        commits = generator.identify_ai_commits(start_date, end_date)
+        return [
+            {
+                "id": c.commit_id,
+                "message": c.message,
+                "author": c.author,
+                "date": c.date,
+                "model": c.ai_model,
+                "issue": c.linked_issue,
+            }
+            for c in commits
+        ]

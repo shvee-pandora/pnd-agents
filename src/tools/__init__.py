@@ -13,6 +13,7 @@ from .figma_parser import FigmaParser
 from .amplience_api import AmplienceAPI
 from .har_analyzer import HARAnalyzer
 from .registry import register_tools
+from .sprint_ai_report import SprintAIReportGenerator, generate_sprint_report, identify_ai_commits_in_range
 
 __all__ = [
     'FilesystemTool',
@@ -21,6 +22,9 @@ __all__ = [
     'AmplienceAPI',
     'HARAnalyzer',
     'register_tools',
+    'SprintAIReportGenerator',
+    'generate_sprint_report',
+    'identify_ai_commits_in_range',
 ]
 
 __version__ = '1.0.0'
