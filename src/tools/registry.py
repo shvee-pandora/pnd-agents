@@ -1068,6 +1068,114 @@ def register_tools(server: Server) -> None:
                     }
                 }
             ),
+            # Delivery Report Agent Tools
+            types.Tool(
+                name="delivery_report_generate",
+                description="Generate multi-sprint velocity report for delivery managers. Aggregates data from multiple closed sprints with ASCII horizontal bar charts showing rollover, commitment, and delivered story points. Supports cross-workspace reporting (Online/Retail) and per-sprint trend breakdown.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "board_ids": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "description": "List of JIRA board IDs to aggregate data from"
+                        },
+                        "workspace_name": {
+                            "type": "string",
+                            "description": "Name for the workspace/report (e.g., 'Online', 'Retail')",
+                            "default": "Default Workspace"
+                        },
+                        "project_keys": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Optional list of project keys to filter (e.g., ['EPA', 'INS'])"
+                        },
+                        "num_sprints": {
+                            "type": "integer",
+                            "description": "Number of recent closed sprints to include (default: all in date range)"
+                        },
+                        "start_date": {
+                            "type": "string",
+                            "description": "Filter sprints starting after this date (YYYY-MM-DD)"
+                        },
+                        "end_date": {
+                            "type": "string",
+                            "description": "Filter sprints ending before this date (YYYY-MM-DD)"
+                        },
+                        "include_ai_metrics": {
+                            "type": "boolean",
+                            "description": "Include AI contribution metrics (default: true)",
+                            "default": True
+                        },
+                        "output_format": {
+                            "type": "string",
+                            "description": "Output format: markdown, markdown_with_charts, or json",
+                            "enum": ["markdown", "markdown_with_charts", "json"],
+                            "default": "markdown_with_charts"
+                        }
+                    },
+                    "required": ["board_ids"]
+                }
+            ),
+            types.Tool(
+                name="delivery_report_publish",
+                description="Generate multi-sprint velocity report and publish to Confluence. Includes ASCII charts, cross-workspace aggregation, and per-sprint breakdown for delivery managers.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "board_ids": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "description": "List of JIRA board IDs to aggregate data from"
+                        },
+                        "workspace_name": {
+                            "type": "string",
+                            "description": "Name for the workspace/report (e.g., 'Online', 'Retail')",
+                            "default": "Default Workspace"
+                        },
+                        "project_keys": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Optional list of project keys to filter"
+                        },
+                        "num_sprints": {
+                            "type": "integer",
+                            "description": "Number of recent closed sprints to include"
+                        },
+                        "start_date": {
+                            "type": "string",
+                            "description": "Filter sprints starting after this date (YYYY-MM-DD)"
+                        },
+                        "end_date": {
+                            "type": "string",
+                            "description": "Filter sprints ending before this date (YYYY-MM-DD)"
+                        },
+                        "space_key": {
+                            "type": "string",
+                            "description": "Confluence space key. Uses CONFLUENCE_SPACE_KEY env var if not provided."
+                        },
+                        "page_title": {
+                            "type": "string",
+                            "description": "Page title. Auto-generated if not provided."
+                        },
+                        "parent_page_id": {
+                            "type": "string",
+                            "description": "Optional parent page ID to nest the report under."
+                        },
+                        "include_ai_metrics": {
+                            "type": "boolean",
+                            "description": "Include AI contribution metrics (default: true)",
+                            "default": True
+                        },
+                        "include_charts": {
+                            "type": "boolean",
+                            "description": "Include ASCII charts in output (default: true)",
+                            "default": True
+                        }
+                    },
+                    "required": ["board_ids"]
+                }
+            ),
         ]
 
     # Register call_tool handler
@@ -1741,6 +1849,56 @@ AI Productivity Tracker Agent v1.0"""
                     return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
                 except Exception as publish_error:
                     return [types.TextContent(type="text", text=f"Value Delivered Report Publish Error: {str(publish_error)}")]
+
+            # Delivery Report Agent Tools
+            elif name == "delivery_report_generate":
+                import json
+                try:
+                    from .delivery_report_agent import generate_delivery_report
+
+                    board_ids = arguments.get("board_ids", [])
+                    if not board_ids:
+                        return [types.TextContent(type="text", text="Error: board_ids is required")]
+
+                    result = generate_delivery_report(
+                        board_ids=board_ids,
+                        workspace_name=arguments.get("workspace_name", "Default Workspace"),
+                        project_keys=arguments.get("project_keys"),
+                        num_sprints=arguments.get("num_sprints"),
+                        start_date=arguments.get("start_date"),
+                        end_date=arguments.get("end_date"),
+                        include_ai_metrics=arguments.get("include_ai_metrics", True),
+                        output_format=arguments.get("output_format", "markdown_with_charts")
+                    )
+                    return [types.TextContent(type="text", text=result)]
+                except Exception as report_error:
+                    return [types.TextContent(type="text", text=f"Delivery Report Error: {str(report_error)}")]
+
+            elif name == "delivery_report_publish":
+                import json
+                try:
+                    from .delivery_report_agent import generate_and_publish_delivery_report
+
+                    board_ids = arguments.get("board_ids", [])
+                    if not board_ids:
+                        return [types.TextContent(type="text", text="Error: board_ids is required")]
+
+                    result = generate_and_publish_delivery_report(
+                        board_ids=board_ids,
+                        workspace_name=arguments.get("workspace_name", "Default Workspace"),
+                        project_keys=arguments.get("project_keys"),
+                        num_sprints=arguments.get("num_sprints"),
+                        start_date=arguments.get("start_date"),
+                        end_date=arguments.get("end_date"),
+                        space_key=arguments.get("space_key"),
+                        page_title=arguments.get("page_title"),
+                        parent_page_id=arguments.get("parent_page_id"),
+                        include_ai_metrics=arguments.get("include_ai_metrics", True),
+                        include_charts=arguments.get("include_charts", True)
+                    )
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as publish_error:
+                    return [types.TextContent(type="text", text=f"Delivery Report Publish Error: {str(publish_error)}")]
 
             else:
                 raise ValueError(f"Unknown tool: {name}")
