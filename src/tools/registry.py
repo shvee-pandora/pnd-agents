@@ -997,6 +997,77 @@ def register_tools(server: Server) -> None:
                     "required": ["content", "space_key", "title"]
                 }
             ),
+            # Value Delivered Report Tools
+            types.Tool(
+                name="sprint_value_delivered_report",
+                description="Generate end-of-sprint value delivered report with Initiative/OKR linking, reliability metrics (commitment vs delivery, carryover, bug ratio), team breakdown, and AI contribution metrics. Designed for sprint retrospectives and stakeholder reporting.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "sprint_id": {
+                            "type": "integer",
+                            "description": "JIRA sprint ID"
+                        },
+                        "board_id": {
+                            "type": "integer",
+                            "description": "JIRA board ID to find active sprint. Use if sprint_id not known."
+                        },
+                        "team_filter": {
+                            "type": "string",
+                            "description": "Optional team/project key to filter results (e.g., 'EPA', 'INS')"
+                        },
+                        "include_ai_metrics": {
+                            "type": "boolean",
+                            "description": "Include AI contribution metrics (default: true)",
+                            "default": True
+                        },
+                        "format": {
+                            "type": "string",
+                            "description": "Output format: markdown (for display) or json (for processing)",
+                            "enum": ["markdown", "json"],
+                            "default": "markdown"
+                        }
+                    }
+                }
+            ),
+            types.Tool(
+                name="confluence_publish_value_delivered_report",
+                description="Generate end-of-sprint value delivered report and publish to Confluence. Includes Initiative/OKR linking, reliability metrics, team breakdown, and AI contribution.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "sprint_id": {
+                            "type": "integer",
+                            "description": "JIRA sprint ID"
+                        },
+                        "board_id": {
+                            "type": "integer",
+                            "description": "JIRA board ID to find active sprint. Use if sprint_id not known."
+                        },
+                        "team_filter": {
+                            "type": "string",
+                            "description": "Optional team/project key to filter results"
+                        },
+                        "space_key": {
+                            "type": "string",
+                            "description": "Confluence space key. Uses CONFLUENCE_SPACE_KEY env var if not provided."
+                        },
+                        "page_title": {
+                            "type": "string",
+                            "description": "Page title. Auto-generated from sprint name if not provided."
+                        },
+                        "parent_page_id": {
+                            "type": "string",
+                            "description": "Optional parent page ID to nest the report under."
+                        },
+                        "include_ai_metrics": {
+                            "type": "boolean",
+                            "description": "Include AI contribution metrics (default: true)",
+                            "default": True
+                        }
+                    }
+                }
+            ),
         ]
 
     # Register call_tool handler
@@ -1623,6 +1694,53 @@ AI Productivity Tracker Agent v1.0"""
                     return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
                 except Exception as publish_error:
                     return [types.TextContent(type="text", text=f"Confluence Publish Error: {str(publish_error)}")]
+
+            # Value Delivered Report Tools
+            elif name == "sprint_value_delivered_report":
+                import json
+                try:
+                    from .sprint_ai_report import generate_value_delivered_report
+
+                    sprint_id = arguments.get("sprint_id")
+                    board_id = arguments.get("board_id")
+
+                    if not sprint_id and not board_id:
+                        return [types.TextContent(type="text", text="Error: Either sprint_id or board_id must be provided")]
+
+                    result = generate_value_delivered_report(
+                        sprint_id=sprint_id,
+                        board_id=board_id,
+                        team_filter=arguments.get("team_filter"),
+                        include_ai_metrics=arguments.get("include_ai_metrics", True),
+                        output_format=arguments.get("format", "markdown")
+                    )
+                    return [types.TextContent(type="text", text=result)]
+                except Exception as report_error:
+                    return [types.TextContent(type="text", text=f"Value Delivered Report Error: {str(report_error)}")]
+
+            elif name == "confluence_publish_value_delivered_report":
+                import json
+                try:
+                    from .sprint_ai_report import generate_and_publish_value_delivered_report
+
+                    sprint_id = arguments.get("sprint_id")
+                    board_id = arguments.get("board_id")
+
+                    if not sprint_id and not board_id:
+                        return [types.TextContent(type="text", text="Error: Either sprint_id or board_id must be provided")]
+
+                    result = generate_and_publish_value_delivered_report(
+                        sprint_id=sprint_id,
+                        board_id=board_id,
+                        team_filter=arguments.get("team_filter"),
+                        space_key=arguments.get("space_key"),
+                        page_title=arguments.get("page_title"),
+                        parent_page_id=arguments.get("parent_page_id"),
+                        include_ai_metrics=arguments.get("include_ai_metrics", True)
+                    )
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as publish_error:
+                    return [types.TextContent(type="text", text=f"Value Delivered Report Publish Error: {str(publish_error)}")]
 
             else:
                 raise ValueError(f"Unknown tool: {name}")

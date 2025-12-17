@@ -1260,3 +1260,818 @@ def publish_to_confluence(
             content=content,
             parent_id=parent_page_id
         )
+
+
+# ==================== Value Delivered Report ====================
+
+@dataclass
+class InitiativeMetrics:
+    """Metrics for a single Initiative/OKR."""
+    key: str
+    summary: str
+    total_story_points: float = 0.0
+    completed_story_points: float = 0.0
+    total_issues: int = 0
+    completed_issues: int = 0
+    ai_assisted_issues: int = 0
+    epics: List[str] = field(default_factory=list)
+    
+    @property
+    def completion_rate(self) -> float:
+        if self.total_story_points == 0:
+            return 0.0
+        return round((self.completed_story_points / self.total_story_points) * 100, 1)
+
+
+@dataclass
+class ReliabilityMetrics:
+    """Sprint reliability metrics."""
+    committed_story_points: float = 0.0
+    delivered_story_points: float = 0.0
+    carryover_story_points: float = 0.0
+    carryover_issues: int = 0
+    total_bugs: int = 0
+    bugs_completed: int = 0
+    bugs_escaped: int = 0
+    
+    @property
+    def delivery_rate(self) -> float:
+        if self.committed_story_points == 0:
+            return 0.0
+        return round((self.delivered_story_points / self.committed_story_points) * 100, 1)
+    
+    @property
+    def carryover_rate(self) -> float:
+        if self.committed_story_points == 0:
+            return 0.0
+        return round((self.carryover_story_points / self.committed_story_points) * 100, 1)
+    
+    @property
+    def bug_fix_rate(self) -> float:
+        if self.total_bugs == 0:
+            return 100.0
+        return round((self.bugs_completed / self.total_bugs) * 100, 1)
+
+
+@dataclass
+class TeamMetrics:
+    """Metrics for a team/project."""
+    name: str
+    total_story_points: float = 0.0
+    completed_story_points: float = 0.0
+    total_issues: int = 0
+    completed_issues: int = 0
+    ai_assisted_issues: int = 0
+    members: List[str] = field(default_factory=list)
+
+
+@dataclass
+class ValueDeliveredReport:
+    """Complete value delivered report data."""
+    sprint_name: str
+    sprint_id: int
+    start_date: str
+    end_date: str
+    sprint_goal: str = ""
+    
+    # Value metrics
+    total_story_points: float = 0.0
+    completed_story_points: float = 0.0
+    total_issues: int = 0
+    completed_issues: int = 0
+    
+    # Initiative breakdown
+    initiatives: List[InitiativeMetrics] = field(default_factory=list)
+    
+    # Team breakdown
+    teams: List[TeamMetrics] = field(default_factory=list)
+    
+    # Reliability metrics
+    reliability: ReliabilityMetrics = field(default_factory=ReliabilityMetrics)
+    
+    # AI contribution
+    ai_assisted_issues: int = 0
+    ai_commits_count: int = 0
+    time_saved_hours: float = 0.0
+    
+    # Outcome/Value summary
+    key_outcomes: List[str] = field(default_factory=list)
+    business_value_delivered: str = ""
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "sprint_name": self.sprint_name,
+            "sprint_id": self.sprint_id,
+            "start_date": self.start_date,
+            "end_date": self.end_date,
+            "sprint_goal": self.sprint_goal,
+            "total_story_points": self.total_story_points,
+            "completed_story_points": self.completed_story_points,
+            "total_issues": self.total_issues,
+            "completed_issues": self.completed_issues,
+            "initiatives": [
+                {
+                    "key": i.key,
+                    "summary": i.summary,
+                    "total_story_points": i.total_story_points,
+                    "completed_story_points": i.completed_story_points,
+                    "completion_rate": i.completion_rate,
+                    "total_issues": i.total_issues,
+                    "completed_issues": i.completed_issues,
+                    "ai_assisted_issues": i.ai_assisted_issues,
+                }
+                for i in self.initiatives
+            ],
+            "teams": [
+                {
+                    "name": t.name,
+                    "total_story_points": t.total_story_points,
+                    "completed_story_points": t.completed_story_points,
+                    "total_issues": t.total_issues,
+                    "completed_issues": t.completed_issues,
+                    "ai_assisted_issues": t.ai_assisted_issues,
+                }
+                for t in self.teams
+            ],
+            "reliability": {
+                "committed_story_points": self.reliability.committed_story_points,
+                "delivered_story_points": self.reliability.delivered_story_points,
+                "delivery_rate": self.reliability.delivery_rate,
+                "carryover_story_points": self.reliability.carryover_story_points,
+                "carryover_rate": self.reliability.carryover_rate,
+                "total_bugs": self.reliability.total_bugs,
+                "bugs_completed": self.reliability.bugs_completed,
+                "bug_fix_rate": self.reliability.bug_fix_rate,
+            },
+            "ai_assisted_issues": self.ai_assisted_issues,
+            "ai_commits_count": self.ai_commits_count,
+            "time_saved_hours": self.time_saved_hours,
+            "key_outcomes": self.key_outcomes,
+            "business_value_delivered": self.business_value_delivered,
+        }
+
+
+@dataclass
+class SprintIssueExtended:
+    """Extended issue data with hierarchy information."""
+    key: str
+    summary: str
+    status: str
+    status_category: str
+    assignee: str
+    issue_type: str
+    story_points: Optional[float] = None
+    epic_key: Optional[str] = None
+    epic_name: Optional[str] = None
+    initiative_key: Optional[str] = None
+    initiative_name: Optional[str] = None
+    labels: List[str] = field(default_factory=list)
+    components: List[str] = field(default_factory=list)
+    project_key: str = ""
+    project_name: str = ""
+    has_ai_contribution: bool = False
+
+
+class ValueDeliveredReportGenerator:
+    """
+    Generates end-of-sprint value delivered reports.
+    
+    Includes:
+    - Value delivered by Initiative/OKR
+    - Team breakdown
+    - Reliability metrics (commitment vs delivery, carryover, bug ratio)
+    - AI contribution metrics
+    - Outcome/value summary
+    """
+    
+    def __init__(self, config: Optional[SprintReportConfig] = None):
+        self.config = config or SprintReportConfig.from_env()
+        self._jira_client: Optional[httpx.Client] = None
+        self._azure_client: Optional[httpx.Client] = None
+    
+    @property
+    def jira_client(self) -> httpx.Client:
+        if self._jira_client is None:
+            self._jira_client = httpx.Client(
+                base_url=f"{self.config.jira_base_url.rstrip('/')}/rest/",
+                auth=(self.config.jira_email, self.config.jira_api_token),
+                headers={
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                },
+                timeout=30.0,
+            )
+        return self._jira_client
+    
+    @property
+    def azure_client(self) -> httpx.Client:
+        if self._azure_client is None:
+            credentials = base64.b64encode(f":{self.config.azure_pat}".encode()).decode()
+            self._azure_client = httpx.Client(
+                base_url=f"https://dev.azure.com/{self.config.azure_org}/{self.config.azure_project}/_apis/",
+                headers={
+                    "Authorization": f"Basic {credentials}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                },
+                timeout=60.0,
+            )
+        return self._azure_client
+    
+    def close(self):
+        if self._jira_client:
+            self._jira_client.close()
+        if self._azure_client:
+            self._azure_client.close()
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+    
+    def get_sprint_by_id(self, sprint_id: int) -> Optional[SprintInfo]:
+        try:
+            response = self.jira_client.get(f"agile/1.0/sprint/{sprint_id}")
+            response.raise_for_status()
+            s = response.json()
+            return SprintInfo(
+                id=s["id"],
+                name=s["name"],
+                state=s["state"],
+                start_date=s.get("startDate", ""),
+                end_date=s.get("endDate", ""),
+                goal=s.get("goal", ""),
+            )
+        except Exception as e:
+            logger.error(f"Failed to get sprint {sprint_id}: {e}")
+            raise
+    
+    def get_active_sprint(self, board_id: int) -> Optional[SprintInfo]:
+        try:
+            response = self.jira_client.get(
+                f"agile/1.0/board/{board_id}/sprint",
+                params={"state": "active"}
+            )
+            response.raise_for_status()
+            data = response.json()
+            sprints = data.get("values", [])
+            if sprints:
+                s = sprints[0]
+                return SprintInfo(
+                    id=s["id"],
+                    name=s["name"],
+                    state=s["state"],
+                    start_date=s.get("startDate", ""),
+                    end_date=s.get("endDate", ""),
+                    goal=s.get("goal", ""),
+                )
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get active sprint: {e}")
+            raise
+    
+    def get_sprint_issues_extended(self, sprint_id: int) -> List[SprintIssueExtended]:
+        """Get sprint issues with hierarchy information (Epic, Initiative)."""
+        try:
+            response = self.jira_client.get(
+                f"agile/1.0/sprint/{sprint_id}/issue",
+                params={
+                    "maxResults": 200,
+                    "fields": "summary,status,assignee,issuetype,customfield_10022,labels,components,parent,project,customfield_10014"
+                }
+            )
+            response.raise_for_status()
+            data = response.json()
+            
+            issues = []
+            epic_cache: Dict[str, Dict[str, Any]] = {}
+            
+            for issue_data in data.get("issues", []):
+                fields = issue_data.get("fields", {})
+                status = fields.get("status", {})
+                status_category = status.get("statusCategory", {})
+                project = fields.get("project", {})
+                
+                # Get parent (Epic) information
+                parent = fields.get("parent", {})
+                epic_key = None
+                epic_name = None
+                
+                if parent:
+                    parent_type = parent.get("fields", {}).get("issuetype", {}).get("name", "")
+                    if parent_type == "Epic":
+                        epic_key = parent.get("key")
+                        epic_name = parent.get("fields", {}).get("summary", "")
+                
+                # Also check Epic Link custom field (customfield_10014)
+                epic_link = fields.get("customfield_10014")
+                if epic_link and not epic_key:
+                    epic_key = epic_link
+                    # Fetch epic details if not cached
+                    if epic_key and epic_key not in epic_cache:
+                        epic_cache[epic_key] = self._get_issue_details(epic_key)
+                    if epic_key in epic_cache:
+                        epic_name = epic_cache[epic_key].get("summary", "")
+                
+                # Get Initiative from Epic's parent
+                initiative_key = None
+                initiative_name = None
+                if epic_key:
+                    if epic_key not in epic_cache:
+                        epic_cache[epic_key] = self._get_issue_details(epic_key)
+                    epic_details = epic_cache.get(epic_key, {})
+                    epic_parent = epic_details.get("parent", {})
+                    if epic_parent:
+                        parent_type = epic_parent.get("fields", {}).get("issuetype", {}).get("name", "")
+                        if parent_type == "Initiative":
+                            initiative_key = epic_parent.get("key")
+                            initiative_name = epic_parent.get("fields", {}).get("summary", "")
+                
+                # Get labels and components
+                labels = [l for l in fields.get("labels", [])] if fields.get("labels") else []
+                components = [c.get("name", "") for c in fields.get("components", [])] if fields.get("components") else []
+                
+                issues.append(SprintIssueExtended(
+                    key=issue_data.get("key", ""),
+                    summary=fields.get("summary", ""),
+                    status=status.get("name", ""),
+                    status_category=status_category.get("name", ""),
+                    assignee=fields.get("assignee", {}).get("displayName", "Unassigned") if fields.get("assignee") else "Unassigned",
+                    issue_type=fields.get("issuetype", {}).get("name", ""),
+                    story_points=fields.get("customfield_10022"),
+                    epic_key=epic_key,
+                    epic_name=epic_name,
+                    initiative_key=initiative_key,
+                    initiative_name=initiative_name,
+                    labels=labels,
+                    components=components,
+                    project_key=project.get("key", ""),
+                    project_name=project.get("name", ""),
+                ))
+            
+            return issues
+        except Exception as e:
+            logger.error(f"Failed to get sprint issues: {e}")
+            raise
+    
+    def _get_issue_details(self, issue_key: str) -> Dict[str, Any]:
+        """Get detailed issue information including parent."""
+        try:
+            response = self.jira_client.get(
+                f"api/3/issue/{issue_key}",
+                params={"fields": "summary,parent,issuetype"}
+            )
+            response.raise_for_status()
+            data = response.json()
+            return {
+                "key": data.get("key"),
+                "summary": data.get("fields", {}).get("summary", ""),
+                "parent": data.get("fields", {}).get("parent"),
+                "issuetype": data.get("fields", {}).get("issuetype", {}).get("name", ""),
+            }
+        except Exception as e:
+            logger.warning(f"Failed to get issue details for {issue_key}: {e}")
+            return {}
+    
+    def identify_ai_assisted_issues(
+        self,
+        issues: List[SprintIssueExtended],
+        start_date: str,
+        end_date: str
+    ) -> List[str]:
+        """Identify issues that had AI-assisted commits."""
+        if not self.config.azure_pat:
+            return []
+        
+        try:
+            # Get AI commits in the sprint date range
+            generator = SprintAIReportGenerator(self.config)
+            ai_commits = generator.identify_ai_commits(start_date, end_date)
+            generator.close()
+            
+            # Extract issue keys from AI commits
+            ai_issue_keys = set()
+            for commit in ai_commits:
+                if commit.linked_issue:
+                    ai_issue_keys.add(commit.linked_issue)
+            
+            # Match with sprint issues
+            ai_assisted = []
+            for issue in issues:
+                if issue.key in ai_issue_keys:
+                    ai_assisted.append(issue.key)
+            
+            return ai_assisted
+        except Exception as e:
+            logger.warning(f"Failed to identify AI-assisted issues: {e}")
+            return []
+    
+    def calculate_reliability_metrics(
+        self,
+        issues: List[SprintIssueExtended]
+    ) -> ReliabilityMetrics:
+        """Calculate sprint reliability metrics."""
+        metrics = ReliabilityMetrics()
+        
+        for issue in issues:
+            points = issue.story_points or 0
+            metrics.committed_story_points += points
+            
+            if issue.status_category == "Done":
+                metrics.delivered_story_points += points
+            else:
+                metrics.carryover_story_points += points
+                metrics.carryover_issues += 1
+            
+            # Track bugs
+            if issue.issue_type.lower() in ["bug", "defect"]:
+                metrics.total_bugs += 1
+                if issue.status_category == "Done":
+                    metrics.bugs_completed += 1
+        
+        return metrics
+    
+    def group_by_initiative(
+        self,
+        issues: List[SprintIssueExtended],
+        ai_assisted_keys: List[str]
+    ) -> List[InitiativeMetrics]:
+        """Group issues by Initiative/OKR."""
+        initiative_map: Dict[str, InitiativeMetrics] = {}
+        no_initiative = InitiativeMetrics(key="NO_INITIATIVE", summary="No Initiative Linked")
+        
+        for issue in issues:
+            points = issue.story_points or 0
+            is_done = issue.status_category == "Done"
+            is_ai = issue.key in ai_assisted_keys
+            
+            if issue.initiative_key:
+                if issue.initiative_key not in initiative_map:
+                    initiative_map[issue.initiative_key] = InitiativeMetrics(
+                        key=issue.initiative_key,
+                        summary=issue.initiative_name or issue.initiative_key
+                    )
+                init = initiative_map[issue.initiative_key]
+            else:
+                init = no_initiative
+            
+            init.total_story_points += points
+            init.total_issues += 1
+            if is_done:
+                init.completed_story_points += points
+                init.completed_issues += 1
+            if is_ai:
+                init.ai_assisted_issues += 1
+            if issue.epic_key and issue.epic_key not in init.epics:
+                init.epics.append(issue.epic_key)
+        
+        # Combine and sort by completed story points
+        initiatives = list(initiative_map.values())
+        if no_initiative.total_issues > 0:
+            initiatives.append(no_initiative)
+        
+        return sorted(initiatives, key=lambda x: x.completed_story_points, reverse=True)
+    
+    def group_by_team(
+        self,
+        issues: List[SprintIssueExtended],
+        ai_assisted_keys: List[str]
+    ) -> List[TeamMetrics]:
+        """Group issues by team (project)."""
+        team_map: Dict[str, TeamMetrics] = {}
+        
+        for issue in issues:
+            points = issue.story_points or 0
+            is_done = issue.status_category == "Done"
+            is_ai = issue.key in ai_assisted_keys
+            
+            team_key = issue.project_key or "Unknown"
+            if team_key not in team_map:
+                team_map[team_key] = TeamMetrics(
+                    name=issue.project_name or team_key
+                )
+            
+            team = team_map[team_key]
+            team.total_story_points += points
+            team.total_issues += 1
+            if is_done:
+                team.completed_story_points += points
+                team.completed_issues += 1
+            if is_ai:
+                team.ai_assisted_issues += 1
+            if issue.assignee and issue.assignee not in team.members:
+                team.members.append(issue.assignee)
+        
+        return sorted(team_map.values(), key=lambda x: x.completed_story_points, reverse=True)
+    
+    def generate_key_outcomes(
+        self,
+        issues: List[SprintIssueExtended],
+        initiatives: List[InitiativeMetrics]
+    ) -> List[str]:
+        """Generate key outcomes from completed work."""
+        outcomes = []
+        
+        # Add outcomes from completed initiatives
+        for init in initiatives:
+            if init.completion_rate >= 80 and init.key != "NO_INITIATIVE":
+                outcomes.append(f"{init.summary}: {init.completed_story_points:.0f} SP delivered ({init.completion_rate:.0f}% complete)")
+        
+        # Add significant completed items
+        completed_features = [
+            i for i in issues
+            if i.status_category == "Done" and i.issue_type in ["Story", "Task"] and (i.story_points or 0) >= 3
+        ]
+        for feature in completed_features[:5]:
+            outcomes.append(f"{feature.key}: {feature.summary}")
+        
+        return outcomes[:10]
+    
+    def generate_report(
+        self,
+        sprint_id: Optional[int] = None,
+        board_id: Optional[int] = None,
+        team_filter: Optional[str] = None,
+        include_ai_metrics: bool = True,
+        output_format: str = "markdown"
+    ) -> str:
+        """
+        Generate end-of-sprint value delivered report.
+        
+        Args:
+            sprint_id: JIRA sprint ID
+            board_id: JIRA board ID (to find active sprint)
+            team_filter: Optional team/project filter
+            include_ai_metrics: Include AI contribution metrics
+            output_format: "markdown" or "json"
+        
+        Returns:
+            Formatted report string
+        """
+        # Get sprint info
+        if sprint_id:
+            sprint = self.get_sprint_by_id(sprint_id)
+        elif board_id:
+            sprint = self.get_active_sprint(board_id)
+        else:
+            raise ValueError("Either sprint_id or board_id must be provided")
+        
+        if not sprint:
+            return "Sprint not found"
+        
+        # Get extended issue data
+        issues = self.get_sprint_issues_extended(sprint.id)
+        
+        # Apply team filter if specified
+        if team_filter:
+            issues = [i for i in issues if i.project_key == team_filter or i.project_name == team_filter]
+        
+        # Identify AI-assisted issues
+        ai_assisted_keys = []
+        ai_commits_count = 0
+        if include_ai_metrics and self.config.azure_pat:
+            start_date = sprint.start_date[:10] if sprint.start_date else ""
+            end_date = sprint.end_date[:10] if sprint.end_date else ""
+            if start_date and end_date:
+                ai_assisted_keys = self.identify_ai_assisted_issues(issues, start_date, end_date)
+                # Get AI commit count
+                generator = SprintAIReportGenerator(self.config)
+                ai_commits = generator.identify_ai_commits(start_date, end_date)
+                ai_commits_count = len(ai_commits)
+                generator.close()
+        
+        # Calculate metrics
+        reliability = self.calculate_reliability_metrics(issues)
+        initiatives = self.group_by_initiative(issues, ai_assisted_keys)
+        teams = self.group_by_team(issues, ai_assisted_keys)
+        key_outcomes = self.generate_key_outcomes(issues, initiatives)
+        
+        # Build report
+        report = ValueDeliveredReport(
+            sprint_name=sprint.name,
+            sprint_id=sprint.id,
+            start_date=sprint.start_date[:10] if sprint.start_date else "",
+            end_date=sprint.end_date[:10] if sprint.end_date else "",
+            sprint_goal=sprint.goal,
+            total_story_points=sum(i.story_points or 0 for i in issues),
+            completed_story_points=sum(i.story_points or 0 for i in issues if i.status_category == "Done"),
+            total_issues=len(issues),
+            completed_issues=len([i for i in issues if i.status_category == "Done"]),
+            initiatives=initiatives,
+            teams=teams,
+            reliability=reliability,
+            ai_assisted_issues=len(ai_assisted_keys),
+            ai_commits_count=ai_commits_count,
+            time_saved_hours=round(ai_commits_count * self.config.time_saved_per_ai_commit_hours, 1),
+            key_outcomes=key_outcomes,
+        )
+        
+        if output_format == "json":
+            return json.dumps(report.to_dict(), indent=2)
+        else:
+            return self._format_markdown(report)
+    
+    def _format_markdown(self, report: ValueDeliveredReport) -> str:
+        """Format value delivered report as markdown."""
+        lines = [
+            f"# Sprint Value Delivered Report: {report.sprint_name}",
+            "",
+            f"**Period:** {report.start_date} to {report.end_date}",
+        ]
+        
+        if report.sprint_goal:
+            lines.extend([
+                "",
+                f"**Sprint Goal:** {report.sprint_goal}",
+            ])
+        
+        lines.extend([
+            "",
+            "---",
+            "",
+            "## Executive Summary",
+            "",
+            "| Metric | Value |",
+            "|--------|-------|",
+            f"| Total Story Points | {report.total_story_points:.0f} |",
+            f"| Delivered Story Points | **{report.completed_story_points:.0f}** |",
+            f"| Delivery Rate | **{report.reliability.delivery_rate}%** |",
+            f"| Total Issues | {report.total_issues} |",
+            f"| Completed Issues | {report.completed_issues} |",
+            "",
+        ])
+        
+        # Reliability Metrics
+        lines.extend([
+            "## Reliability Metrics",
+            "",
+            "| Metric | Value | Status |",
+            "|--------|-------|--------|",
+            f"| Commitment | {report.reliability.committed_story_points:.0f} SP | - |",
+            f"| Delivered | {report.reliability.delivered_story_points:.0f} SP | {'On Track' if report.reliability.delivery_rate >= 80 else 'Needs Attention'} |",
+            f"| Delivery Rate | {report.reliability.delivery_rate}% | {'Good' if report.reliability.delivery_rate >= 80 else 'Below Target'} |",
+            f"| Carryover | {report.reliability.carryover_story_points:.0f} SP ({report.reliability.carryover_issues} issues) | {'Low' if report.reliability.carryover_rate <= 20 else 'High'} |",
+            f"| Bug Fix Rate | {report.reliability.bug_fix_rate}% ({report.reliability.bugs_completed}/{report.reliability.total_bugs}) | {'Good' if report.reliability.bug_fix_rate >= 80 else 'Needs Attention'} |",
+            "",
+        ])
+        
+        # Value by Initiative/OKR
+        if report.initiatives:
+            lines.extend([
+                "## Value Delivered by Initiative/OKR",
+                "",
+                "| Initiative | Delivered SP | Total SP | Completion | Issues | AI-Assisted |",
+                "|------------|--------------|----------|------------|--------|-------------|",
+            ])
+            for init in report.initiatives:
+                ai_pct = round((init.ai_assisted_issues / init.total_issues * 100), 0) if init.total_issues > 0 else 0
+                lines.append(
+                    f"| {init.summary[:40]}{'...' if len(init.summary) > 40 else ''} | {init.completed_story_points:.0f} | {init.total_story_points:.0f} | {init.completion_rate}% | {init.completed_issues}/{init.total_issues} | {ai_pct:.0f}% |"
+                )
+            lines.append("")
+        
+        # Team Breakdown
+        if report.teams:
+            lines.extend([
+                "## Team Breakdown",
+                "",
+                "| Team | Delivered SP | Total SP | Completion | Issues |",
+                "|------|--------------|----------|------------|--------|",
+            ])
+            for team in report.teams:
+                completion = round((team.completed_story_points / team.total_story_points * 100), 1) if team.total_story_points > 0 else 0
+                lines.append(
+                    f"| {team.name} | {team.completed_story_points:.0f} | {team.total_story_points:.0f} | {completion}% | {team.completed_issues}/{team.total_issues} |"
+                )
+            lines.append("")
+        
+        # AI Contribution
+        if report.ai_commits_count > 0 or report.ai_assisted_issues > 0:
+            lines.extend([
+                "## AI Contribution",
+                "",
+                "| Metric | Value |",
+                "|--------|-------|",
+                f"| AI-Assisted Issues | {report.ai_assisted_issues} |",
+                f"| AI Commits | {report.ai_commits_count} |",
+                f"| Estimated Time Saved | **{report.time_saved_hours} hours** |",
+                "",
+            ])
+        
+        # Key Outcomes
+        if report.key_outcomes:
+            lines.extend([
+                "## Key Outcomes & Value Delivered",
+                "",
+            ])
+            for outcome in report.key_outcomes:
+                lines.append(f"- {outcome}")
+            lines.append("")
+        
+        lines.extend([
+            "---",
+            "",
+            "*Generated by PND Agents Value Delivered Report Tool*",
+        ])
+        
+        return "\n".join(lines)
+
+
+# ==================== Value Delivered Report Functions ====================
+
+def generate_value_delivered_report(
+    sprint_id: Optional[int] = None,
+    board_id: Optional[int] = None,
+    team_filter: Optional[str] = None,
+    include_ai_metrics: bool = True,
+    output_format: str = "markdown"
+) -> str:
+    """
+    Generate end-of-sprint value delivered report.
+    
+    Args:
+        sprint_id: JIRA sprint ID
+        board_id: JIRA board ID (to find active sprint)
+        team_filter: Optional team/project filter
+        include_ai_metrics: Include AI contribution metrics
+        output_format: "markdown" or "json"
+    
+    Returns:
+        Formatted report string
+    """
+    with ValueDeliveredReportGenerator() as generator:
+        return generator.generate_report(
+            sprint_id=sprint_id,
+            board_id=board_id,
+            team_filter=team_filter,
+            include_ai_metrics=include_ai_metrics,
+            output_format=output_format,
+        )
+
+
+def generate_and_publish_value_delivered_report(
+    sprint_id: Optional[int] = None,
+    board_id: Optional[int] = None,
+    team_filter: Optional[str] = None,
+    space_key: Optional[str] = None,
+    page_title: Optional[str] = None,
+    parent_page_id: Optional[str] = None,
+    include_ai_metrics: bool = True
+) -> Dict[str, Any]:
+    """
+    Generate value delivered report and publish to Confluence.
+    
+    Args:
+        sprint_id: JIRA sprint ID
+        board_id: JIRA board ID (to find active sprint)
+        team_filter: Optional team/project filter
+        space_key: Confluence space key
+        page_title: Page title (auto-generated if not provided)
+        parent_page_id: Optional parent page ID
+        include_ai_metrics: Include AI contribution metrics
+    
+    Returns:
+        Dictionary with report content and Confluence page URL
+    """
+    with ValueDeliveredReportGenerator() as generator:
+        if sprint_id:
+            sprint = generator.get_sprint_by_id(sprint_id)
+        elif board_id:
+            sprint = generator.get_active_sprint(board_id)
+        else:
+            raise ValueError("Either sprint_id or board_id must be provided")
+        
+        if not sprint:
+            raise ValueError("Sprint not found")
+        
+        report_content = generator.generate_report(
+            sprint_id=sprint.id,
+            team_filter=team_filter,
+            include_ai_metrics=include_ai_metrics,
+            output_format="markdown"
+        )
+    
+    # Determine space key
+    confluence_space = space_key or os.environ.get("CONFLUENCE_SPACE_KEY", "")
+    if not confluence_space:
+        raise ValueError("Confluence space key not provided. Set CONFLUENCE_SPACE_KEY env var or pass space_key parameter.")
+    
+    # Determine page title
+    title = page_title or f"Value Delivered Report: {sprint.name}"
+    
+    # Publish to Confluence
+    with ConfluencePublisher() as publisher:
+        result = publisher.publish_or_update(
+            space_key=confluence_space,
+            title=title,
+            content=report_content,
+            parent_id=parent_page_id
+        )
+    
+    return {
+        "sprint_name": sprint.name,
+        "sprint_id": sprint.id,
+        "report_content": report_content,
+        "confluence_page": result
+    }
