@@ -1176,6 +1176,56 @@ def register_tools(server: Server) -> None:
                     "required": ["board_ids"]
                 }
             ),
+            types.Tool(
+                name="delivery_report_compare",
+                description="Generate comparison report with full report per board plus cross-board comparison table. Each board gets its own section with charts, tables, and AI metrics, followed by a final comparison section showing side-by-side metrics.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "board_configs": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "board_id": {
+                                        "type": "integer",
+                                        "description": "JIRA board ID"
+                                    },
+                                    "name": {
+                                        "type": "string",
+                                        "description": "Display name for the board (e.g., 'Board 847 - Inspire')"
+                                    },
+                                    "project_keys": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                        "description": "Optional list of project keys to filter"
+                                    }
+                                },
+                                "required": ["board_id"]
+                            },
+                            "description": "List of board configurations to compare"
+                        },
+                        "num_sprints": {
+                            "type": "integer",
+                            "description": "Number of recent closed sprints per board"
+                        },
+                        "start_date": {
+                            "type": "string",
+                            "description": "Filter sprints starting after this date (YYYY-MM-DD)"
+                        },
+                        "end_date": {
+                            "type": "string",
+                            "description": "Filter sprints ending before this date (YYYY-MM-DD)"
+                        },
+                        "include_ai_metrics": {
+                            "type": "boolean",
+                            "description": "Include AI contribution metrics (default: true)",
+                            "default": True
+                        }
+                    },
+                    "required": ["board_configs"]
+                }
+            ),
         ]
 
     # Register call_tool handler
@@ -1899,6 +1949,25 @@ AI Productivity Tracker Agent v1.0"""
                     return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
                 except Exception as publish_error:
                     return [types.TextContent(type="text", text=f"Delivery Report Publish Error: {str(publish_error)}")]
+
+            elif name == "delivery_report_compare":
+                try:
+                    from .delivery_report_agent import generate_delivery_report_comparison
+
+                    board_configs = arguments.get("board_configs", [])
+                    if not board_configs:
+                        return [types.TextContent(type="text", text="Error: board_configs is required")]
+
+                    result = generate_delivery_report_comparison(
+                        board_configs=board_configs,
+                        num_sprints=arguments.get("num_sprints"),
+                        start_date=arguments.get("start_date"),
+                        end_date=arguments.get("end_date"),
+                        include_ai_metrics=arguments.get("include_ai_metrics", True)
+                    )
+                    return [types.TextContent(type="text", text=result)]
+                except Exception as compare_error:
+                    return [types.TextContent(type="text", text=f"Delivery Report Compare Error: {str(compare_error)}")]
 
             else:
                 raise ValueError(f"Unknown tool: {name}")
