@@ -936,6 +936,67 @@ def register_tools(server: Server) -> None:
                     "required": ["start_date", "end_date"]
                 }
             ),
+            # Confluence Publishing Tools
+            types.Tool(
+                name="confluence_publish_sprint_report",
+                description="Generate a sprint AI report and automatically publish it to a Confluence page. Combines sprint_ai_report generation with Confluence publishing in one step.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "sprint_id": {
+                            "type": "integer",
+                            "description": "JIRA sprint ID"
+                        },
+                        "board_id": {
+                            "type": "integer",
+                            "description": "JIRA board ID to find active sprint. Use if sprint_id not known."
+                        },
+                        "space_key": {
+                            "type": "string",
+                            "description": "Confluence space key (e.g., 'SHAM'). Uses CONFLUENCE_SPACE_KEY env var if not provided."
+                        },
+                        "page_title": {
+                            "type": "string",
+                            "description": "Page title. Auto-generated from sprint name if not provided."
+                        },
+                        "parent_page_id": {
+                            "type": "string",
+                            "description": "Optional parent page ID to nest the report under."
+                        },
+                        "include_commits": {
+                            "type": "boolean",
+                            "description": "Include Azure DevOps commit analysis (default: true)",
+                            "default": True
+                        }
+                    }
+                }
+            ),
+            types.Tool(
+                name="confluence_publish_page",
+                description="Publish any markdown content to a Confluence page. Creates a new page or updates existing one with the same title.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "content": {
+                            "type": "string",
+                            "description": "Markdown content to publish"
+                        },
+                        "space_key": {
+                            "type": "string",
+                            "description": "Confluence space key (e.g., 'SHAM')"
+                        },
+                        "title": {
+                            "type": "string",
+                            "description": "Page title"
+                        },
+                        "parent_page_id": {
+                            "type": "string",
+                            "description": "Optional parent page ID"
+                        }
+                    },
+                    "required": ["content", "space_key", "title"]
+                }
+            ),
         ]
 
     # Register call_tool handler
@@ -1523,6 +1584,45 @@ AI Productivity Tracker Agent v1.0"""
                     return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
                 except Exception as commits_error:
                     return [types.TextContent(type="text", text=f"AI Commits Error: {str(commits_error)}")]
+
+            # Confluence Publishing Tools
+            elif name == "confluence_publish_sprint_report":
+                import json
+                try:
+                    from .sprint_ai_report import generate_and_publish_sprint_report
+
+                    sprint_id = arguments.get("sprint_id")
+                    board_id = arguments.get("board_id")
+
+                    if not sprint_id and not board_id:
+                        return [types.TextContent(type="text", text="Error: Either sprint_id or board_id must be provided")]
+
+                    result = generate_and_publish_sprint_report(
+                        sprint_id=sprint_id,
+                        board_id=board_id,
+                        space_key=arguments.get("space_key"),
+                        page_title=arguments.get("page_title"),
+                        parent_page_id=arguments.get("parent_page_id"),
+                        include_commits=arguments.get("include_commits", True)
+                    )
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as publish_error:
+                    return [types.TextContent(type="text", text=f"Confluence Publish Error: {str(publish_error)}")]
+
+            elif name == "confluence_publish_page":
+                import json
+                try:
+                    from .sprint_ai_report import publish_to_confluence
+
+                    result = publish_to_confluence(
+                        content=arguments["content"],
+                        space_key=arguments["space_key"],
+                        title=arguments["title"],
+                        parent_page_id=arguments.get("parent_page_id")
+                    )
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as publish_error:
+                    return [types.TextContent(type="text", text=f"Confluence Publish Error: {str(publish_error)}")]
 
             else:
                 raise ValueError(f"Unknown tool: {name}")
