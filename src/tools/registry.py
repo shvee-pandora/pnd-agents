@@ -1068,6 +1068,48 @@ def register_tools(server: Server) -> None:
                     }
                 }
             ),
+            types.Tool(
+                name="multi_board_value_delivered_report",
+                description="Generate value delivered report for multiple boards with comparison. Produces full value delivered report per board (Initiative/OKR, reliability metrics, carryover, AI contribution) plus cross-board comparison section with ASCII charts. Ideal for comparing Online vs Retail or multiple team boards.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "board_configs": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "board_id": {
+                                        "type": "integer",
+                                        "description": "JIRA board ID"
+                                    },
+                                    "name": {
+                                        "type": "string",
+                                        "description": "Display name for the board (e.g., 'FIND - Board 847')"
+                                    },
+                                    "sprint_id": {
+                                        "type": "integer",
+                                        "description": "Optional specific sprint ID (uses active sprint if not provided)"
+                                    }
+                                },
+                                "required": ["board_id"]
+                            },
+                            "description": "List of board configurations to generate reports for"
+                        },
+                        "include_ai_metrics": {
+                            "type": "boolean",
+                            "description": "Include AI contribution metrics (default: true)",
+                            "default": True
+                        },
+                        "include_charts": {
+                            "type": "boolean",
+                            "description": "Include ASCII comparison charts (default: true)",
+                            "default": True
+                        }
+                    },
+                    "required": ["board_configs"]
+                }
+            ),
             # Delivery Report Agent Tools
             types.Tool(
                 name="delivery_report_generate",
@@ -1899,6 +1941,23 @@ AI Productivity Tracker Agent v1.0"""
                     return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
                 except Exception as publish_error:
                     return [types.TextContent(type="text", text=f"Value Delivered Report Publish Error: {str(publish_error)}")]
+
+            elif name == "multi_board_value_delivered_report":
+                try:
+                    from .sprint_ai_report import generate_multi_board_value_delivered_report
+
+                    board_configs = arguments.get("board_configs", [])
+                    if not board_configs:
+                        return [types.TextContent(type="text", text="Error: board_configs is required")]
+
+                    result = generate_multi_board_value_delivered_report(
+                        board_configs=board_configs,
+                        include_ai_metrics=arguments.get("include_ai_metrics", True),
+                        include_charts=arguments.get("include_charts", True)
+                    )
+                    return [types.TextContent(type="text", text=result)]
+                except Exception as report_error:
+                    return [types.TextContent(type="text", text=f"Multi-Board Value Delivered Report Error: {str(report_error)}")]
 
             # Delivery Report Agent Tools
             elif name == "delivery_report_generate":

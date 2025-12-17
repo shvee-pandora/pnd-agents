@@ -2010,6 +2010,349 @@ def generate_value_delivered_report(
         )
 
 
+def generate_multi_board_value_delivered_report(
+    board_configs: List[Dict[str, Any]],
+    include_ai_metrics: bool = True,
+    include_charts: bool = True
+) -> str:
+    """
+    Generate value delivered report for multiple boards with comparison.
+    
+    Args:
+        board_configs: List of board configurations, each with:
+            - board_id: JIRA board ID (required)
+            - name: Display name for the board (e.g., "FIND - Board 847")
+            - sprint_id: Optional specific sprint ID (uses active sprint if not provided)
+        include_ai_metrics: Include AI contribution metrics
+        include_charts: Include ASCII charts for visualization
+    
+    Returns:
+        Formatted multi-board report string with:
+        - Section per board with full value delivered report
+        - Cross-board comparison section with charts
+    
+    Example:
+        board_configs = [
+            {"board_id": 847, "name": "FIND"},
+            {"board_id": 7151, "name": "EPA"}
+        ]
+        result = generate_multi_board_value_delivered_report(board_configs)
+    """
+    with ValueDeliveredReportGenerator() as generator:
+        board_reports: List[Dict[str, Any]] = []
+        
+        for config in board_configs:
+            board_id = config["board_id"]
+            board_name = config.get("name", f"Board {board_id}")
+            sprint_id = config.get("sprint_id")
+            
+            try:
+                # Get sprint info
+                if sprint_id:
+                    sprint = generator.get_sprint_by_id(sprint_id)
+                else:
+                    sprint = generator.get_active_sprint(board_id)
+                
+                if not sprint:
+                    board_reports.append({
+                        "board_name": board_name,
+                        "board_id": board_id,
+                        "error": "No active sprint found",
+                        "report": None
+                    })
+                    continue
+                
+                # Get extended issue data
+                issues = generator.get_sprint_issues_extended(sprint.id)
+                
+                # Identify AI-assisted issues
+                ai_assisted_keys = []
+                ai_commits_count = 0
+                if include_ai_metrics and generator.config.azure_pat:
+                    start_date = sprint.start_date[:10] if sprint.start_date else ""
+                    end_date = sprint.end_date[:10] if sprint.end_date else ""
+                    if start_date and end_date:
+                        ai_assisted_keys = generator.identify_ai_assisted_issues(issues, start_date, end_date)
+                        ai_generator = SprintAIReportGenerator(generator.config)
+                        ai_commits = ai_generator.identify_ai_commits(start_date, end_date)
+                        ai_commits_count = len(ai_commits)
+                        ai_generator.close()
+                
+                # Calculate metrics
+                reliability = generator.calculate_reliability_metrics(issues)
+                initiatives = generator.group_by_initiative(issues, ai_assisted_keys)
+                teams = generator.group_by_team(issues, ai_assisted_keys)
+                key_outcomes = generator.generate_key_outcomes(issues, initiatives)
+                
+                # Build report
+                report = ValueDeliveredReport(
+                    sprint_name=sprint.name,
+                    sprint_id=sprint.id,
+                    start_date=sprint.start_date[:10] if sprint.start_date else "",
+                    end_date=sprint.end_date[:10] if sprint.end_date else "",
+                    sprint_goal=sprint.goal,
+                    total_story_points=sum(i.story_points or 0 for i in issues),
+                    completed_story_points=sum(i.story_points or 0 for i in issues if i.status_category == "Done"),
+                    total_issues=len(issues),
+                    completed_issues=len([i for i in issues if i.status_category == "Done"]),
+                    initiatives=initiatives,
+                    teams=teams,
+                    reliability=reliability,
+                    ai_assisted_issues=len(ai_assisted_keys),
+                    ai_commits_count=ai_commits_count,
+                    time_saved_hours=round(ai_commits_count * generator.config.time_saved_per_ai_commit_hours, 1),
+                    key_outcomes=key_outcomes,
+                )
+                
+                board_reports.append({
+                    "board_name": board_name,
+                    "board_id": board_id,
+                    "error": None,
+                    "report": report
+                })
+            except Exception as e:
+                board_reports.append({
+                    "board_name": board_name,
+                    "board_id": board_id,
+                    "error": str(e),
+                    "report": None
+                })
+        
+        # Format the multi-board report
+        return _format_multi_board_value_report(board_reports, generator, include_charts)
+
+
+def _format_multi_board_value_report(
+    board_reports: List[Dict[str, Any]],
+    generator: "ValueDeliveredReportGenerator",
+    include_charts: bool = True
+) -> str:
+    """Format multi-board value delivered report with comparison section."""
+    lines = [
+        "# Multi-Board Value Delivered Report",
+        "",
+        f"**Boards Analyzed:** {len(board_reports)}",
+        f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        "",
+    ]
+    
+    valid_reports = [r for r in board_reports if r["report"] is not None]
+    
+    # Section for each board's full report
+    for i, board_data in enumerate(board_reports, 1):
+        lines.extend([
+            "---",
+            "",
+            f"# Section {i}: {board_data['board_name']}",
+            "",
+        ])
+        
+        if board_data["error"]:
+            lines.extend([
+                f"**Error:** {board_data['error']}",
+                "",
+            ])
+            continue
+        
+        report = board_data["report"]
+        
+        # Add full report content for this board
+        lines.extend([
+            f"**Sprint:** {report.sprint_name}",
+            f"**Period:** {report.start_date} to {report.end_date}",
+            "",
+        ])
+        
+        if report.sprint_goal:
+            lines.append(f"**Sprint Goal:** {report.sprint_goal}")
+            lines.append("")
+        
+        # Executive Summary
+        lines.extend([
+            "## Executive Summary",
+            "",
+            "| Metric | Value |",
+            "|--------|-------|",
+            f"| Total Story Points | {report.total_story_points:.0f} |",
+            f"| Delivered Story Points | **{report.completed_story_points:.0f}** |",
+            f"| Delivery Rate | **{report.reliability.delivery_rate}%** |",
+            f"| Total Issues | {report.total_issues} |",
+            f"| Completed Issues | {report.completed_issues} |",
+            "",
+        ])
+        
+        # Reliability Metrics
+        lines.extend([
+            "## Reliability Metrics",
+            "",
+            "| Metric | Value | Status |",
+            "|--------|-------|--------|",
+            f"| Commitment | {report.reliability.committed_story_points:.0f} SP | - |",
+            f"| Delivered | {report.reliability.delivered_story_points:.0f} SP | {'On Track' if report.reliability.delivery_rate >= 80 else 'Needs Attention'} |",
+            f"| Delivery Rate | {report.reliability.delivery_rate}% | {'Good' if report.reliability.delivery_rate >= 80 else 'Below Target'} |",
+            f"| Carryover | {report.reliability.carryover_story_points:.0f} SP ({report.reliability.carryover_issues} issues) | {'Low' if report.reliability.carryover_rate <= 20 else 'High'} |",
+            f"| Bug Fix Rate | {report.reliability.bug_fix_rate}% ({report.reliability.bugs_completed}/{report.reliability.total_bugs}) | {'Good' if report.reliability.bug_fix_rate >= 80 else 'Needs Attention'} |",
+            "",
+        ])
+        
+        # Value by Initiative/OKR
+        if report.initiatives:
+            lines.extend([
+                "## Value Delivered by Initiative/OKR",
+                "",
+                "| Initiative | Delivered SP | Total SP | Completion | Issues |",
+                "|------------|--------------|----------|------------|--------|",
+            ])
+            for init in report.initiatives:
+                lines.append(
+                    f"| {init.summary[:40]}{'...' if len(init.summary) > 40 else ''} | {init.completed_story_points:.0f} | {init.total_story_points:.0f} | {init.completion_rate}% | {init.completed_issues}/{init.total_issues} |"
+                )
+            lines.append("")
+        
+        # AI Contribution
+        if report.ai_commits_count > 0 or report.ai_assisted_issues > 0:
+            lines.extend([
+                "## AI Contribution",
+                "",
+                "| Metric | Value |",
+                "|--------|-------|",
+                f"| AI-Assisted Issues | {report.ai_assisted_issues} |",
+                f"| AI Commits | {report.ai_commits_count} |",
+                f"| Estimated Time Saved | **{report.time_saved_hours} hours** |",
+                "",
+            ])
+        
+        # Key Outcomes
+        if report.key_outcomes:
+            lines.extend([
+                "## Key Outcomes",
+                "",
+            ])
+            for outcome in report.key_outcomes[:5]:
+                lines.append(f"- {outcome}")
+            lines.append("")
+    
+    # Cross-board comparison section
+    if len(valid_reports) > 1:
+        lines.extend([
+            "---",
+            "",
+            f"# Section {len(board_reports) + 1}: Cross-Board Comparison",
+            "",
+            "## Summary Comparison Table",
+            "",
+            "| Board | Sprint | Committed SP | Delivered SP | Delivery Rate | Carryover |",
+            "|-------|--------|--------------|--------------|---------------|-----------|",
+        ])
+        
+        for board_data in valid_reports:
+            report = board_data["report"]
+            lines.append(
+                f"| {board_data['board_name'][:20]} | {report.sprint_name[:20]} | "
+                f"{report.reliability.committed_story_points:.0f} | "
+                f"**{report.reliability.delivered_story_points:.0f}** | "
+                f"**{report.reliability.delivery_rate}%** | "
+                f"{report.reliability.carryover_story_points:.0f} SP |"
+            )
+        
+        lines.append("")
+        
+        # AI Contribution comparison
+        has_ai = any(r["report"].ai_commits_count > 0 or r["report"].ai_assisted_issues > 0 for r in valid_reports)
+        if has_ai:
+            lines.extend([
+                "## AI Contribution Comparison",
+                "",
+                "| Board | AI-Assisted Issues | AI Commits | Time Saved (hours) |",
+                "|-------|-------------------|------------|-------------------|",
+            ])
+            for board_data in valid_reports:
+                report = board_data["report"]
+                lines.append(
+                    f"| {board_data['board_name'][:20]} | "
+                    f"{report.ai_assisted_issues} | "
+                    f"{report.ai_commits_count} | "
+                    f"**{report.time_saved_hours}** |"
+                )
+            lines.append("")
+        
+        # ASCII Charts
+        if include_charts:
+            # Delivery Rate Chart
+            lines.extend([
+                "## Delivery Rate Comparison Chart",
+                "",
+                "```",
+            ])
+            
+            for board_data in valid_reports:
+                report = board_data["report"]
+                board_label = board_data["board_name"][:20].ljust(20)
+                rate = report.reliability.delivery_rate
+                bar_width = int(rate / 2.5)  # Scale to 40 chars for 100%
+                bar = "*" * bar_width
+                status = "OK" if rate >= 80 else "LOW"
+                lines.append(f"{board_label} |{bar.ljust(40)}| {rate:.1f}% [{status}]")
+            
+            lines.extend([
+                "```",
+                "",
+            ])
+            
+            # Story Points Delivered Chart
+            lines.extend([
+                "## Story Points Delivered Chart",
+                "",
+                "```",
+            ])
+            
+            max_sp = max(r["report"].completed_story_points for r in valid_reports) if valid_reports else 1
+            chart_width = 40
+            
+            for board_data in valid_reports:
+                report = board_data["report"]
+                board_label = board_data["board_name"][:20].ljust(20)
+                sp_width = int((report.completed_story_points / max_sp) * chart_width) if max_sp > 0 else 0
+                sp_bar = "=" * sp_width
+                lines.append(f"{board_label} |{sp_bar.ljust(chart_width)}| {report.completed_story_points:.0f} SP")
+            
+            lines.extend([
+                "```",
+                "",
+            ])
+            
+            # Carryover Chart
+            lines.extend([
+                "## Carryover Comparison Chart",
+                "",
+                "```",
+            ])
+            
+            max_carryover = max(r["report"].reliability.carryover_story_points for r in valid_reports) if valid_reports else 1
+            
+            for board_data in valid_reports:
+                report = board_data["report"]
+                board_label = board_data["board_name"][:20].ljust(20)
+                carryover = report.reliability.carryover_story_points
+                carryover_width = int((carryover / max_carryover) * chart_width) if max_carryover > 0 else 0
+                carryover_bar = "#" * carryover_width
+                status = "HIGH" if report.reliability.carryover_rate > 20 else "OK"
+                lines.append(f"{board_label} |{carryover_bar.ljust(chart_width)}| {carryover:.0f} SP [{status}]")
+            
+            lines.extend([
+                "```",
+                "",
+            ])
+    
+    lines.extend([
+        "---",
+        "",
+        "*Generated by PND Agents Multi-Board Value Delivered Report Tool*",
+    ])
+    
+    return "\n".join(lines)
+
+
 def generate_and_publish_value_delivered_report(
     sprint_id: Optional[int] = None,
     board_id: Optional[int] = None,
