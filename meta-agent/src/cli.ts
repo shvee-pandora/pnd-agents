@@ -425,6 +425,9 @@ class MetaAgentCLI {
                             "files": [arguments["source_file"]] if arguments.get("source_file") else [],
                         }
                     })
+                    # Convert result to dict if it has to_dict method (generated agents return dataclass)
+                    if hasattr(result, "to_dict"):
+                        result = result.to_dict()
                     return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
                 except Exception as e:
                     return [types.TextContent(type="text", text=f"${className} Agent Error: {str(e)}")]
