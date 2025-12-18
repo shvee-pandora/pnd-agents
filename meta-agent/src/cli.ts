@@ -431,11 +431,14 @@ class MetaAgentCLI {
 `;
 
       // Find the position to insert the handler (before the final else clause or at end of call_tool)
-      // Look for the pattern of the last elif block before the final else
-      const callToolEndPattern = /(            else:\s*\n\s*return \[types\.TextContent\(type="text", text=f"Unknown tool: \{name\}"\)\])/;
+      // Look for the pattern of the final else block that raises ValueError for unknown tools
+      const callToolEndPattern = /(            else:\s*\n\s*raise ValueError\(f"Unknown tool: \{name\}"\))/;
       const callToolMatch = content.match(callToolEndPattern);
       if (callToolMatch) {
         content = content.replace(callToolEndPattern, `${handlerCode}\n$1`);
+      } else {
+        console.error(`  Warning: Could not find insertion point for call_tool handler`);
+        return false;
       }
 
       fs.writeFileSync(MCP_REGISTRY_FILE, content);
