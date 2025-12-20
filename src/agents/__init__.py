@@ -11,6 +11,7 @@ from .figma_reader_agent import FigmaReaderAgent
 from .qa_agent import QAAgent
 from .sonar_validation_agent import SonarValidationAgent
 from .task_manager_agent import TaskManagerAgent
+from .test_case_writing_agent import TestCaseWritingAgent
 from .unit_test_agent import UnitTestAgent
 
 __all__ = [
@@ -21,5 +22,6 @@ __all__ = [
     "QAAgent",
     "SonarValidationAgent",
     "TaskManagerAgent",
+    "TestCaseWritingAgent",
     "UnitTestAgent",
 ]
