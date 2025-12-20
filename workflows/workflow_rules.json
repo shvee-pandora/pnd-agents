@@ -10,6 +10,7 @@
     "amplience_placement": ["amplience_placement"],
     "qa": ["unit_test", "review", "sonar"],
     "unit_test": ["unit_test", "sonar"],
+    "test_case_writing": ["test_case_writing", "qa"],
     "sonar": ["sonar", "review"],
     "code_review": ["review", "sonar"],
     "performance": ["performance", "frontend", "unit_test", "review"],
@@ -24,6 +25,7 @@
     "amplience_placement": [["amplience_placement"]],
     "qa": [["unit_test"], ["review"], ["sonar"]],
     "unit_test": [["unit_test"], ["sonar"]],
+    "test_case_writing": [["test_case_writing"], ["qa"]],
     "sonar": [["sonar"], ["review"]],
     "code_review": [["review"], ["sonar"]],
     "performance": [["performance"], ["frontend"], ["unit_test"], ["review"]],
@@ -102,6 +104,18 @@
       "100% coverage",
       "test coverage",
       "write tests"
+    ],
+    "test_case_writing": [
+      "test cases",
+      "test case",
+      "test plan",
+      "test scenarios",
+      "test documentation",
+      "qa documentation",
+      "acceptance criteria",
+      "gherkin",
+      "bdd",
+      "test specification"
     ],
     "sonar": [
       "sonar",
@@ -224,6 +238,13 @@
       "handler": "technical_debt_agent.run",
       "input": ["repo_path", "include_sonarcloud", "sonar_project_key", "sonar_branch"],
       "output": ["report", "summary", "register", "hotspots", "recommendations", "next_actions"]
+    },
+    "test_case_writing": {
+      "name": "Test Case Writing Agent",
+      "description": "Generate comprehensive test cases from requirements, user stories, or acceptance criteria",
+      "handler": "test_case_writing_agent.run",
+      "input": ["requirements", "feature_name", "acceptance_criteria", "include_security", "include_accessibility"],
+      "output": ["test_suites", "test_cases", "coverage_summary", "recommendations"]
     }
   },
   "defaults": {
