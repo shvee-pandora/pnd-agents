@@ -1,0 +1,24 @@
+{
+  "name": "pnd-meta-agent",
+  "version": "1.0.0",
+  "description": "Mastra-based Meta-Agent that generates pnd-agents compatible agent packages",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node --loader ts-node/esm src/index.ts",
+    "interview": "node --loader ts-node/esm src/cli.ts",
+    "generate-demo": "node --loader ts-node/esm src/cli.ts --demo",
+    "lint": "tsc --noEmit"
+  },
+  "keywords": ["mastra", "agent", "pnd-agents", "code-generation"],
+  "author": "Pandora Group",
+  "license": "MIT",
+  "dependencies": {
+    "@mastra/core": "^0.24.8",
+    "@types/node": "^25.0.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3",
+    "zod": "^3.25.76"
+  }
+}

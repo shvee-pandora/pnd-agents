@@ -712,37 +712,107 @@ def cmd_run_task(args):
 def cmd_analyze_task(args):
     """Analyze a task and show the workflow plan."""
     import sys
-    
+
     # Add parent directory to path for imports
     pnd_agents_path = get_pnd_agents_path()
     sys.path.insert(0, str(pnd_agents_path))
-    
+
     try:
         from workflows.workflow_engine import WorkflowEngine
     except ImportError as e:
         print(color(f"Error importing WorkflowEngine: {e}", Colors.RED))
         return 1
-    
+
     task = args.task
     engine = WorkflowEngine()
-    
+
     plan = engine.get_workflow_plan(task)
-    
+
     print(color("\n" + "=" * 60, Colors.CYAN))
     print(color("TASK ANALYSIS", Colors.BOLD))
     print(color("=" * 60, Colors.CYAN))
-    
+
     print(f"\nTask: \"{plan['task'][:80]}{'...' if len(plan['task']) > 80 else ''}\"")
     print(f"Detected Type: {color(plan['detected_type'], Colors.YELLOW)}")
     print(f"\nWorkflow Pipeline:")
-    
+
     for stage in plan['stages']:
         agent_name = stage['agent'].capitalize() + 'Agent'
         print(f"  {stage['step']}. {color(agent_name, Colors.CYAN)}")
         print(f"     -> {stage['description']}")
-    
+
     print(color("\n" + "=" * 60, Colors.CYAN))
     return 0
+
+
+def cmd_sprint_report(args):
+    """Generate a sprint AI report."""
+    import sys
+    import os
+    from pathlib import Path
+
+    # Add parent directory to path for imports
+    pnd_agents_path = get_pnd_agents_path()
+    sys.path.insert(0, str(pnd_agents_path))
+
+    # Load environment variables from .env
+    env_path = pnd_agents_path / ".env"
+    if env_path.exists():
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ[key] = value
+
+    try:
+        from tools.sprint_ai_report import generate_sprint_report
+    except ImportError as e:
+        print(color(f"Error importing sprint_ai_report: {e}", Colors.RED))
+        return 1
+
+    # Validate inputs
+    if not args.sprint_id and not args.board_id:
+        print(color("Error: Either --sprint-id or --board-id must be provided", Colors.RED))
+        return 1
+
+    print(color("\n" + "=" * 60, Colors.CYAN))
+    print(color("SPRINT AI REPORT", Colors.BOLD))
+    print(color("=" * 60, Colors.CYAN))
+
+    if args.sprint_id:
+        print(f"\nFetching data for sprint ID: {args.sprint_id}")
+    else:
+        print(f"\nFetching active sprint for board ID: {args.board_id}")
+
+    if not args.no_commits:
+        print(color("Including commit analysis from Azure DevOps...", Colors.YELLOW))
+
+    try:
+        report = generate_sprint_report(
+            sprint_id=args.sprint_id,
+            board_id=args.board_id,
+            include_commits=not args.no_commits,
+            output_format=args.format
+        )
+
+        print("\n")
+        print(report)
+
+        # Save to file if requested
+        if args.output:
+            with open(args.output, 'w') as f:
+                f.write(report)
+            print(color(f"\nReport saved to {args.output}", Colors.GREEN))
+
+        return 0
+
+    except Exception as e:
+        print(color(f"\nError generating report: {e}", Colors.RED))
+        if os.environ.get("DEBUG"):
+            import traceback
+            traceback.print_exc()
+        return 1
 
 
 def cmd_uninstall(args):
@@ -797,6 +867,9 @@ Examples:
   pnd-agents run-task "Create Stories carousel from Figma: ..."
   pnd-agents run-task "Build React component" --plan-only
   pnd-agents analyze-task "Create API endpoint for products"
+  pnd-agents sprint-report --sprint-id 16597    Generate AI report for sprint
+  pnd-agents sprint-report --board-id 795       Generate AI report for active sprint
+  pnd-agents sprint-report --sprint-id 16597 --format json -o report.json
         """
     )
     
@@ -899,7 +972,36 @@ Examples:
         help="Task description to analyze"
     )
     analyze_parser.set_defaults(func=cmd_analyze_task)
-    
+
+    # Sprint-report command
+    sprint_parser = subparsers.add_parser("sprint-report", help="Generate sprint AI contribution report")
+    sprint_parser.add_argument(
+        "--sprint-id",
+        type=int,
+        help="JIRA sprint ID (e.g., 16597)"
+    )
+    sprint_parser.add_argument(
+        "--board-id",
+        type=int,
+        help="JIRA board ID to find active sprint (e.g., 795)"
+    )
+    sprint_parser.add_argument(
+        "--no-commits",
+        action="store_true",
+        help="Skip Azure DevOps commit analysis"
+    )
+    sprint_parser.add_argument(
+        "--format",
+        choices=["markdown", "json"],
+        default="markdown",
+        help="Output format (default: markdown)"
+    )
+    sprint_parser.add_argument(
+        "--output", "-o",
+        help="Save report to file"
+    )
+    sprint_parser.set_defaults(func=cmd_sprint_report)
+
     args = parser.parse_args()
     
     if args.command is None:

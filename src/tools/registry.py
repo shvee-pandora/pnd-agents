@@ -27,6 +27,7 @@ from agents.sonar_validation_agent import SonarValidationAgent, validate_for_pr
 from agents.analytics_agent import AnalyticsAgent
 from agents.task_manager_agent import TaskManagerAgent
 from tools.jira_client import JiraClient, JiraConfig
+from tools.sprint_ai_report import SprintAIReportGenerator, generate_sprint_report, identify_ai_commits_in_range
 
 
 def register_tools(server: Server) -> None:
@@ -888,6 +889,385 @@ def register_tools(server: Server) -> None:
                     "properties": {}
                 }
             ),
+            # Sprint AI Report Tools
+            types.Tool(
+                name="sprint_ai_report",
+                description="Generate a comprehensive sprint report showing AI contribution metrics. Fetches data from JIRA and Azure DevOps to identify AI-generated commits. Designed for scrum masters and non-technical stakeholders - no repo cloning required.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "sprint_id": {
+                            "type": "integer",
+                            "description": "JIRA sprint ID (e.g., 16597)"
+                        },
+                        "board_id": {
+                            "type": "integer",
+                            "description": "JIRA board ID to find active sprint (e.g., 795). Use if sprint_id not known."
+                        },
+                        "include_commits": {
+                            "type": "boolean",
+                            "description": "Include Azure DevOps commit analysis (default: true)",
+                            "default": True
+                        },
+                        "format": {
+                            "type": "string",
+                            "description": "Output format: markdown (for display) or json (for processing)",
+                            "enum": ["markdown", "json"],
+                            "default": "markdown"
+                        }
+                    }
+                }
+            ),
+            types.Tool(
+                name="sprint_ai_commits",
+                description="Identify AI-generated commits in a date range by detecting Claude Code signatures. Returns list of commits with author, date, type, and linked JIRA issues.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "start_date": {
+                            "type": "string",
+                            "description": "Start date in ISO format (YYYY-MM-DD)"
+                        },
+                        "end_date": {
+                            "type": "string",
+                            "description": "End date in ISO format (YYYY-MM-DD)"
+                        }
+                    },
+                    "required": ["start_date", "end_date"]
+                }
+            ),
+            # Confluence Publishing Tools
+            types.Tool(
+                name="confluence_publish_sprint_report",
+                description="Generate a sprint AI report and automatically publish it to a Confluence page. Combines sprint_ai_report generation with Confluence publishing in one step.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "sprint_id": {
+                            "type": "integer",
+                            "description": "JIRA sprint ID"
+                        },
+                        "board_id": {
+                            "type": "integer",
+                            "description": "JIRA board ID to find active sprint. Use if sprint_id not known."
+                        },
+                        "space_key": {
+                            "type": "string",
+                            "description": "Confluence space key (e.g., 'SHAM'). Uses CONFLUENCE_SPACE_KEY env var if not provided."
+                        },
+                        "page_title": {
+                            "type": "string",
+                            "description": "Page title. Auto-generated from sprint name if not provided."
+                        },
+                        "parent_page_id": {
+                            "type": "string",
+                            "description": "Optional parent page ID to nest the report under."
+                        },
+                        "include_commits": {
+                            "type": "boolean",
+                            "description": "Include Azure DevOps commit analysis (default: true)",
+                            "default": True
+                        }
+                    }
+                }
+            ),
+            types.Tool(
+                name="confluence_publish_page",
+                description="Publish any markdown content to a Confluence page. Creates a new page or updates existing one with the same title.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "content": {
+                            "type": "string",
+                            "description": "Markdown content to publish"
+                        },
+                        "space_key": {
+                            "type": "string",
+                            "description": "Confluence space key (e.g., 'SHAM')"
+                        },
+                        "title": {
+                            "type": "string",
+                            "description": "Page title"
+                        },
+                        "parent_page_id": {
+                            "type": "string",
+                            "description": "Optional parent page ID"
+                        }
+                    },
+                    "required": ["content", "space_key", "title"]
+                }
+            ),
+            # Value Delivered Report Tools
+            types.Tool(
+                name="sprint_value_delivered_report",
+                description="Generate end-of-sprint value delivered report with Initiative/OKR linking, reliability metrics (commitment vs delivery, carryover, bug ratio), team breakdown, and AI contribution metrics. Designed for sprint retrospectives and stakeholder reporting.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "sprint_id": {
+                            "type": "integer",
+                            "description": "JIRA sprint ID"
+                        },
+                        "board_id": {
+                            "type": "integer",
+                            "description": "JIRA board ID to find active sprint. Use if sprint_id not known."
+                        },
+                        "team_filter": {
+                            "type": "string",
+                            "description": "Optional team/project key to filter results (e.g., 'EPA', 'INS')"
+                        },
+                        "include_ai_metrics": {
+                            "type": "boolean",
+                            "description": "Include AI contribution metrics (default: true)",
+                            "default": True
+                        },
+                        "format": {
+                            "type": "string",
+                            "description": "Output format: markdown (for display) or json (for processing)",
+                            "enum": ["markdown", "json"],
+                            "default": "markdown"
+                        }
+                    }
+                }
+            ),
+            types.Tool(
+                name="confluence_publish_value_delivered_report",
+                description="Generate end-of-sprint value delivered report and publish to Confluence. Includes Initiative/OKR linking, reliability metrics, team breakdown, and AI contribution.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "sprint_id": {
+                            "type": "integer",
+                            "description": "JIRA sprint ID"
+                        },
+                        "board_id": {
+                            "type": "integer",
+                            "description": "JIRA board ID to find active sprint. Use if sprint_id not known."
+                        },
+                        "team_filter": {
+                            "type": "string",
+                            "description": "Optional team/project key to filter results"
+                        },
+                        "space_key": {
+                            "type": "string",
+                            "description": "Confluence space key. Uses CONFLUENCE_SPACE_KEY env var if not provided."
+                        },
+                        "page_title": {
+                            "type": "string",
+                            "description": "Page title. Auto-generated from sprint name if not provided."
+                        },
+                        "parent_page_id": {
+                            "type": "string",
+                            "description": "Optional parent page ID to nest the report under."
+                        },
+                        "include_ai_metrics": {
+                            "type": "boolean",
+                            "description": "Include AI contribution metrics (default: true)",
+                            "default": True
+                        }
+                    }
+                }
+            ),
+            types.Tool(
+                name="multi_board_value_delivered_report",
+                description="Generate value delivered report for multiple boards with comparison. Produces full value delivered report per board (Initiative/OKR, reliability metrics, carryover, AI contribution) plus cross-board comparison section with ASCII charts. Ideal for comparing Online vs Retail or multiple team boards.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "board_configs": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "board_id": {
+                                        "type": "integer",
+                                        "description": "JIRA board ID"
+                                    },
+                                    "name": {
+                                        "type": "string",
+                                        "description": "Display name for the board (e.g., 'FIND - Board 847')"
+                                    },
+                                    "sprint_id": {
+                                        "type": "integer",
+                                        "description": "Optional specific sprint ID (uses active sprint if not provided)"
+                                    }
+                                },
+                                "required": ["board_id"]
+                            },
+                            "description": "List of board configurations to generate reports for"
+                        },
+                        "include_ai_metrics": {
+                            "type": "boolean",
+                            "description": "Include AI contribution metrics (default: true)",
+                            "default": True
+                        },
+                        "include_charts": {
+                            "type": "boolean",
+                            "description": "Include ASCII comparison charts (default: true)",
+                            "default": True
+                        }
+                    },
+                    "required": ["board_configs"]
+                }
+            ),
+            # Delivery Report Agent Tools
+            types.Tool(
+                name="delivery_report_generate",
+                description="Generate multi-sprint velocity report for delivery managers. Aggregates data from multiple closed sprints with ASCII horizontal bar charts showing rollover, commitment, and delivered story points. Supports cross-workspace reporting (Online/Retail) and per-sprint trend breakdown.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "board_ids": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "description": "List of JIRA board IDs to aggregate data from"
+                        },
+                        "workspace_name": {
+                            "type": "string",
+                            "description": "Name for the workspace/report (e.g., 'Online', 'Retail')",
+                            "default": "Default Workspace"
+                        },
+                        "project_keys": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Optional list of project keys to filter (e.g., ['EPA', 'INS'])"
+                        },
+                        "num_sprints": {
+                            "type": "integer",
+                            "description": "Number of recent closed sprints to include (default: all in date range)"
+                        },
+                        "start_date": {
+                            "type": "string",
+                            "description": "Filter sprints starting after this date (YYYY-MM-DD)"
+                        },
+                        "end_date": {
+                            "type": "string",
+                            "description": "Filter sprints ending before this date (YYYY-MM-DD)"
+                        },
+                        "include_ai_metrics": {
+                            "type": "boolean",
+                            "description": "Include AI contribution metrics (default: true)",
+                            "default": True
+                        },
+                        "output_format": {
+                            "type": "string",
+                            "description": "Output format: markdown, markdown_with_charts, or json",
+                            "enum": ["markdown", "markdown_with_charts", "json"],
+                            "default": "markdown_with_charts"
+                        }
+                    },
+                    "required": ["board_ids"]
+                }
+            ),
+            types.Tool(
+                name="delivery_report_publish",
+                description="Generate multi-sprint velocity report and publish to Confluence. Includes ASCII charts, cross-workspace aggregation, and per-sprint breakdown for delivery managers.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "board_ids": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "description": "List of JIRA board IDs to aggregate data from"
+                        },
+                        "workspace_name": {
+                            "type": "string",
+                            "description": "Name for the workspace/report (e.g., 'Online', 'Retail')",
+                            "default": "Default Workspace"
+                        },
+                        "project_keys": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Optional list of project keys to filter"
+                        },
+                        "num_sprints": {
+                            "type": "integer",
+                            "description": "Number of recent closed sprints to include"
+                        },
+                        "start_date": {
+                            "type": "string",
+                            "description": "Filter sprints starting after this date (YYYY-MM-DD)"
+                        },
+                        "end_date": {
+                            "type": "string",
+                            "description": "Filter sprints ending before this date (YYYY-MM-DD)"
+                        },
+                        "space_key": {
+                            "type": "string",
+                            "description": "Confluence space key. Uses CONFLUENCE_SPACE_KEY env var if not provided."
+                        },
+                        "page_title": {
+                            "type": "string",
+                            "description": "Page title. Auto-generated if not provided."
+                        },
+                        "parent_page_id": {
+                            "type": "string",
+                            "description": "Optional parent page ID to nest the report under."
+                        },
+                        "include_ai_metrics": {
+                            "type": "boolean",
+                            "description": "Include AI contribution metrics (default: true)",
+                            "default": True
+                        },
+                        "include_charts": {
+                            "type": "boolean",
+                            "description": "Include ASCII charts in output (default: true)",
+                            "default": True
+                        }
+                    },
+                    "required": ["board_ids"]
+                }
+            ),
+            types.Tool(
+                name="delivery_report_compare",
+                description="Generate comparison report with full report per board plus cross-board comparison table. Each board gets its own section with charts, tables, and AI metrics, followed by a final comparison section showing side-by-side metrics.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "board_configs": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "board_id": {
+                                        "type": "integer",
+                                        "description": "JIRA board ID"
+                                    },
+                                    "name": {
+                                        "type": "string",
+                                        "description": "Display name for the board (e.g., 'Board 847 - Inspire')"
+                                    },
+                                    "project_keys": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                        "description": "Optional list of project keys to filter"
+                                    }
+                                },
+                                "required": ["board_id"]
+                            },
+                            "description": "List of board configurations to compare"
+                        },
+                        "num_sprints": {
+                            "type": "integer",
+                            "description": "Number of recent closed sprints per board"
+                        },
+                        "start_date": {
+                            "type": "string",
+                            "description": "Filter sprints starting after this date (YYYY-MM-DD)"
+                        },
+                        "end_date": {
+                            "type": "string",
+                            "description": "Filter sprints ending before this date (YYYY-MM-DD)"
+                        },
+                        "include_ai_metrics": {
+                            "type": "boolean",
+                            "description": "Include AI contribution metrics (default: true)",
+                            "default": True
+                        }
+                    },
+                    "required": ["board_configs"]
+                }
+            ),
         ]
 
     # Register call_tool handler
@@ -1437,6 +1817,235 @@ AI Productivity Tracker Agent v1.0"""
                     return [types.TextContent(type="text", text=json.dumps({"status": "success", "message": "Task context cleared"}, indent=2))]
                 except Exception as tm_error:
                     return [types.TextContent(type="text", text=f"Task Manager Error: {str(tm_error)}")]
+
+            # Sprint AI Report Tools
+            elif name == "sprint_ai_report":
+                import json
+                try:
+                    sprint_id = arguments.get("sprint_id")
+                    board_id = arguments.get("board_id")
+                    include_commits = arguments.get("include_commits", True)
+                    output_format = arguments.get("format", "markdown")
+
+                    if not sprint_id and not board_id:
+                        return [types.TextContent(type="text", text="Error: Either sprint_id or board_id must be provided")]
+
+                    report = generate_sprint_report(
+                        sprint_id=sprint_id,
+                        board_id=board_id,
+                        include_commits=include_commits,
+                        output_format=output_format
+                    )
+                    return [types.TextContent(type="text", text=report)]
+                except Exception as report_error:
+                    return [types.TextContent(type="text", text=f"Sprint Report Error: {str(report_error)}")]
+
+            elif name == "sprint_ai_commits":
+                import json
+                try:
+                    start_date = arguments["start_date"]
+                    end_date = arguments["end_date"]
+
+                    commits = identify_ai_commits_in_range(start_date, end_date)
+                    result = {
+                        "status": "success",
+                        "count": len(commits),
+                        "commits": commits
+                    }
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as commits_error:
+                    return [types.TextContent(type="text", text=f"AI Commits Error: {str(commits_error)}")]
+
+            # Confluence Publishing Tools
+            elif name == "confluence_publish_sprint_report":
+                import json
+                try:
+                    from .sprint_ai_report import generate_and_publish_sprint_report
+
+                    sprint_id = arguments.get("sprint_id")
+                    board_id = arguments.get("board_id")
+
+                    if not sprint_id and not board_id:
+                        return [types.TextContent(type="text", text="Error: Either sprint_id or board_id must be provided")]
+
+                    result = generate_and_publish_sprint_report(
+                        sprint_id=sprint_id,
+                        board_id=board_id,
+                        space_key=arguments.get("space_key"),
+                        page_title=arguments.get("page_title"),
+                        parent_page_id=arguments.get("parent_page_id"),
+                        include_commits=arguments.get("include_commits", True)
+                    )
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as publish_error:
+                    return [types.TextContent(type="text", text=f"Confluence Publish Error: {str(publish_error)}")]
+
+            elif name == "confluence_publish_page":
+                import json
+                try:
+                    from .sprint_ai_report import publish_to_confluence
+
+                    result = publish_to_confluence(
+                        content=arguments["content"],
+                        space_key=arguments["space_key"],
+                        title=arguments["title"],
+                        parent_page_id=arguments.get("parent_page_id")
+                    )
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as publish_error:
+                    return [types.TextContent(type="text", text=f"Confluence Publish Error: {str(publish_error)}")]
+
+            # Value Delivered Report Tools
+            elif name == "sprint_value_delivered_report":
+                import json
+                try:
+                    from .sprint_ai_report import generate_value_delivered_report
+
+                    sprint_id = arguments.get("sprint_id")
+                    board_id = arguments.get("board_id")
+
+                    if not sprint_id and not board_id:
+                        return [types.TextContent(type="text", text="Error: Either sprint_id or board_id must be provided")]
+
+                    result = generate_value_delivered_report(
+                        sprint_id=sprint_id,
+                        board_id=board_id,
+                        team_filter=arguments.get("team_filter"),
+                        include_ai_metrics=arguments.get("include_ai_metrics", True),
+                        output_format=arguments.get("format", "markdown")
+                    )
+                    return [types.TextContent(type="text", text=result)]
+                except Exception as report_error:
+                    return [types.TextContent(type="text", text=f"Value Delivered Report Error: {str(report_error)}")]
+
+            elif name == "confluence_publish_value_delivered_report":
+                import json
+                try:
+                    from .sprint_ai_report import generate_and_publish_value_delivered_report
+
+                    sprint_id = arguments.get("sprint_id")
+                    board_id = arguments.get("board_id")
+
+                    if not sprint_id and not board_id:
+                        return [types.TextContent(type="text", text="Error: Either sprint_id or board_id must be provided")]
+
+                    result = generate_and_publish_value_delivered_report(
+                        sprint_id=sprint_id,
+                        board_id=board_id,
+                        team_filter=arguments.get("team_filter"),
+                        space_key=arguments.get("space_key"),
+                        page_title=arguments.get("page_title"),
+                        parent_page_id=arguments.get("parent_page_id"),
+                        include_ai_metrics=arguments.get("include_ai_metrics", True)
+                    )
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as publish_error:
+                    return [types.TextContent(type="text", text=f"Value Delivered Report Publish Error: {str(publish_error)}")]
+
+            elif name == "multi_board_value_delivered_report":
+                try:
+                    from .sprint_ai_report import generate_multi_board_value_delivered_report
+
+                    board_configs = arguments.get("board_configs", [])
+                    if not board_configs:
+                        return [types.TextContent(type="text", text="Error: board_configs is required")]
+
+                    result = generate_multi_board_value_delivered_report(
+                        board_configs=board_configs,
+                        include_ai_metrics=arguments.get("include_ai_metrics", True),
+                        include_charts=arguments.get("include_charts", True)
+                    )
+                    return [types.TextContent(type="text", text=result)]
+                except Exception as report_error:
+                    return [types.TextContent(type="text", text=f"Multi-Board Value Delivered Report Error: {str(report_error)}")]
+
+            # Delivery Report Agent Tools
+            elif name == "delivery_report_generate":
+                import json
+                try:
+                    from .delivery_report_agent import generate_delivery_report
+
+                    board_ids = arguments.get("board_ids", [])
+                    if not board_ids:
+                        return [types.TextContent(type="text", text="Error: board_ids is required")]
+
+                    result = generate_delivery_report(
+                        board_ids=board_ids,
+                        workspace_name=arguments.get("workspace_name", "Default Workspace"),
+                        project_keys=arguments.get("project_keys"),
+                        num_sprints=arguments.get("num_sprints"),
+                        start_date=arguments.get("start_date"),
+                        end_date=arguments.get("end_date"),
+                        include_ai_metrics=arguments.get("include_ai_metrics", True),
+                        output_format=arguments.get("output_format", "markdown_with_charts")
+                    )
+                    return [types.TextContent(type="text", text=result)]
+                except Exception as report_error:
+                    return [types.TextContent(type="text", text=f"Delivery Report Error: {str(report_error)}")]
+
+            elif name == "delivery_report_publish":
+                import json
+                try:
+                    from .delivery_report_agent import generate_and_publish_delivery_report
+
+                    board_ids = arguments.get("board_ids", [])
+                    if not board_ids:
+                        return [types.TextContent(type="text", text="Error: board_ids is required")]
+
+                    result = generate_and_publish_delivery_report(
+                        board_ids=board_ids,
+                        workspace_name=arguments.get("workspace_name", "Default Workspace"),
+                        project_keys=arguments.get("project_keys"),
+                        num_sprints=arguments.get("num_sprints"),
+                        start_date=arguments.get("start_date"),
+                        end_date=arguments.get("end_date"),
+                        space_key=arguments.get("space_key"),
+                        page_title=arguments.get("page_title"),
+                        parent_page_id=arguments.get("parent_page_id"),
+                        include_ai_metrics=arguments.get("include_ai_metrics", True),
+                        include_charts=arguments.get("include_charts", True)
+                    )
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as publish_error:
+                    return [types.TextContent(type="text", text=f"Delivery Report Publish Error: {str(publish_error)}")]
+
+            elif name == "delivery_report_compare":
+                try:
+                    from .delivery_report_agent import generate_delivery_report_comparison
+
+                    board_configs = arguments.get("board_configs", [])
+                    if not board_configs:
+                        return [types.TextContent(type="text", text="Error: board_configs is required")]
+
+                    result = generate_delivery_report_comparison(
+                        board_configs=board_configs,
+                        num_sprints=arguments.get("num_sprints"),
+                        start_date=arguments.get("start_date"),
+                        end_date=arguments.get("end_date"),
+                        include_ai_metrics=arguments.get("include_ai_metrics", True)
+                    )
+                    return [types.TextContent(type="text", text=result)]
+                except Exception as compare_error:
+                    return [types.TextContent(type="text", text=f"Delivery Report Compare Error: {str(compare_error)}")]
+
+            elif name == "unit_test_advisor":
+                import json
+                try:
+                    from agents.unit_test_advisor import UnitTestAdvisorAgent
+                    
+                    agent = UnitTestAdvisorAgent()
+                    result = agent.run({
+                        "task_description": arguments.get("task", "Analyze and provide recommendations"),
+                        "input_data": {
+                            "files": [arguments["source_file"]] if arguments.get("source_file") else [],
+                        }
+                    })
+                    # Convert result to dict if it has to_dict method (generated agents return dataclass)
+                    if hasattr(result, "to_dict"):
+                        result = result.to_dict()
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as e:
+                    return [types.TextContent(type="text", text=f"UnitTestAdvisor Agent Error: {str(e)}")]
 
             else:
                 raise ValueError(f"Unknown tool: {name}")
