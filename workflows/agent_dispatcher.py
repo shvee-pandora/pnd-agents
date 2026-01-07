@@ -36,6 +36,7 @@ class AgentDispatcher:
         self.register("frontend", self._frontend_handler)
         self.register("backend", self._backend_handler)
         self.register("amplience", self._amplience_handler)
+        self.register("amplience_placement", self._amplience_placement_handler)
         self.register("review", self._review_handler)
         self.register("qa", self._qa_handler)
         self.register("performance", self._performance_handler)
@@ -624,6 +625,71 @@ class AgentDispatcher:
             return AgentResult(
                 status="error",
                 error=f"Sonar validation failed: {str(e)}"
+            )
+    
+    def _amplience_placement_handler(self, context: Dict[str, Any]) -> AgentResult:
+        """
+        Amplience Placement Agent handler.
+        
+        Human-in-the-Loop agent that assists engineers and content editors
+        in placing existing Amplience modules into the correct page sections
+        based on Figma designs.
+        
+        CRITICAL CONSTRAINTS:
+        - NO autonomous publishing
+        - NO visual/design decisions
+        - NO content creation from scratch
+        - Draft/suggestion mode only
+        - Human approval required before write operations
+        """
+        task = context.get("task", "")
+        input_data = context.get("input", {})
+        metadata = context.get("metadata", {})
+        
+        try:
+            from agents.amplience_placement_agent import AmplicencePlacementAgent
+            
+            # Determine operation mode from metadata
+            mode_str = metadata.get("mode", "read_only")
+            from agents.amplience_placement_agent import OperationMode
+            mode_map = {
+                "read_only": OperationMode.READ_ONLY,
+                "draft_only": OperationMode.DRAFT_ONLY,
+                "full": OperationMode.FULL,
+            }
+            mode = mode_map.get(mode_str, OperationMode.READ_ONLY)
+            
+            agent = AmplicencePlacementAgent(mode=mode)
+            
+            # Build agent context
+            agent_context = {
+                "task_description": task,
+                "input_data": {
+                    "figma_url": input_data.get("figma_url"),
+                    "figma_file_id": input_data.get("figma_file_id"),
+                    "figma_node_id": input_data.get("figma_node_id"),
+                    "approval_status": input_data.get("approval_status"),
+                    "approved_by": input_data.get("approved_by"),
+                }
+            }
+            
+            result = agent.run(agent_context)
+            
+            return AgentResult(
+                status=result.get("status", "success"),
+                data=result.get("data", {}),
+                next=result.get("next"),
+                error=result.get("error")
+            )
+        except ImportError:
+            return AgentResult(
+                status="error",
+                error="AmplicencePlacementAgent not available. Please ensure the agent is properly installed."
+            )
+        except Exception as e:
+            return AgentResult(
+                status="error",
+                error=f"Amplience placement failed: {str(e)}"
             )
     
     # ==================== Helper Methods ====================

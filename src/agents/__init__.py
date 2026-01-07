@@ -4,6 +4,7 @@ PND Agents Package
 Re-exports all agent classes for convenient imports.
 """
 
+from .amplience_placement_agent import AmplicencePlacementAgent
 from .analytics_agent import AnalyticsAgent
 from .broken_experience_detector_agent import BrokenExperienceDetectorAgent
 from .commerce_agent import CommerceAgent
@@ -14,6 +15,7 @@ from .task_manager_agent import TaskManagerAgent
 from .unit_test_agent import UnitTestAgent
 
 __all__ = [
+    "AmplicencePlacementAgent",
     "AnalyticsAgent",
     "BrokenExperienceDetectorAgent",
     "CommerceAgent",

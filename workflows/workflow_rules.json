@@ -7,6 +7,7 @@
     "frontend": ["frontend", "unit_test", "review", "sonar", "performance"],
     "backend": ["backend", "unit_test", "review", "sonar"],
     "amplience": ["amplience", "frontend", "unit_test", "review", "sonar"],
+    "amplience_placement": ["amplience_placement"],
     "qa": ["unit_test", "review", "sonar"],
     "unit_test": ["unit_test", "sonar"],
     "sonar": ["sonar", "review"],
@@ -19,6 +20,7 @@
     "frontend": [["frontend"], ["unit_test", "performance"], ["review"], ["sonar"]],
     "backend": [["backend"], ["unit_test"], ["review"], ["sonar"]],
     "amplience": [["amplience"], ["frontend"], ["unit_test"], ["review"], ["sonar"]],
+    "amplience_placement": [["amplience_placement"]],
     "qa": [["unit_test"], ["review"], ["sonar"]],
     "unit_test": [["unit_test"], ["sonar"]],
     "sonar": [["sonar"], ["review"]],
@@ -67,6 +69,18 @@
       "amplience",
       "content model",
       "dynamic content"
+    ],
+    "amplience_placement": [
+      "placement",
+      "place modules",
+      "figma to amplience",
+      "design to cms",
+      "slot placement",
+      "module placement",
+      "cms placement",
+      "amplience placement",
+      "map figma",
+      "map design"
     ],
     "qa": [
       "tests",
@@ -180,6 +194,13 @@
       "handler": "sonar_validation_agent.run",
       "input": ["branch", "repo_path"],
       "output": ["issues", "fix_plans", "coverage", "pr_checklist", "quality_gate_status"]
+    },
+    "amplience_placement": {
+      "name": "Amplience Placement Agent",
+      "description": "Human-in-the-Loop agent that maps Figma designs to Amplience CMS modules with mandatory human approval before any write operations",
+      "handler": "amplience_placement_agent.run",
+      "input": ["figma_url", "figma_file_id", "figma_node_id", "approval_status", "approved_by"],
+      "output": ["placement_plan", "mappings", "confidence_scores", "review_summary", "draft_ids"]
     }
   },
   "defaults": {

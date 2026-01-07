@@ -264,6 +264,45 @@
       ],
       "model": "sonnet",
       "priority": 2
+    },
+    {
+      "id": "amplience-placement",
+      "name": "Amplience Placement Agent",
+      "description": "Human-in-the-Loop agent that assists engineers and content editors in placing existing Amplience modules into the correct page sections based on Figma designs. Requires explicit human approval before any write operations.",
+      "role": "specialist",
+      "capabilities": [
+        "figma-analysis",
+        "amplience-discovery",
+        "mapping-recommendation",
+        "human-review",
+        "draft-execution"
+      ],
+      "commands": [
+        "analyze-figma",
+        "discover-modules",
+        "generate-placement-plan",
+        "execute-approved-plan"
+      ],
+      "skills": [
+        "figma-parsing",
+        "amplience-content-types",
+        "pandora-content-patterns",
+        "slot-management",
+        "confidence-scoring"
+      ],
+      "tools": [
+        "figma-parser",
+        "amplience-api"
+      ],
+      "model": "sonnet",
+      "priority": 2,
+      "constraints": {
+        "no_autonomous_publishing": true,
+        "no_visual_design_decisions": true,
+        "no_content_creation_from_scratch": true,
+        "draft_mode_only": true,
+        "human_approval_required": true
+      }
     }
   ],
   "tools": [
