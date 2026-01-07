@@ -1,4 +1,4 @@
-# PG AI Squad
+# Pandora AI Squad
 
 A production-grade agentic system for Pandora Group, featuring MCP-compatible agents that can be loaded as Claude Desktop plugins.
 
