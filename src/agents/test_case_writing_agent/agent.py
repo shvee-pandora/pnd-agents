@@ -287,6 +287,421 @@ def enrich_requirements_with_external_docs(
     return enriched_requirements, fetched_docs
 
 
+# =============================================================================
+# JIRA Context Enrichment (Parent, Epic, Existing Test Cases)
+# =============================================================================
+
+@dataclass
+class JiraContext:
+    """Context gathered from JIRA ticket hierarchy and existing test cases."""
+    story_key: str
+    story_summary: str
+    story_description: str
+    parent_key: Optional[str] = None
+    parent_summary: Optional[str] = None
+    parent_description: Optional[str] = None
+    epic_key: Optional[str] = None
+    epic_summary: Optional[str] = None
+    epic_description: Optional[str] = None
+    linked_test_cases: List[Dict[str, Any]] = field(default_factory=list)
+    related_test_cases: List[Dict[str, Any]] = field(default_factory=list)
+    reusable_scenarios: List[str] = field(default_factory=list)
+
+    def to_requirements_context(self) -> str:
+        """Convert JIRA context to requirements text for test case generation."""
+        sections = []
+
+        # Story context
+        sections.append(f"## Story: {self.story_key}")
+        sections.append(f"**Summary:** {self.story_summary}")
+        if self.story_description:
+            sections.append(f"\n{self.story_description}")
+
+        # Parent context
+        if self.parent_key:
+            sections.append(f"\n## Parent: {self.parent_key}")
+            sections.append(f"**Summary:** {self.parent_summary or 'N/A'}")
+            if self.parent_description:
+                sections.append(f"\n{self.parent_description}")
+
+        # Epic context
+        if self.epic_key:
+            sections.append(f"\n## Epic: {self.epic_key}")
+            sections.append(f"**Summary:** {self.epic_summary or 'N/A'}")
+            if self.epic_description:
+                sections.append(f"\n{self.epic_description}")
+
+        # Existing test cases for reuse
+        if self.linked_test_cases or self.related_test_cases:
+            sections.append("\n## Existing Test Cases (Consider for Reuse)")
+            all_tests = self.linked_test_cases + self.related_test_cases
+            for tc in all_tests[:10]:  # Limit to 10
+                sections.append(f"- {tc.get('key')}: {tc.get('summary')}")
+
+        if self.reusable_scenarios:
+            sections.append("\n## Reusable Scenarios Identified")
+            for scenario in self.reusable_scenarios:
+                sections.append(f"- {scenario}")
+
+        return "\n".join(sections)
+
+
+def fetch_jira_context(
+    story_key: str,
+    jira_client: Any,
+    include_parent: bool = True,
+    include_epic: bool = True,
+    include_existing_tests: bool = True,
+) -> Optional[JiraContext]:
+    """
+    Fetch comprehensive JIRA context including parent, epic, and existing test cases.
+
+    Args:
+        story_key: JIRA story key (e.g., "OG-6606")
+        jira_client: JIRA client instance
+        include_parent: Whether to fetch parent ticket details
+        include_epic: Whether to fetch epic details
+        include_existing_tests: Whether to search for existing test cases
+
+    Returns:
+        JiraContext object with all gathered information
+    """
+    if not jira_client:
+        logger.warning("No JIRA client provided for context enrichment")
+        return None
+
+    try:
+        # Fetch the main story
+        story = jira_client.get_issue(story_key)
+        if not story:
+            logger.warning(f"Could not fetch story {story_key}")
+            return None
+
+        context = JiraContext(
+            story_key=story_key,
+            story_summary=story.summary,
+            story_description=story.description or "",
+        )
+
+        # Fetch parent ticket if exists
+        if include_parent:
+            parent_key = _get_parent_key(story_key, jira_client)
+            if parent_key:
+                parent = jira_client.get_issue(parent_key)
+                if parent:
+                    context.parent_key = parent_key
+                    context.parent_summary = parent.summary
+                    context.parent_description = parent.description
+
+        # Fetch epic if exists
+        if include_epic:
+            epic_key = _get_epic_key(story_key, jira_client)
+            if epic_key:
+                epic = jira_client.get_issue(epic_key)
+                if epic:
+                    context.epic_key = epic_key
+                    context.epic_summary = epic.summary
+                    context.epic_description = epic.description
+
+        # Fetch existing test cases
+        if include_existing_tests:
+            project_key = story_key.split("-")[0]
+
+            # Get linked test cases
+            linked_tests = _get_linked_test_cases(story_key, jira_client)
+            context.linked_test_cases = linked_tests
+
+            # Search for related test cases in the project
+            related_tests = _search_related_test_cases(
+                project_key,
+                story.summary,
+                jira_client,
+                exclude_keys=[tc["key"] for tc in linked_tests]
+            )
+            context.related_test_cases = related_tests
+
+            # Identify reusable scenarios
+            context.reusable_scenarios = _identify_reusable_scenarios(
+                linked_tests + related_tests
+            )
+
+        logger.info(f"Fetched JIRA context for {story_key}: parent={context.parent_key}, epic={context.epic_key}, "
+                   f"linked_tests={len(context.linked_test_cases)}, related_tests={len(context.related_test_cases)}")
+
+        return context
+
+    except Exception as e:
+        logger.error(f"Error fetching JIRA context for {story_key}: {e}")
+        return None
+
+
+def _get_parent_key(story_key: str, jira_client: Any) -> Optional[str]:
+    """Get the parent ticket key for a story."""
+    try:
+        # Use the JIRA API to get parent
+        response = jira_client.client.get(
+            f"issue/{story_key}",
+            params={"fields": "parent"}
+        )
+        if response.status_code == 200:
+            data = response.json()
+            parent = data.get("fields", {}).get("parent")
+            if parent:
+                return parent.get("key")
+    except Exception as e:
+        logger.debug(f"Could not get parent for {story_key}: {e}")
+    return None
+
+
+def _get_epic_key(story_key: str, jira_client: Any) -> Optional[str]:
+    """Get the epic key for a story."""
+    try:
+        # Try common epic link field names
+        epic_fields = ["customfield_10014", "customfield_10008", "epic", "parent"]
+        response = jira_client.client.get(
+            f"issue/{story_key}",
+            params={"fields": ",".join(epic_fields)}
+        )
+        if response.status_code == 200:
+            data = response.json()
+            fields = data.get("fields", {})
+
+            # Check each potential epic field
+            for field in epic_fields:
+                value = fields.get(field)
+                if value:
+                    if isinstance(value, str):
+                        return value
+                    elif isinstance(value, dict):
+                        return value.get("key")
+    except Exception as e:
+        logger.debug(f"Could not get epic for {story_key}: {e}")
+    return None
+
+
+def _get_linked_test_cases(story_key: str, jira_client: Any) -> List[Dict[str, Any]]:
+    """Get test cases linked to a story."""
+    test_cases = []
+    try:
+        links = jira_client.get_issue_links(story_key)
+        for link in links:
+            inward = link.get("inwardIssue", {})
+            outward = link.get("outwardIssue", {})
+
+            for issue in [inward, outward]:
+                if issue:
+                    issue_type = issue.get("fields", {}).get("issuetype", {}).get("name", "")
+                    if "test" in issue_type.lower():
+                        test_cases.append({
+                            "key": issue.get("key"),
+                            "summary": issue.get("fields", {}).get("summary", ""),
+                            "status": issue.get("fields", {}).get("status", {}).get("name", ""),
+                            "type": issue_type,
+                        })
+    except Exception as e:
+        logger.debug(f"Could not get linked test cases for {story_key}: {e}")
+    return test_cases
+
+
+def _search_related_test_cases(
+    project_key: str,
+    story_summary: str,
+    jira_client: Any,
+    exclude_keys: List[str] = None,
+    max_results: int = 20
+) -> List[Dict[str, Any]]:
+    """Search for related test cases in the project based on keywords."""
+    test_cases = []
+    exclude_keys = exclude_keys or []
+
+    try:
+        # Extract keywords from story summary
+        keywords = _extract_keywords(story_summary)
+        if not keywords:
+            return []
+
+        # Build JQL to search for test cases with similar keywords
+        keyword_conditions = " OR ".join([f'summary ~ "{kw}"' for kw in keywords[:5]])
+        jql = f'project = "{project_key}" AND issuetype = Test AND ({keyword_conditions})'
+
+        results = jira_client.search_issues(jql, max_results=max_results)
+        for issue in results:
+            if issue.key not in exclude_keys:
+                test_cases.append({
+                    "key": issue.key,
+                    "summary": issue.summary,
+                    "status": issue.status,
+                    "type": issue.issue_type,
+                })
+    except Exception as e:
+        logger.debug(f"Could not search related test cases: {e}")
+    return test_cases
+
+
+def _extract_keywords(text: str) -> List[str]:
+    """Extract meaningful keywords from text for search."""
+    # Remove common words and extract significant terms
+    stop_words = {
+        "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+        "of", "with", "by", "from", "as", "is", "was", "are", "were", "been",
+        "be", "have", "has", "had", "do", "does", "did", "will", "would",
+        "could", "should", "may", "might", "must", "shall", "can", "need",
+        "that", "this", "these", "those", "i", "you", "he", "she", "it", "we", "they",
+        "what", "which", "who", "whom", "when", "where", "why", "how",
+        "all", "each", "every", "both", "few", "more", "most", "other",
+        "some", "such", "no", "nor", "not", "only", "own", "same", "so",
+        "than", "too", "very", "just", "also", "now", "here", "there",
+    }
+
+    # Clean and tokenize
+    words = re.findall(r'\b[a-zA-Z]{3,}\b', text.lower())
+    keywords = [w for w in words if w not in stop_words]
+
+    # Return unique keywords, preserving order
+    return list(dict.fromkeys(keywords))[:10]
+
+
+def _identify_reusable_scenarios(test_cases: List[Dict[str, Any]]) -> List[str]:
+    """Identify scenarios from existing test cases that could be reused."""
+    reusable = []
+    for tc in test_cases:
+        summary = tc.get("summary", "")
+        # Extract the scenario description from test case title
+        # Common patterns: "Validate that...", "Verify...", "Test..."
+        patterns = [
+            r"(?:Validate|Verify|Test|Check)\s+(?:that\s+)?(.+)",
+            r"POC\s*-\s*(.+)",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, summary, re.IGNORECASE)
+            if match:
+                reusable.append(match.group(1).strip())
+                break
+    return reusable[:10]  # Limit to 10 reusable scenarios
+
+
+def merge_similar_scenarios(scenarios: List[Dict[str, Any]], similarity_threshold: float = 0.6) -> List[Dict[str, Any]]:
+    """
+    Merge similar test scenarios to reduce redundancy.
+
+    Args:
+        scenarios: List of scenario dictionaries with 'name' and 'steps' keys
+        similarity_threshold: Threshold for considering scenarios similar (0-1)
+
+    Returns:
+        List of merged scenarios
+    """
+    if len(scenarios) <= 1:
+        return scenarios
+
+    merged = []
+    used_indices = set()
+
+    for i, scenario1 in enumerate(scenarios):
+        if i in used_indices:
+            continue
+
+        merged_scenario = scenario1.copy()
+        merged_names = [scenario1.get("name", "")]
+        merged_steps = list(scenario1.get("steps", []))
+
+        for j, scenario2 in enumerate(scenarios[i + 1:], start=i + 1):
+            if j in used_indices:
+                continue
+
+            similarity = _calculate_scenario_similarity(scenario1, scenario2)
+            if similarity >= similarity_threshold:
+                # Merge scenarios
+                used_indices.add(j)
+                merged_names.append(scenario2.get("name", ""))
+
+                # Add unique steps from scenario2
+                for step in scenario2.get("steps", []):
+                    if step not in merged_steps:
+                        merged_steps.append(step)
+
+        # Update merged scenario
+        if len(merged_names) > 1:
+            merged_scenario["name"] = f"Combined: {' + '.join(merged_names[:3])}"
+            if len(merged_names) > 3:
+                merged_scenario["name"] += f" (+{len(merged_names) - 3} more)"
+            merged_scenario["steps"] = merged_steps
+            merged_scenario["merged_count"] = len(merged_names)
+            merged_scenario["original_scenarios"] = merged_names
+
+        merged.append(merged_scenario)
+        used_indices.add(i)
+
+    logger.info(f"Merged {len(scenarios)} scenarios into {len(merged)} test cases")
+    return merged
+
+
+def _calculate_scenario_similarity(scenario1: Dict[str, Any], scenario2: Dict[str, Any]) -> float:
+    """Calculate similarity between two scenarios based on keywords."""
+    name1 = scenario1.get("name", "").lower()
+    name2 = scenario2.get("name", "").lower()
+
+    # Extract keywords
+    keywords1 = set(_extract_keywords(name1))
+    keywords2 = set(_extract_keywords(name2))
+
+    if not keywords1 or not keywords2:
+        return 0.0
+
+    # Jaccard similarity
+    intersection = len(keywords1 & keywords2)
+    union = len(keywords1 | keywords2)
+
+    return intersection / union if union > 0 else 0.0
+
+
+def enrich_requirements_with_jira_context(
+    requirements: str,
+    story_key: str,
+    jira_client: Any,
+    include_parent: bool = True,
+    include_epic: bool = True,
+    include_existing_tests: bool = True,
+) -> Tuple[str, Optional[JiraContext]]:
+    """
+    Enrich requirements with JIRA context including parent, epic, and existing test cases.
+
+    Args:
+        requirements: Original requirements text
+        story_key: JIRA story key
+        jira_client: JIRA client instance
+        include_parent: Whether to include parent ticket context
+        include_epic: Whether to include epic context
+        include_existing_tests: Whether to include existing test cases
+
+    Returns:
+        Tuple of (enriched requirements, JiraContext object)
+    """
+    context = fetch_jira_context(
+        story_key,
+        jira_client,
+        include_parent=include_parent,
+        include_epic=include_epic,
+        include_existing_tests=include_existing_tests,
+    )
+
+    if not context:
+        return requirements, None
+
+    # Build enriched requirements
+    enriched_parts = [requirements]
+
+    # Add JIRA context
+    jira_context_text = context.to_requirements_context()
+    if jira_context_text:
+        enriched_parts.append("\n\n---\n## JIRA Context\n")
+        enriched_parts.append(jira_context_text)
+
+    enriched_requirements = "\n".join(enriched_parts)
+
+    return enriched_requirements, context
+
+
 class TestCaseType(Enum):
     """Types of test cases."""
     FUNCTIONAL = "functional"
@@ -301,10 +716,10 @@ class TestCaseType(Enum):
 
 class TestCasePriority(Enum):
     """Priority levels for test cases."""
-    CRITICAL = "critical"
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
+    CRITICAL = "Highest"
+    HIGH = "High"
+    MEDIUM = "Medium"
+    LOW = "Low"
 
 
 class TestCaseFormat(Enum):
@@ -3051,6 +3466,25 @@ def run_jira_workflow(
     # Parse project key from story key
     project_key = story_key.split("-")[0] if "-" in story_key else "PANDORA"
 
+    # Enrich requirements with JIRA context (parent, epic, existing test cases)
+    jira_context = None
+    enriched_requirements = requirements
+    if jira_client:
+        enriched_requirements, jira_context = enrich_requirements_with_jira_context(
+            requirements=requirements,
+            story_key=story_key,
+            jira_client=jira_client,
+            include_parent=True,
+            include_epic=True,
+            include_existing_tests=True,
+        )
+        if jira_context:
+            logger.info(f"JIRA context enriched for {story_key}: "
+                       f"parent={jira_context.parent_key}, "
+                       f"epic={jira_context.epic_key}, "
+                       f"linked_tests={len(jira_context.linked_test_cases)}, "
+                       f"related_tests={len(jira_context.related_test_cases)}")
+
     # Create workflow config
     config = JiraWorkflowConfig(
         project_key=project_key,
@@ -3083,13 +3517,32 @@ def run_jira_workflow(
         default_label="qAIn",
     )
 
-    # Generate test suite (enriched with external documentation if provided)
+    # Generate test suite (enriched with JIRA context and external documentation)
     test_suite = agent.generate_test_suite(
-        requirements,
+        enriched_requirements,
         feature_name,
         include_all_types=False,
         external_doc_links=external_doc_links
     )
+
+    # Apply scenario merging to reduce redundant test cases
+    if len(test_suite.test_cases) > 0:
+        original_count = len(test_suite.test_cases)
+        # Convert test cases to scenario format for merging
+        scenarios = [
+            {
+                "name": tc.title,
+                "description": tc.description,
+                "test_case": tc
+            }
+            for tc in test_suite.test_cases
+        ]
+        merged_scenarios = merge_similar_scenarios(scenarios, similarity_threshold=0.6)
+        # Update test suite with merged test cases
+        test_suite.test_cases = [s["test_case"] for s in merged_scenarios]
+        merged_count = len(test_suite.test_cases)
+        if original_count != merged_count:
+            logger.info(f"Merged {original_count} test cases into {merged_count} (reduced by {original_count - merged_count})")
 
     # Generate JIRA comments
     coverage_comment = generate_coverage_comment(test_suite, story_key, [])
@@ -3115,6 +3568,15 @@ def run_jira_workflow(
             "byTestingCycle": test_suite._count_by_testing_cycle(),
         },
         "priority_level_table": test_suite.get_priority_level_table(),
+        "jira_context": {
+            "parent_key": jira_context.parent_key if jira_context else None,
+            "parent_summary": jira_context.parent_summary if jira_context else None,
+            "epic_key": jira_context.epic_key if jira_context else None,
+            "epic_summary": jira_context.epic_summary if jira_context else None,
+            "linked_test_cases_count": len(jira_context.linked_test_cases) if jira_context else 0,
+            "related_test_cases_count": len(jira_context.related_test_cases) if jira_context else 0,
+            "reusable_scenarios": jira_context.reusable_scenarios if jira_context else [],
+        } if jira_context else None,
     }
 
     # Create in JIRA if configured
