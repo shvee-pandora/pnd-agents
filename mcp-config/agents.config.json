@@ -303,6 +303,106 @@
         "draft_mode_only": true,
         "human_approval_required": true
       }
+    },
+    {
+      "id": "prd-to-jira",
+      "name": "PRD to Jira Breakdown Agent",
+      "description": "Converts PRD or Confluence text into structured Jira work items including epics, user stories with acceptance criteria in Gherkin format, dependencies, and risk assessments. Designed for Product Managers using Claude Desktop.",
+      "role": "specialist",
+      "category": "Product Management",
+      "capabilities": [
+        "prd-analysis",
+        "epic-creation",
+        "story-writing",
+        "acceptance-criteria-gherkin",
+        "dependency-mapping",
+        "risk-assessment"
+      ],
+      "commands": [
+        "prd-to-jira",
+        "generate-stories",
+        "identify-dependencies"
+      ],
+      "skills": [
+        "agile-methodologies",
+        "jira-best-practices",
+        "gherkin-syntax",
+        "product-requirements"
+      ],
+      "tools": [],
+      "model": "sonnet",
+      "priority": 2,
+      "metadata": {
+        "claude_desktop_friendly": true,
+        "requires_coding": false,
+        "target_audience": ["Product Managers", "TPMs", "Engineering Managers"]
+      }
+    },
+    {
+      "id": "exec-summary",
+      "name": "Stakeholder Update / Exec Summary Agent",
+      "description": "Converts sprint data or Jira summaries into executive-friendly updates with 1-page summaries, risks & mitigations, and decisions required. Designed for Director/VP audiences.",
+      "role": "specialist",
+      "category": "Product Management",
+      "capabilities": [
+        "sprint-summarization",
+        "executive-communication",
+        "risk-reporting",
+        "decision-framing",
+        "metrics-visualization"
+      ],
+      "commands": [
+        "generate-exec-summary",
+        "create-stakeholder-update",
+        "format-sprint-report"
+      ],
+      "skills": [
+        "executive-communication",
+        "data-synthesis",
+        "risk-management",
+        "stakeholder-management"
+      ],
+      "tools": [],
+      "model": "sonnet",
+      "priority": 2,
+      "metadata": {
+        "claude_desktop_friendly": true,
+        "requires_coding": false,
+        "target_audience": ["Product Managers", "TPMs", "Engineering Managers"]
+      }
+    },
+    {
+      "id": "roadmap-review",
+      "name": "Roadmap Review & Risk Agent",
+      "description": "Critiques product roadmaps and OKRs to identify risks, missing dependencies, timeline realism issues, and provides actionable improvement suggestions.",
+      "role": "specialist",
+      "category": "Product Management",
+      "capabilities": [
+        "roadmap-analysis",
+        "timeline-assessment",
+        "dependency-identification",
+        "risk-evaluation",
+        "improvement-recommendations"
+      ],
+      "commands": [
+        "review-roadmap",
+        "assess-timeline",
+        "identify-risks"
+      ],
+      "skills": [
+        "product-strategy",
+        "roadmap-planning",
+        "risk-assessment",
+        "okr-methodology"
+      ],
+      "tools": [],
+      "model": "sonnet",
+      "priority": 2,
+      "metadata": {
+        "claude_desktop_friendly": true,
+        "requires_coding": false,
+        "target_audience": ["Product Managers", "TPMs", "Engineering Managers"]
+      }
     }
   ],
   "tools": [
