@@ -64,13 +64,17 @@ class TaskManagerAgent:
         "default": [["frontend"], ["review"], ["unit_test"], ["sonar"]],
     }
     
-    def __init__(self, rules_file: Optional[str] = None):
+    def __init__(self, rules_file: Optional[str] = None, repo_root: Optional[str] = None):
         """
         Initialize the Task Manager Agent.
         
         Args:
             rules_file: Path to workflow_rules.json. If not provided,
                        uses default path.
+            repo_root: Optional path to target repository root. If provided
+                      and the repo has a .claude/repo-profile.json, the
+                      Code Singularity pattern will be used to inject
+                      repo context into all workflows.
         """
         if rules_file is None:
             # Go up from src/agents/task_manager_agent/ to repo root, then into workflows/
@@ -82,12 +86,13 @@ class TaskManagerAgent:
             agent_dir = os.path.dirname(os.path.abspath(__file__))  # src/agents/task_manager_agent/
             agents_dir = os.path.dirname(agent_dir)  # src/agents/
             src_dir = os.path.dirname(agents_dir)  # src/
-            repo_root = os.path.dirname(src_dir)  # repo root
-            rules_file = os.path.join(repo_root, "workflows", "workflow_rules.json")
+            pnd_agents_root = os.path.dirname(src_dir)  # repo root
+            rules_file = os.path.join(pnd_agents_root, "workflows", "workflow_rules.json")
         
         self.engine = WorkflowEngine(rules_file)
         self.dispatcher = get_dispatcher()
         self._rules_file = rules_file
+        self._repo_root = repo_root
         
         for agent_name in self.dispatcher.list_agents():
             handler = self.dispatcher.get_handler(agent_name)
@@ -98,6 +103,63 @@ class TaskManagerAgent:
         self._on_stage_complete: Optional[Callable[[str, AgentResult, WorkflowContext], None]] = None
         
         self._load_parallel_groups_from_rules()
+        
+        # Initialize Code Singularity pattern if repo_root provided
+        if repo_root:
+            self._init_repo_adapter(repo_root)
+    
+    def _init_repo_adapter(self, repo_root: str):
+        """
+        Initialize RepoAdapter for Code Singularity pattern.
+        
+        Looks for .claude/repo-profile.json in the target repo and
+        configures the workflow engine to inject repo context.
+        
+        Args:
+            repo_root: Path to the target repository root.
+        """
+        try:
+            from src.agents.repo_profile import load_repo_profile, discover_repo_profile
+            from src.agents.repo_adapter import RepoAdapter
+            
+            profile_path = discover_repo_profile(repo_root)
+            if profile_path:
+                profile = load_repo_profile(profile_path)
+                adapter = RepoAdapter(profile=profile, repo_root=repo_root)
+                self.engine.set_repo_adapter(adapter)
+                logger.info(f"Code Singularity enabled for: {profile.name}")
+            else:
+                logger.debug(f"No repo-profile.json found in {repo_root}, Code Singularity disabled")
+        except ImportError as e:
+            logger.warning(f"Could not import repo_adapter modules: {e}")
+        except Exception as e:
+            logger.warning(f"Could not initialize RepoAdapter: {e}")
+    
+    def set_repo_adapter_from_path(self, repo_root: str):
+        """
+        Set or update the RepoAdapter for a target repository.
+        
+        This enables the Code Singularity pattern for the specified repo,
+        injecting repo context (commands, paths, constraints) into all
+        subsequent workflows.
+        
+        Args:
+            repo_root: Path to the target repository root.
+        """
+        self._repo_root = repo_root
+        self._init_repo_adapter(repo_root)
+    
+    def get_repo_context(self) -> Optional[Dict[str, Any]]:
+        """
+        Get the current repo context if Code Singularity is enabled.
+        
+        Returns:
+            Dictionary with repo context, or None if not configured.
+        """
+        adapter = self.engine.get_repo_adapter()
+        if adapter:
+            return adapter.get_context_for_agent()
+        return None
     
     def _load_parallel_groups_from_rules(self):
         """Load parallel groups from workflow_rules.json if available."""
