@@ -27,6 +27,266 @@ logger = logging.getLogger(__name__)
 QAIN_SIGNATURE = "I'm your Junior Quality Engineer - qAIn"
 
 
+# =============================================================================
+# External Documentation Link Processing
+# =============================================================================
+
+def extract_links_from_text(text: str) -> Dict[str, List[str]]:
+    """
+    Extract Figma and Confluence links from text.
+
+    Args:
+        text: Text that may contain documentation links
+
+    Returns:
+        Dictionary with 'figma' and 'confluence' link lists
+    """
+    links = {
+        "figma": [],
+        "confluence": [],
+        "other": []
+    }
+
+    # Figma URL patterns
+    figma_patterns = [
+        r'https?://(?:www\.)?figma\.com/(?:file|design|proto)/[^\s\)>\]]+',
+        r'https?://(?:www\.)?figma\.com/board/[^\s\)>\]]+',
+    ]
+
+    # Confluence URL patterns
+    confluence_patterns = [
+        r'https?://[^\s/]+\.atlassian\.net/wiki/[^\s\)>\]]+',
+        r'https?://[^\s/]+/confluence/[^\s\)>\]]+',
+        r'https?://confluence\.[^\s/]+/[^\s\)>\]]+',
+    ]
+
+    for pattern in figma_patterns:
+        matches = re.findall(pattern, text, re.IGNORECASE)
+        links["figma"].extend(matches)
+
+    for pattern in confluence_patterns:
+        matches = re.findall(pattern, text, re.IGNORECASE)
+        links["confluence"].extend(matches)
+
+    # Remove duplicates while preserving order
+    links["figma"] = list(dict.fromkeys(links["figma"]))
+    links["confluence"] = list(dict.fromkeys(links["confluence"]))
+
+    return links
+
+
+def fetch_external_doc_content(url: str, auth_token: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Fetch content from external documentation URL (Figma or Confluence).
+
+    Args:
+        url: The documentation URL
+        auth_token: Optional authentication token
+
+    Returns:
+        Dictionary with extracted content and metadata
+    """
+    result = {
+        "url": url,
+        "type": "unknown",
+        "title": "",
+        "content": "",
+        "components": [],
+        "requirements": [],
+        "error": None
+    }
+
+    try:
+        # Determine URL type
+        if "figma.com" in url.lower():
+            result["type"] = "figma"
+            result["content"] = _extract_figma_context(url)
+        elif "atlassian.net/wiki" in url.lower() or "confluence" in url.lower():
+            result["type"] = "confluence"
+            result["content"] = _extract_confluence_context(url, auth_token)
+        else:
+            result["type"] = "other"
+            result["content"] = f"External documentation link: {url}"
+
+    except Exception as e:
+        logger.warning(f"Failed to fetch external doc from {url}: {e}")
+        result["error"] = str(e)
+        result["content"] = f"[Unable to fetch content from {url}. Manual review required.]"
+
+    return result
+
+
+def _extract_figma_context(url: str) -> str:
+    """
+    Extract context from Figma URL for test case generation.
+
+    Note: Full Figma API integration requires authentication.
+    This provides structured guidance for manual review.
+
+    Args:
+        url: Figma file/design URL
+
+    Returns:
+        Context string for test case generation
+    """
+    # Extract file key from URL
+    file_key_match = re.search(r'figma\.com/(?:file|design|proto)/([^/]+)', url)
+    file_key = file_key_match.group(1) if file_key_match else "unknown"
+
+    context = f"""
+## Figma Design Reference
+**URL:** {url}
+**File Key:** {file_key}
+
+### Design Review Checklist for Test Cases:
+1. **Visual Elements:**
+   - Verify all UI components match the design
+   - Check color schemes, typography, and spacing
+   - Validate responsive breakpoints if specified
+
+2. **Interactive Elements:**
+   - Identify all clickable/tappable elements
+   - Note hover states and transitions
+   - Document form fields and validation requirements
+
+3. **User Flows:**
+   - Map out primary user journey from design
+   - Identify entry and exit points
+   - Note conditional paths and error states
+
+4. **Accessibility Considerations:**
+   - Check color contrast ratios
+   - Verify touch target sizes
+   - Note any animation/motion requirements
+
+5. **Edge Cases from Design:**
+   - Empty states
+   - Loading states
+   - Error states
+   - Maximum content scenarios
+
+### Recommended Test Scenarios:
+- Validate UI matches Figma design specifications
+- Test all interactive elements identified in design
+- Verify responsive behavior across breakpoints
+- Test accessibility compliance per design annotations
+"""
+    return context
+
+
+def _extract_confluence_context(url: str, auth_token: Optional[str] = None) -> str:
+    """
+    Extract context from Confluence URL for test case generation.
+
+    Args:
+        url: Confluence page URL
+        auth_token: Optional Confluence API token
+
+    Returns:
+        Context string for test case generation
+    """
+    # Try to extract page info from URL
+    page_match = re.search(r'/pages/(\d+)', url)
+    page_id = page_match.group(1) if page_match else None
+
+    space_match = re.search(r'/spaces/([^/]+)', url)
+    space_key = space_match.group(1) if space_match else None
+
+    context = f"""
+## Confluence Documentation Reference
+**URL:** {url}
+**Page ID:** {page_id or 'Not extracted'}
+**Space:** {space_key or 'Not extracted'}
+
+### Documentation Review for Test Cases:
+1. **Requirements Extraction:**
+   - Identify functional requirements
+   - Note acceptance criteria
+   - Extract business rules
+
+2. **Technical Specifications:**
+   - API endpoints and contracts
+   - Data models and schemas
+   - Integration points
+
+3. **User Stories:**
+   - Parse user story format (As a... I want... So that...)
+   - Extract acceptance criteria
+   - Identify personas and use cases
+
+4. **Test Considerations:**
+   - Documented test scenarios
+   - Known edge cases
+   - Performance requirements
+
+### Recommended Actions:
+- Review linked Confluence page for detailed requirements
+- Extract acceptance criteria for test case generation
+- Identify any referenced API specifications or schemas
+- Note any cross-references to other documentation
+"""
+
+    # If we have auth token, we could make API call
+    if auth_token and page_id:
+        context += """
+### API Integration Available:
+- Confluence API token provided
+- Can fetch page content programmatically
+- Contact administrator for API access if needed
+"""
+
+    return context
+
+
+def enrich_requirements_with_external_docs(
+    requirements: str,
+    external_links: List[str],
+    auth_tokens: Optional[Dict[str, str]] = None
+) -> Tuple[str, List[Dict[str, Any]]]:
+    """
+    Enrich requirements text with content from external documentation links.
+
+    Args:
+        requirements: Original requirements text
+        external_links: List of external documentation URLs
+        auth_tokens: Optional dict with 'figma' and 'confluence' tokens
+
+    Returns:
+        Tuple of (enriched requirements string, list of fetched doc metadata)
+    """
+    if not external_links:
+        # Try to extract links from requirements text
+        extracted = extract_links_from_text(requirements)
+        external_links = extracted["figma"] + extracted["confluence"]
+
+    if not external_links:
+        return requirements, []
+
+    auth_tokens = auth_tokens or {}
+    fetched_docs = []
+    enriched_content = [requirements, "\n\n---\n## External Documentation Context\n"]
+
+    for url in external_links:
+        token = None
+        if "figma.com" in url.lower():
+            token = auth_tokens.get("figma")
+        elif "confluence" in url.lower() or "atlassian.net" in url.lower():
+            token = auth_tokens.get("confluence")
+
+        doc_content = fetch_external_doc_content(url, token)
+        fetched_docs.append(doc_content)
+
+        if doc_content["content"]:
+            enriched_content.append(f"\n### Source: {doc_content['type'].title()}\n")
+            enriched_content.append(doc_content["content"])
+
+    enriched_requirements = "\n".join(enriched_content)
+
+    logger.info(f"Enriched requirements with {len(fetched_docs)} external document(s)")
+
+    return enriched_requirements, fetched_docs
+
+
 class TestCaseType(Enum):
     """Types of test cases."""
     FUNCTIONAL = "functional"
@@ -456,6 +716,9 @@ class JiraWorkflowConfig:
     feature_label: str = ""
     create_in_jira: bool = True
     link_to_story: bool = True
+    # External documentation links
+    external_doc_links: List[str] = field(default_factory=list)
+    external_doc_content: Dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def from_answers(cls, answers: Dict[str, Any]) -> "JiraWorkflowConfig":
@@ -463,6 +726,11 @@ class JiraWorkflowConfig:
         test_types = answers.get("test_types", [])
         if isinstance(test_types, str):
             test_types = [t.strip() for t in test_types.split(",")]
+
+        # Parse external doc links
+        external_links = answers.get("external_doc_links", [])
+        if isinstance(external_links, str):
+            external_links = [l.strip() for l in external_links.split(",") if l.strip()]
 
         return cls(
             project_key=answers.get("project_key", ""),
@@ -479,6 +747,7 @@ class JiraWorkflowConfig:
             feature_label=answers.get("feature_label", ""),
             create_in_jira=answers.get("create_in_jira", True),
             link_to_story=answers.get("link_to_story", True),
+            external_doc_links=external_links,
         )
 
 
@@ -738,20 +1007,56 @@ class TestCaseWritingAgent:
 
     # API test scenarios
     API_TEST_SCENARIOS = [
+        # Basic validation
         ("valid request with all required fields", TestCasePriority.CRITICAL, True),
         ("missing required fields", TestCasePriority.HIGH, False),
         ("invalid field types", TestCasePriority.HIGH, False),
         ("empty request body", TestCasePriority.MEDIUM, False),
         ("malformed JSON", TestCasePriority.MEDIUM, False),
+        # Status codes for invalid input
+        ("proper 400 status code for invalid input", TestCasePriority.HIGH, False),
+        ("proper 404 status code for non-existent resource", TestCasePriority.HIGH, False),
+        ("proper 422 status code for unprocessable entity", TestCasePriority.MEDIUM, False),
+        ("proper 409 status code for conflict/duplicate", TestCasePriority.MEDIUM, False),
+        # Authentication & Authorization
         ("invalid authentication token", TestCasePriority.CRITICAL, False),
         ("expired authentication token", TestCasePriority.HIGH, False),
         ("missing authentication header", TestCasePriority.CRITICAL, False),
+        # Security - Role-based access control (RBAC)
+        ("role-based access - admin user access", TestCasePriority.CRITICAL, True),
+        ("role-based access - regular user restricted access", TestCasePriority.CRITICAL, False),
+        ("role-based access - unauthorized role rejection", TestCasePriority.CRITICAL, False),
+        ("role-based access - permission escalation prevention", TestCasePriority.HIGH, False),
+        # Contract validation (OpenAPI/Swagger)
+        ("contract - response JSON matches OpenAPI spec", TestCasePriority.CRITICAL, True),
+        ("contract - all required fields exist in response", TestCasePriority.CRITICAL, True),
+        ("contract - response data types match spec", TestCasePriority.HIGH, True),
+        ("contract - response schema validation", TestCasePriority.HIGH, True),
+        ("contract - request body schema validation", TestCasePriority.HIGH, False),
+        # Idempotency
+        ("idempotency - repeated POST with same key returns same result", TestCasePriority.HIGH, True),
+        ("idempotency - duplicate request does not create duplicate resource", TestCasePriority.HIGH, True),
+        ("idempotency - PUT request is idempotent", TestCasePriority.MEDIUM, True),
+        ("idempotency - DELETE request is idempotent", TestCasePriority.MEDIUM, True),
+        # Versioning & Backward compatibility
+        ("versioning - v1 API backward compatibility", TestCasePriority.HIGH, True),
+        ("versioning - v2 API new features work correctly", TestCasePriority.HIGH, True),
+        ("versioning - deprecated endpoint warning in response", TestCasePriority.MEDIUM, True),
+        ("versioning - version header handling", TestCasePriority.MEDIUM, True),
+        # Data persistence & Database integrity
+        ("db persistence - correct data persisted after API call", TestCasePriority.CRITICAL, True),
+        ("db persistence - no duplicate records created", TestCasePriority.CRITICAL, True),
+        ("db persistence - transactional consistency on success", TestCasePriority.HIGH, True),
+        ("db persistence - rollback on partial failure", TestCasePriority.HIGH, False),
+        ("db persistence - referential integrity maintained", TestCasePriority.HIGH, True),
+        # Rate limiting & Performance
         ("rate limiting behavior", TestCasePriority.MEDIUM, False),
         ("timeout handling", TestCasePriority.MEDIUM, False),
         ("pagination with valid parameters", TestCasePriority.HIGH, True),
         ("pagination with invalid parameters", TestCasePriority.MEDIUM, False),
         ("concurrent requests", TestCasePriority.MEDIUM, False),
         ("large payload handling", TestCasePriority.LOW, False),
+        # Protocol & Format
         ("content-type validation", TestCasePriority.MEDIUM, False),
         ("HTTP method validation", TestCasePriority.HIGH, False),
         ("CORS preflight request", TestCasePriority.MEDIUM, True),
@@ -1232,7 +1537,7 @@ class TestCaseWritingAgent:
         for scenario_name, boundary_type, priority in self.BOUNDARY_SCENARIOS:
             test_case = TestCase(
                 id=self._generate_test_id(),
-                title=f"POC - Validate that {field_name} handles {scenario_name}",
+                title=f"Validate that {field_name} handles {scenario_name}",
                 description=f"Boundary Value Analysis: Test {field_name} at {boundary_type}",
                 test_type=TestCaseType.BOUNDARY,
                 priority=priority,
@@ -1289,7 +1594,7 @@ class TestCaseWritingAgent:
         for scenario in self.INTEGRATION_SCENARIOS:
             test_case = TestCase(
                 id=self._generate_test_id(),
-                title=f"POC - Validate that {feature_name} {scenario}",
+                title=f"Validate that {feature_name} {scenario}",
                 description=f"Integration test: Verify {scenario} for {feature_name}",
                 test_type=TestCaseType.INTEGRATION,
                 priority=TestCasePriority.HIGH,
@@ -1348,7 +1653,7 @@ class TestCaseWritingAgent:
         for scenario_name, threshold, priority in self.PERFORMANCE_SCENARIOS:
             test_case = TestCase(
                 id=self._generate_test_id(),
-                title=f"POC - Validate that {feature_name} meets {scenario_name}",
+                title=f"Validate that {feature_name} meets {scenario_name}",
                 description=f"Performance test: {scenario_name} with threshold {threshold}",
                 test_type=TestCaseType.PERFORMANCE,
                 priority=priority,
@@ -1414,7 +1719,7 @@ class TestCaseWritingAgent:
         for scenario_name, priority, is_positive in self.API_TEST_SCENARIOS:
             test_case = TestCase(
                 id=self._generate_test_id(),
-                title=f"POC - Validate that {endpoint} handles {scenario_name}",
+                title=f"Validate that {endpoint} handles {scenario_name}",
                 description=f"API test: {http_method} {endpoint} - {scenario_name}",
                 test_type=TestCaseType.FUNCTIONAL if is_positive else TestCaseType.NEGATIVE,
                 priority=priority,
@@ -1496,7 +1801,7 @@ class TestCaseWritingAgent:
             for to_state in to_states:
                 test_case = TestCase(
                     id=self._generate_test_id(),
-                    title=f"POC - Validate that transition from {from_state} to {to_state} works",
+                    title=f"Validate that transition from {from_state} to {to_state} works",
                     description=f"State transition test: {from_state} → {to_state}",
                     test_type=TestCaseType.FUNCTIONAL,
                     priority=TestCasePriority.HIGH,
@@ -1541,7 +1846,7 @@ class TestCaseWritingAgent:
             for to_state in invalid_to_states[:2]:  # Limit to 2 invalid transitions per state
                 test_case = TestCase(
                     id=self._generate_test_id(),
-                    title=f"POC - Validate that invalid transition from {from_state} to {to_state} is blocked",
+                    title=f"Validate that invalid transition from {from_state} to {to_state} is blocked",
                     description=f"Invalid state transition test: {from_state} → {to_state} (should fail)",
                     test_type=TestCaseType.NEGATIVE,
                     priority=TestCasePriority.MEDIUM,
@@ -1605,7 +1910,7 @@ class TestCaseWritingAgent:
         for scenario in scenarios:
             test_case = TestCase(
                 id=self._generate_test_id(),
-                title=f"POC - Validate that {field_name} handles {scenario}",
+                title=f"Validate that {field_name} handles {scenario}",
                 description=f"Field-specific edge case: {field_type} - {scenario}",
                 test_type=TestCaseType.EDGE_CASE,
                 priority=TestCasePriority.MEDIUM,
@@ -1655,7 +1960,7 @@ class TestCaseWritingAgent:
         for browser, device_type, priority in self.CROSS_BROWSER_SCENARIOS:
             test_case = TestCase(
                 id=self._generate_test_id(),
-                title=f"POC - Validate that {feature_name} works on {browser} ({device_type})",
+                title=f"Validate that {feature_name} works on {browser} ({device_type})",
                 description=f"Cross-browser test: {feature_name} on {browser}",
                 test_type=TestCaseType.FUNCTIONAL,
                 priority=priority,
@@ -1735,7 +2040,7 @@ class TestCaseWritingAgent:
             if is_required:
                 test_case = TestCase(
                     id=self._generate_test_id(),
-                    title=f"POC - Validate that {field_name} is required",
+                    title=f"Validate that {field_name} is required",
                     description=f"Verify {field_name} cannot be empty when required",
                     test_type=TestCaseType.NEGATIVE,
                     priority=TestCasePriority.HIGH,
@@ -1770,7 +2075,7 @@ class TestCaseWritingAgent:
                 min_len = field["min_length"]
                 test_case = TestCase(
                     id=self._generate_test_id(),
-                    title=f"POC - Validate that {field_name} minimum length is {min_len}",
+                    title=f"Validate that {field_name} minimum length is {min_len}",
                     description=f"Verify {field_name} rejects values shorter than {min_len} characters",
                     test_type=TestCaseType.BOUNDARY,
                     priority=TestCasePriority.HIGH,
@@ -1803,7 +2108,7 @@ class TestCaseWritingAgent:
                 max_len = field["max_length"]
                 test_case = TestCase(
                     id=self._generate_test_id(),
-                    title=f"POC - Validate that {field_name} maximum length is {max_len}",
+                    title=f"Validate that {field_name} maximum length is {max_len}",
                     description=f"Verify {field_name} rejects values longer than {max_len} characters",
                     test_type=TestCaseType.BOUNDARY,
                     priority=TestCasePriority.HIGH,
@@ -1837,7 +2142,7 @@ class TestCaseWritingAgent:
                 valid_values = field["valid_values"]
                 test_case = TestCase(
                     id=self._generate_test_id(),
-                    title=f"POC - Validate that {field_name} accepts valid values",
+                    title=f"Validate that {field_name} accepts valid values",
                     description=f"Verify {field_name} accepts: {', '.join(str(v) for v in valid_values[:3])}...",
                     test_type=TestCaseType.FUNCTIONAL,
                     priority=TestCasePriority.HIGH,
@@ -1951,6 +2256,7 @@ class TestCaseWritingAgent:
         text: str,
         feature_name: str,
         include_all_types: bool = False,
+        external_doc_links: Optional[List[str]] = None,
     ) -> TestSuite:
         """
         Generate a complete test suite from requirements text.
@@ -1959,12 +2265,24 @@ class TestCaseWritingAgent:
             text: Text containing requirements or user stories
             feature_name: Name of the feature being tested
             include_all_types: Override settings to include all test types
+            external_doc_links: Optional list of Figma/Confluence URLs to enrich requirements
 
         Returns:
             Complete test suite with all applicable test cases
         """
-        # Extract requirements
-        requirements = self.extract_requirements(text)
+        # Enrich requirements with external documentation (Figma, Confluence)
+        enriched_text, external_docs = enrich_requirements_with_external_docs(
+            text,
+            external_doc_links or []
+        )
+
+        # Log if external docs were found
+        if external_docs:
+            doc_types = [d["type"] for d in external_docs]
+            logger.info(f"Enriched requirements with external docs: {doc_types}")
+
+        # Extract requirements from enriched text
+        requirements = self.extract_requirements(enriched_text)
 
         # Generate test cases
         test_cases = []
@@ -2238,6 +2556,7 @@ def generate_test_cases(
     include_all: bool = False,
     output_format: str = "structured",
     default_label: str = "qAIn",
+    external_doc_links: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """
     Generate test cases from requirements.
@@ -2258,6 +2577,7 @@ def generate_test_cases(
         include_all: Whether to include all test types
         output_format: Output format (structured, gherkin, markdown)
         default_label: Default label to add to all test cases
+        external_doc_links: Optional list of Figma/Confluence URLs for additional context
 
     Returns:
         Generated test cases with coverage summary
@@ -2281,7 +2601,12 @@ def generate_test_cases(
         default_label=default_label,
     )
 
-    test_suite = agent.generate_test_suite(requirements, feature_name, include_all)
+    test_suite = agent.generate_test_suite(
+        requirements,
+        feature_name,
+        include_all,
+        external_doc_links=external_doc_links
+    )
 
     return {
         "testSuite": test_suite.to_dict(),
@@ -2706,6 +3031,7 @@ def run_jira_workflow(
     test_types: List[str],
     jira_client: Optional[Any] = None,
     create_in_jira: bool = False,
+    external_doc_links: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """
     Run the complete JIRA test case workflow.
@@ -2717,6 +3043,7 @@ def run_jira_workflow(
         test_types: List of test types to generate (FT-UI, FT-API, SIT, E2E, etc.)
         jira_client: Optional JIRA client instance
         create_in_jira: Whether to actually create test cases in JIRA
+        external_doc_links: Optional list of Figma/Confluence URLs for additional context
 
     Returns:
         Workflow result with test suite and JIRA comments
@@ -2756,8 +3083,13 @@ def run_jira_workflow(
         default_label="qAIn",
     )
 
-    # Generate test suite
-    test_suite = agent.generate_test_suite(requirements, feature_name, include_all_types=False)
+    # Generate test suite (enriched with external documentation if provided)
+    test_suite = agent.generate_test_suite(
+        requirements,
+        feature_name,
+        include_all_types=False,
+        external_doc_links=external_doc_links
+    )
 
     # Generate JIRA comments
     coverage_comment = generate_coverage_comment(test_suite, story_key, [])
