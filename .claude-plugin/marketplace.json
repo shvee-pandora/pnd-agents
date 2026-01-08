@@ -253,6 +253,101 @@
         "./skills/nextjs-server-patterns",
         "./skills/api-design-patterns"
       ]
+    },
+    {
+      "name": "prd-to-jira",
+      "source": "./agents/pm_agent_pack",
+      "description": "PRD to Jira Breakdown Agent - Converts PRD or Confluence text into structured Jira work items including epics, user stories with acceptance criteria in Gherkin format, dependencies, and risk assessments. Designed for Product Managers using Claude Desktop.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Pandora Group",
+        "url": "https://github.com/shvee-pandora"
+      },
+      "homepage": "https://github.com/shvee-pandora/pnd-agents",
+      "repository": "https://github.com/shvee-pandora/pnd-agents",
+      "license": "MIT",
+      "keywords": [
+        "product-management",
+        "prd",
+        "jira",
+        "user-stories",
+        "acceptance-criteria",
+        "gherkin",
+        "agile",
+        "claude-desktop"
+      ],
+      "category": "product-management",
+      "strict": false,
+      "metadata": {
+        "claude_desktop_friendly": true,
+        "requires_coding": false,
+        "target_audience": ["Product Managers", "TPMs", "Engineering Managers"]
+      },
+      "agents": [
+        "./agents/pm_agent_pack/prd_to_jira_agent.py"
+      ]
+    },
+    {
+      "name": "exec-summary",
+      "source": "./agents/pm_agent_pack",
+      "description": "Stakeholder Update / Exec Summary Agent - Converts sprint data or Jira summaries into executive-friendly updates with 1-page summaries, risks & mitigations, and decisions required. Designed for Director/VP audiences.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Pandora Group",
+        "url": "https://github.com/shvee-pandora"
+      },
+      "homepage": "https://github.com/shvee-pandora/pnd-agents",
+      "repository": "https://github.com/shvee-pandora/pnd-agents",
+      "license": "MIT",
+      "keywords": [
+        "product-management",
+        "executive-summary",
+        "stakeholder-update",
+        "sprint-report",
+        "leadership",
+        "claude-desktop"
+      ],
+      "category": "product-management",
+      "strict": false,
+      "metadata": {
+        "claude_desktop_friendly": true,
+        "requires_coding": false,
+        "target_audience": ["Product Managers", "TPMs", "Engineering Managers"]
+      },
+      "agents": [
+        "./agents/pm_agent_pack/exec_summary_agent.py"
+      ]
+    },
+    {
+      "name": "roadmap-review",
+      "source": "./agents/pm_agent_pack",
+      "description": "Roadmap Review & Risk Agent - Critiques product roadmaps and OKRs to identify risks, missing dependencies, timeline realism issues, and provides actionable improvement suggestions.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Pandora Group",
+        "url": "https://github.com/shvee-pandora"
+      },
+      "homepage": "https://github.com/shvee-pandora/pnd-agents",
+      "repository": "https://github.com/shvee-pandora/pnd-agents",
+      "license": "MIT",
+      "keywords": [
+        "product-management",
+        "roadmap",
+        "okr",
+        "risk-assessment",
+        "planning",
+        "claude-desktop"
+      ],
+      "category": "product-management",
+      "strict": false,
+      "metadata": {
+        "claude_desktop_friendly": true,
+        "requires_coding": false,
+        "target_audience": ["Product Managers", "TPMs", "Engineering Managers"]
+      },
+      "agents": [
+        "./agents/pm_agent_pack/roadmap_review_agent.py"
+      ]
     }
   ]
 }

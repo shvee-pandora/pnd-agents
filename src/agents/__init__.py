@@ -14,6 +14,13 @@ from .sonar_validation_agent import SonarValidationAgent
 from .task_manager_agent import TaskManagerAgent
 from .unit_test_agent import UnitTestAgent
 
+# PM Agent Pack
+from .pm_agent_pack import (
+    PRDToJiraAgent,
+    ExecSummaryAgent,
+    RoadmapReviewAgent,
+)
+
 __all__ = [
     "AmplicencePlacementAgent",
     "AnalyticsAgent",
@@ -24,4 +31,8 @@ __all__ = [
     "SonarValidationAgent",
     "TaskManagerAgent",
     "UnitTestAgent",
+    # PM Agent Pack
+    "PRDToJiraAgent",
+    "ExecSummaryAgent",
+    "RoadmapReviewAgent",
 ]
