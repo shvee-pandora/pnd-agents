@@ -1,6 +1,6 @@
 # Test Case Writing Agent - Stakeholder Overview
 
-**Document Version:** 1.0
+**Document Version:** 2.0
 **Date:** January 2026
 **Prepared for:** Senior Stakeholders
 
@@ -8,13 +8,17 @@
 
 ## Executive Summary
 
-The **Test Case Writing Agent** is an AI-powered automation tool that generates comprehensive test cases from requirements, user stories, and acceptance criteria. It integrates with JIRA to streamline test management, reducing manual effort and ensuring consistent test coverage across projects.
+The **Test Case Writing Agent** (qAIn - Quality AI Agent) is an AI-powered automation tool that generates comprehensive test cases from requirements, user stories, and acceptance criteria. It integrates with JIRA to streamline test management, reducing manual effort and ensuring consistent test coverage across projects.
 
 **Key Value Proposition:**
 - Reduces test case writing time by up to 70%
 - Ensures consistent test coverage across all acceptance criteria
 - Provides traceability from requirements to test cases
 - Integrates seamlessly with existing JIRA workflows
+- **NEW:** Enriches context from Parent tickets and EPICs
+- **NEW:** Discovers and reuses existing test cases
+- **NEW:** Merges similar scenarios to reduce redundancy
+- **NEW:** Processes external documentation (Figma, Confluence)
 
 ---
 
@@ -27,26 +31,26 @@ The **Test Case Writing Agent** is an AI-powered automation tool that generates 
 │                        TEST CASE WRITING AGENT WORKFLOW                      │
 └─────────────────────────────────────────────────────────────────────────────┘
 
-     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-     │   INPUT      │     │  PROCESSING  │     │   OUTPUT     │
-     │              │     │              │     │              │
-     │ • JIRA Story │────▶│ • Parse      │────▶│ • Test Cases │
-     │ • User Story │     │   Requirements│     │ • Coverage   │
-     │ • Acceptance │     │ • Generate   │     │   Matrix     │
-     │   Criteria   │     │   Test Cases │     │ • JIRA       │
-     │ • Test Types │     │ • Classify   │     │   Comments   │
-     │   Required   │     │   & Organize │     │ • Traceability│
-     └──────────────┘     └──────────────┘     └──────────────┘
-                                │
-                                ▼
-                    ┌──────────────────────┐
-                    │   JIRA INTEGRATION   │
-                    │                      │
-                    │ • Create Test Cases  │
-                    │ • Link to Story      │
-                    │ • Add Coverage       │
-                    │   Comments           │
-                    └──────────────────────┘
+     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+     │   INPUT      │     │  ENRICHMENT  │     │  PROCESSING  │     │   OUTPUT     │
+     │              │     │              │     │              │     │              │
+     │ • JIRA Story │────▶│ • Parent/EPIC│────▶│ • Parse      │────▶│ • Test Cases │
+     │ • User Story │     │   Context    │     │   Requirements│     │ • Coverage   │
+     │ • Acceptance │     │ • Existing   │     │ • Generate   │     │   Matrix     │
+     │   Criteria   │     │   Test Cases │     │   Test Cases │     │ • JIRA       │
+     │ • Test Types │     │ • Figma/     │     │ • Merge      │     │   Comments   │
+     │ • Doc Links  │     │   Confluence │     │   Similar    │     │ • Traceability│
+     └──────────────┘     └──────────────┘     └──────────────┘     └──────────────┘
+                                                       │
+                                                       ▼
+                                           ┌──────────────────────┐
+                                           │   JIRA INTEGRATION   │
+                                           │                      │
+                                           │ • Create Test Cases  │
+                                           │ • Link to Story      │
+                                           │ • Add Coverage       │
+                                           │   Comments           │
+                                           └──────────────────────┘
 ```
 
 ---
@@ -64,6 +68,71 @@ When the agent is invoked, it receives:
 | **Feature Name** | Name of the feature being tested | "Product Set Engraving" |
 | **Test Types** | Types of testing required | FT-UI, E2E, Integration |
 | **JIRA Story Key** | Reference ticket | OG-7381 |
+| **External Doc Links** | Figma/Confluence URLs (auto-detected or provided) | `https://figma.com/file/...` |
+
+### Step 1.5: Context Enrichment (NEW)
+
+Before generating test cases, the agent enriches the requirements with additional context:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     CONTEXT ENRICHMENT                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
+│  │  JIRA CONTEXT   │  │ EXTERNAL DOCS   │  │ EXISTING TESTS  │ │
+│  │                 │  │                 │  │                 │ │
+│  │ • Parent Ticket │  │ • Figma Designs │  │ • Linked Tests  │ │
+│  │ • EPIC Details  │  │ • Confluence    │  │ • Related Tests │ │
+│  │ • Story Desc.   │  │   Pages         │  │ • Reusable      │ │
+│  │                 │  │                 │  │   Scenarios     │ │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
+│           │                   │                    │            │
+│           └───────────────────┼────────────────────┘            │
+│                               ▼                                 │
+│                 ┌─────────────────────────┐                     │
+│                 │  ENRICHED REQUIREMENTS  │                     │
+│                 │  + JIRA Context         │                     │
+│                 │  + Design Context       │                     │
+│                 │  + Reusable Scenarios   │                     │
+│                 └─────────────────────────┘                     │
+│                               │                                 │
+│                               ▼                                 │
+│                 ┌─────────────────────────┐                     │
+│                 │   SCENARIO MERGING      │                     │
+│                 │   (Jaccard Similarity)  │                     │
+│                 │   Threshold: 0.6        │                     │
+│                 └─────────────────────────┘                     │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### A. JIRA Context Enrichment
+
+The agent automatically fetches:
+
+| Context | Source | Purpose |
+|---------|--------|---------|
+| **Parent Ticket** | JIRA parent field | Broader feature context |
+| **EPIC Details** | JIRA epic link | Strategic objectives |
+| **Linked Test Cases** | JIRA issue links | Avoid duplication |
+| **Related Test Cases** | JQL search by keywords | Identify reusable scenarios |
+
+#### B. External Documentation Processing
+
+URLs are auto-detected from requirements text:
+
+| Doc Type | URL Pattern | Extracted Context |
+|----------|-------------|-------------------|
+| **Figma** | `figma.com/file/*`, `figma.com/design/*` | UI components, states, breakpoints, accessibility |
+| **Confluence** | `*.atlassian.net/wiki/*` | Requirements, API specs, business rules |
+
+#### C. Scenario Merging
+
+Similar scenarios are merged using Jaccard similarity algorithm:
+- **Threshold:** 0.6 (60% keyword overlap)
+- **Benefit:** Reduces redundant test cases
+- **Output:** Combined scenarios with unified steps
 
 ### Step 2: Requirements Extraction
 
@@ -112,6 +181,54 @@ The agent generates multiple categories of test cases:
 │  │ • CSRF      │  │   reader    │  │ • Concurrent│             │
 │  │ • Auth      │  │ • Contrast  │  │   users     │             │
 │  └─────────────┘  └─────────────┘  └─────────────┘             │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Step 3.5: Enhanced API Test Scenarios (NEW)
+
+When generating API tests, the agent includes 34 comprehensive test scenarios:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    API TEST SCENARIOS (34 Total)                │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─────────────────────┐  ┌─────────────────────┐              │
+│  │  BASIC VALIDATION   │  │  AUTHENTICATION     │              │
+│  │                     │  │                     │              │
+│  │ • Valid request     │  │ • Invalid token     │              │
+│  │ • Missing fields    │  │ • Expired token     │              │
+│  │ • Invalid format    │  │ • Missing header    │              │
+│  │ • Malformed JSON    │  │ • Unauthorized user │              │
+│  └─────────────────────┘  └─────────────────────┘              │
+│                                                                 │
+│  ┌─────────────────────┐  ┌─────────────────────┐              │
+│  │  RBAC SECURITY      │  │  HTTP STATUS CODES  │              │
+│  │                     │  │                     │              │
+│  │ • Admin access      │  │ • 400 Bad Request   │              │
+│  │ • Regular user      │  │ • 404 Not Found     │              │
+│  │ • Role rejection    │  │ • 409 Conflict      │              │
+│  │ • Permission denied │  │ • 422 Unprocessable │              │
+│  └─────────────────────┘  └─────────────────────┘              │
+│                                                                 │
+│  ┌─────────────────────┐  ┌─────────────────────┐              │
+│  │  CONTRACT TESTING   │  │  IDEMPOTENCY        │              │
+│  │                     │  │                     │              │
+│  │ • OpenAPI/Swagger   │  │ • Repeated POST     │              │
+│  │ • Response schema   │  │ • Duplicate check   │              │
+│  │ • Request schema    │  │ • PUT idempotent    │              │
+│  │ • Content-Type      │  │ • DELETE idempotent │              │
+│  └─────────────────────┘  └─────────────────────┘              │
+│                                                                 │
+│  ┌─────────────────────┐  ┌─────────────────────┐              │
+│  │  API VERSIONING     │  │  DATABASE           │              │
+│  │                     │  │                     │              │
+│  │ • v1 compatibility  │  │ • Persistence check │              │
+│  │ • v2 new features   │  │ • Transactional     │              │
+│  │ • Deprecation       │  │ • Rollback on error │              │
+│  │ • Header version    │  │ • Consistency       │              │
+│  └─────────────────────┘  └─────────────────────┘              │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -281,13 +398,36 @@ TestSuite
 └── coverage_gaps: ["Security not covered"]
 ```
 
+### JIRA Context Structure (NEW)
+```
+JiraContext
+├── story_key: "OG-7381"
+├── story_summary: "Product Set Engraving"
+├── story_description: "As a customer..."
+├── parent_key: "OG-7380"
+├── parent_summary: "Engraving Feature"
+├── parent_description: "Parent feature details..."
+├── epic_key: "OG-7000"
+├── epic_summary: "Q1 2026 Enhancements"
+├── epic_description: "Epic level objectives..."
+├── linked_test_cases: [
+│   ├── key: "OG-7382"
+│   ├── summary: "Test engraving flow"
+│   └── status: "Ready"
+│   ]
+├── related_test_cases: [...]
+└── reusable_scenarios: ["Engraving validation", "CTA visibility"]
+```
+
 ---
 
 ## Integration Points
 
 | System | Integration Type | Purpose |
 |--------|-----------------|---------|
-| **JIRA** | REST API v3 | Create test cases, link issues, add comments |
+| **JIRA** | REST API v3 | Create test cases, link issues, add comments, fetch parent/epic context |
+| **Figma** | URL parsing + API | Extract design context, UI components, states |
+| **Confluence** | URL parsing + API | Extract requirements, API specs, business rules |
 | **Workflow Engine** | Context-based | Part of larger agent workflows |
 | **CLI** | Direct invocation | Standalone test generation |
 
@@ -306,6 +446,11 @@ result = generate_test_cases(
     feature_name="User Login",
     include_security=True,
     include_accessibility=True,
+    include_api=True,  # NEW: Generates 34 API test scenarios
+    external_doc_links=[  # NEW: External documentation
+        "https://figma.com/file/ABC123/Login-Design",
+        "https://company.atlassian.net/wiki/spaces/PROJ/pages/123"
+    ],
 )
 ```
 
@@ -319,11 +464,12 @@ result = run({
         "requirements": "...",
         "feature_name": "Login",
         "include_all": True,
+        "external_doc_links": [],  # NEW: Auto-detected from requirements
     }
 })
 ```
 
-### 3. JIRA Workflow
+### 3. JIRA Workflow (with Context Enrichment)
 ```python
 from src.agents.test_case_writing_agent import run_jira_workflow
 
@@ -333,7 +479,18 @@ result = run_jira_workflow(
     feature_name="Product Set Engraving",
     test_types=["FT-UI", "E2E"],
     create_in_jira=True,
+    # NEW: Context enrichment options
+    include_parent_context=True,   # Fetch parent ticket
+    include_epic_context=True,     # Fetch EPIC details
+    include_existing_tests=True,   # Find existing test cases
+    external_doc_links=[],         # Figma/Confluence URLs
 )
+
+# NEW: Result includes JIRA context info
+print(f"Parent: {result['jira_context']['parent_key']}")
+print(f"Epic: {result['jira_context']['epic_key']}")
+print(f"Linked tests found: {result['jira_context']['linked_test_count']}")
+print(f"Related tests found: {result['jira_context']['related_test_count']}")
 ```
 
 ---
@@ -349,6 +506,11 @@ result = run_jira_workflow(
 | **Quality** | Professional-grade test design techniques applied |
 | **Integration** | Seamless JIRA workflow integration |
 | **Documentation** | Auto-generated coverage matrices and reports |
+| **Context Awareness** | Parent/EPIC context enrichment for better test design |
+| **Reusability** | Discovers and leverages existing test cases |
+| **Redundancy Reduction** | Merges similar scenarios using AI similarity matching |
+| **Design Integration** | Figma/Confluence content informs test scenarios |
+| **API Coverage** | 34 comprehensive API test scenarios out-of-the-box |
 
 ---
 
@@ -365,6 +527,15 @@ This identifies AI-generated test artifacts for governance and audit purposes.
 ## Contact & Support
 
 For questions about the Test Case Writing Agent, contact the **PG AI Squad**.
+
+---
+
+## Changelog
+
+| Version | Date | Changes |
+|---------|------|---------|
+| 2.0 | January 2026 | Added JIRA context enrichment (parent/EPIC), external doc processing (Figma/Confluence), scenario merging, 34 API test scenarios |
+| 1.0 | January 2026 | Initial release with core test case generation and JIRA integration |
 
 ---
 
