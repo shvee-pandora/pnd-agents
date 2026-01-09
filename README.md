@@ -4,7 +4,7 @@ A production-grade agentic system for Pandora Group, featuring MCP-compatible ag
 
 ## Overview
 
-PG AI Squad is a comprehensive agent ecosystem designed to assist with building the Pandora Group website. The system includes specialized agents for task management, frontend development, Amplience CMS integration, code review, performance optimization, QA testing, and backend development.
+PG AI Squad is a comprehensive agent ecosystem designed to assist with building the Pandora Group website. The system includes specialized agents for task management, frontend development, Amplience CMS integration, code review, performance optimization, QA testing, test case writing, and backend development.
 
 ## Features
 
@@ -16,6 +16,7 @@ PG AI Squad is a comprehensive agent ecosystem designed to assist with building 
 - **Code Review**: Automated validation against Pandora coding standards
 - **Performance Analysis**: HAR file analysis and Core Web Vitals optimization
 - **QA Testing**: Unit test, integration test, and E2E test generation
+- **Test Case Writing**: AI-powered test case generation from requirements with JIRA integration
 - **Backend Development**: API routes, Server Components, and mock API services
 
 ## Agents
@@ -31,6 +32,7 @@ PG AI Squad is a comprehensive agent ecosystem designed to assist with building 
 | QA | Validator | Generates E2E and integration tests, validates acceptance criteria |
 | **Unit Test** | Specialist | Generates comprehensive unit tests with **100% coverage** target |
 | **Sonar Validation** | Validator | Validates against SonarCloud quality gates (0 errors, 0 duplication, 100% coverage) |
+| **Test Case Writing** | Specialist | Generates comprehensive test cases from requirements, user stories, and acceptance criteria with JIRA integration |
 | Backend | Specialist | Creates API routes, Server Components, mock APIs |
 | Commerce | Specialist | Agentic commerce - finds products, filters by criteria, prepares cart metadata |
 
@@ -303,6 +305,7 @@ pnd-agents/
 │   │   ├── code_review/           # Code Review Agent
 │   │   ├── unit_test_agent/       # Unit Test Agent
 │   │   ├── sonar_validation_agent/# Sonar Validation Agent
+│   │   ├── test_case_writing_agent/ # Test Case Writing Agent
 │   │   ├── qa_agent/              # QA Agent
 │   │   ├── performance/           # Performance Agent
 │   │   ├── backend/               # Backend Agent
@@ -480,13 +483,14 @@ The engine detects task types using keyword matching:
 | Amplience | content type, cms, schema, amplience |
 | Unit Test | unit tests, coverage, jest, vitest, 100% coverage |
 | Sonar | sonar, sonarcloud, quality gate, duplication, code smells |
+| Test Case Writing | test cases, acceptance criteria, user story, gherkin, test design, test scenarios, qain |
 | QA | tests, automation, playwright, e2e, integration tests |
 | Code Review | review, lint, standards, refactor |
 | Performance | performance, har, metrics, optimization |
 
 ### Workflow Pipelines
 
-Different task types trigger different agent sequences (now includes Unit Test and Sonar Validation):
+Different task types trigger different agent sequences (now includes Unit Test, Sonar Validation, and Test Case Writing):
 
 | Workflow | Pipeline |
 |----------|----------|
@@ -496,6 +500,7 @@ Different task types trigger different agent sequences (now includes Unit Test a
 | Amplience | Amplience → Frontend → Code Review → **Unit Test → Sonar** |
 | Unit Test | **Unit Test → Sonar** |
 | Sonar | **Sonar** → Code Review |
+| Test Case Writing | **Test Case Writing** → QA |
 | Default | Frontend → Code Review → **Unit Test → Sonar** |
 
 ### CLI Commands
@@ -652,6 +657,92 @@ export SONAR_TOKEN="your-sonarcloud-token"  # Optional, for API access
 pnd-agents run-task "Validate code against SonarCloud quality gates"
 ```
 
+## Test Case Writing Agent
+
+The Test Case Writing Agent (qAIn - Quality AI Agent) is an AI-powered automation tool that generates comprehensive test cases from requirements, user stories, and acceptance criteria. It reduces manual effort by up to 70% and ensures consistent test coverage across projects.
+
+### Features
+
+- Parses requirements from user stories, acceptance criteria, and BDD/Gherkin formats
+- Generates multiple test case types: functional, negative, edge case, boundary, integration, API, security, accessibility, and performance
+- Automatic test case classification by priority, test level, testing cycle, and component
+- Applies industry-standard testing techniques (BVA, Equivalence Partitioning, Decision Tables, State Transition)
+- JIRA integration for creating test cases, linking to stories, and adding coverage comments
+- Generates coverage matrices and traceability reports
+- JIRA context enrichment with parent/EPIC reading and scenario merging
+
+### Test Case Types Generated
+
+| Test Type | Generated When | Use Case |
+|-----------|----------------|----------|
+| **Functional** | Always | Core feature validation |
+| **Negative** | Always | Error handling verification |
+| **Edge Case** | `include_edge_cases=True` | Unusual input scenarios |
+| **Boundary** | `include_boundary=True` | Min/max value testing |
+| **Integration** | `include_integration=True` | Cross-component testing |
+| **API** | `include_api=True` | REST API validation |
+| **Security** | `include_security=True` | Vulnerability testing |
+| **Accessibility** | `include_accessibility=True` | WCAG compliance |
+| **Performance** | `include_performance=True` | Load & response testing |
+
+### Usage
+
+```python
+from src.agents.test_case_writing_agent import generate_test_cases, run_jira_workflow
+
+# Generate test cases from requirements
+result = generate_test_cases(
+    requirements="As a customer, I want to add engraving to products...",
+    feature_name="Product Engraving",
+    include_security=True,
+    include_accessibility=True,
+)
+
+print(f"Generated {len(result['test_cases'])} test cases")
+
+# Run full JIRA workflow
+result = run_jira_workflow(
+    story_key="OG-7381",
+    requirements="User should be able to login...",
+    feature_name="User Login",
+    test_types=["FT-UI", "E2E"],
+    create_in_jira=True,
+)
+```
+
+### Output Example (Gherkin Format)
+
+```gherkin
+@Label: qAIn, ProductSetEngraving
+@Component: UI
+@Priority: High
+@TestType: Functional
+@TestLevel: FT-UI
+@TestingCycle: Regression
+
+Scenario: Verify Engrave CTA visible when set has 1 engravable product
+  Given User is on Product Set PDP with 1 engravable child product
+  When User views the product details
+  Then Engrave CTA button is visible
+  And CTA matches standard product engraving design
+```
+
+### Coverage Matrix Output
+
+| Priority | FT-UI | FT-API | SIT | E2E | Total |
+|----------|-------|--------|-----|-----|-------|
+| Critical | 2 | 0 | 0 | 1 | 3 |
+| High | 5 | 2 | 1 | 2 | 10 |
+| Medium | 3 | 1 | 2 | 1 | 7 |
+| Low | 1 | 0 | 0 | 0 | 1 |
+
+### CLI Usage
+
+```bash
+# Run test case generation as part of workflow
+pnd-agents run-task "Generate test cases for login feature from acceptance criteria"
+```
+
 ## Analytics & Reporting Agent
 
 The Analytics & Reporting Agent tracks metrics about agent performance, persists structured logs, updates JIRA issues, and generates reports. It provides MCP endpoints for Claude Desktop/Code integration.
@@ -789,6 +880,7 @@ All documentation has been consolidated into the `/docs` folder for better organ
 - [Setup Guide](docs/setup.md) - Detailed installation and configuration
 - [Architecture](docs/architecture.md) - System architecture and design decisions
 - [Agents Overview](docs/agents-overview.md) - Complete list of all agents with capabilities
+- [Test Case Writing Agent](docs/Test_Case_Writing_Agent_Overview.md) - Comprehensive test case generation with JIRA integration
 - [Quick Reference](docs/quick-reference.md) - One-page quick reference card
 - [Publishing Guide](docs/publishing.md) - Publishing to Azure Artifacts
 - [Examples](examples/) - Example tasks demonstrating agent collaboration
