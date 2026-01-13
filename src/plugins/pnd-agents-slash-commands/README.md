@@ -1,10 +1,42 @@
 # PND Agents Slash Commands Plugin
 
-A comprehensive Claude Desktop plugin that provides instant access to all PND Agents via slash commands. No MCP server setup required - just install and use.
+A comprehensive plugin that provides instant access to all PND Agents via slash commands. Works with both **Claude Desktop** and **Claude Code** (CLI/IDE). No MCP server setup required - just install and use.
 
 ## Installation
 
-### Step 1: Locate Your Claude Desktop Plugins Folder
+### Option A: Claude Code (CLI/IDE)
+
+For Claude Code users, slash commands are available through the `.claude/commands/` directory in the repository root.
+
+**Step 1: Clone the Repository**
+```bash
+git clone https://github.com/shvee-pandora/pnd-agents.git
+cd pnd-agents
+```
+
+**Step 2: Use Slash Commands**
+
+The `.claude/commands/` directory contains all 17 agent commands. When you open Claude Code in this repository, you can use:
+```
+/task-manager Create a new product detail page
+/frontend Create a button component
+/prd-to-jira [paste PRD content]
+```
+
+**Step 3: Copy to Your Project (Optional)**
+
+To use these commands in your own project, copy the `.claude/commands/` folder:
+```bash
+cp -r .claude/commands/ /path/to/your/project/.claude/commands/
+```
+
+---
+
+### Option B: Claude Desktop
+
+For Claude Desktop users, install the plugin to your plugins folder.
+
+**Step 1: Locate Your Claude Desktop Plugins Folder**
 
 **macOS:**
 ```
