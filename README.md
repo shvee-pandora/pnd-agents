@@ -174,6 +174,93 @@ Create a Stories carousel component from this Figma design:
 https://www.figma.com/design/ABC123/My-Design?node-id=123-456
 ```
 
+### Using Slash Commands (No MCP Setup Required)
+
+PND Agents are also available as **slash commands** in both Claude Desktop and Claude Code. This is the easiest way to use the agents - no MCP server configuration needed.
+
+#### Option A: Claude Code (CLI/IDE)
+
+The `.claude/commands/` directory in this repository contains all 17 agent commands. When you open Claude Code in this repo, type `/` to see available commands:
+
+```bash
+# Clone the repo
+git clone https://github.com/shvee-pandora/pnd-agents.git
+cd pnd-agents
+
+# Open in Claude Code and use slash commands
+/frontend Create a product card component
+/prd-to-jira [paste your PRD content]
+/code-review [paste code to review]
+```
+
+To use these commands in your own project, copy the `.claude/commands/` folder:
+
+```bash
+cp -r .claude/commands/ /path/to/your/project/.claude/commands/
+```
+
+#### Option B: Claude Desktop Plugin
+
+Install the plugin from `src/plugins/pnd-agents-slash-commands/`:
+
+**macOS:**
+```bash
+cp -r src/plugins/pnd-agents-slash-commands ~/Library/Application\ Support/Claude/plugins/
+```
+
+**Windows (PowerShell):**
+```powershell
+Copy-Item -Recurse src\plugins\pnd-agents-slash-commands $env:APPDATA\Claude\plugins\
+```
+
+Then restart Claude Desktop and type `/` to see all available commands.
+
+#### Available Slash Commands
+
+**Development Agents:**
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `/task-manager` | Orchestrate complex tasks across specialized agents | `/task-manager Create a product detail page with cart functionality` |
+| `/frontend` | Generate React/Next.js components | `/frontend Create a product card with image, title, price` |
+| `/backend` | Create API routes and serverless functions | `/backend Create a REST API for user profiles` |
+| `/unit-test` | Generate comprehensive unit tests | `/unit-test [paste component code]` |
+| `/code-review` | Review code for quality and security | `/code-review [paste code to review]` |
+
+**CMS Agents:**
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `/amplience` | Create Amplience CMS content types | `/amplience Create a hero banner content type` |
+| `/amplience-placement` | Configure content placements and slots | `/amplience-placement Configure hero slot for homepage` |
+
+**Quality & Performance Agents:**
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `/qa` | Analyze test coverage and generate scenarios | `/qa Analyze test coverage for checkout flow` |
+| `/performance` | Analyze HAR files and Core Web Vitals | `/performance Our LCP is 4.2s, help identify causes` |
+| `/sonar` | Validate SonarCloud compliance | `/sonar [paste code for analysis]` |
+| `/bx-scan` | Detect broken experiences and dead links | `/bx-scan https://www.pandora.net/en-us` |
+
+**Commerce Agents:**
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `/commerce` | SFCC product search and integration | `/commerce Find rings under $500` |
+| `/figma` | Extract design tokens from Figma | `/figma Extract color tokens from brand guidelines` |
+
+**Product Management Agents:**
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `/prd-to-jira` | Convert PRDs to Jira epics and stories | `/prd-to-jira [paste PRD content]` |
+| `/exec-summary` | Generate executive summaries | `/exec-summary [paste sprint data]` |
+| `/roadmap-review` | Critique roadmaps and OKRs | `/roadmap-review [paste roadmap]` |
+| `/analytics` | Generate sprint reports and metrics | `/analytics Generate velocity report for last 6 sprints` |
+
+For detailed documentation, see the [Slash Commands Runbook](https://pandoradigital.atlassian.net/wiki/spaces/~712020a796c84908ee48a8bc04950e7f6fb704/pages/5165351194/PND+Agents+Slash+Commands+-+Runbook).
+
 #### Programmatic Usage
 
 ```python
