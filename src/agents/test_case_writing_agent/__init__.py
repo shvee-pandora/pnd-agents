@@ -3,6 +3,8 @@ Test Case Writing Agent Package
 
 Re-exports the main agent class, enums, dataclasses, and convenience functions.
 Includes JIRA integration for test case management.
+
+Supports Pandora JIRA Workflow Hierarchy: Initiative -> Epic -> Story -> Task
 """
 
 from .agent import (
@@ -23,6 +25,7 @@ from .agent import (
     TestCaseWritingResult,
     JiraWorkflowConfig,
     JiraTestCaseCreationResult,
+    JiraContext,
     # Convenience functions
     run,
     generate_test_cases,
@@ -34,8 +37,10 @@ from .agent import (
     generate_coverage_matrix_comment,
     create_jira_test_cases,
     run_jira_workflow,
+    fetch_jira_context,
     # Constants
     QAIN_SIGNATURE,
+    PANDORA_JIRA_HIERARCHY,
 )
 
 __all__ = [
@@ -56,6 +61,7 @@ __all__ = [
     "TestCaseWritingResult",
     "JiraWorkflowConfig",
     "JiraTestCaseCreationResult",
+    "JiraContext",
     # Convenience functions
     "run",
     "generate_test_cases",
@@ -67,6 +73,8 @@ __all__ = [
     "generate_coverage_matrix_comment",
     "create_jira_test_cases",
     "run_jira_workflow",
+    "fetch_jira_context",
     # Constants
     "QAIN_SIGNATURE",
+    "PANDORA_JIRA_HIERARCHY",
 ]
