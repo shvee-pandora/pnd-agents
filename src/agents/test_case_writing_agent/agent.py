@@ -288,48 +288,109 @@ def enrich_requirements_with_external_docs(
 
 
 # =============================================================================
-# JIRA Context Enrichment (Parent, Epic, Existing Test Cases)
+# JIRA Context Enrichment (Parent, Epic, Initiative, Existing Test Cases)
 # =============================================================================
+
+# Pandora JIRA Workflow Hierarchy Configuration
+# The hierarchy is: Initiative -> Epic -> Story -> Task
+PANDORA_JIRA_HIERARCHY = {
+    "levels": ["Initiative", "Epic", "Story", "Task"],
+    "description": """
+    Pandora JIRA Workflow Hierarchy:
+    - Initiative: High-level business objective or theme (top-level)
+    - Epic: Large body of work that can be broken down into Stories
+    - Story: User-facing feature or requirement
+    - Task: Technical implementation item under a Story
+
+    This hierarchy helps provide context for test case generation by understanding
+    the broader business objective (Initiative) and feature scope (Epic).
+    """,
+    "issue_types": {
+        "initiative": ["Initiative"],
+        "epic": ["Epic"],
+        "story": ["Story", "User Story"],
+        "task": ["Task", "Sub-task", "Technical Task"]
+    }
+}
+
 
 @dataclass
 class JiraContext:
-    """Context gathered from JIRA ticket hierarchy and existing test cases."""
+    """Context gathered from JIRA ticket hierarchy and existing test cases.
+
+    Supports Pandora's JIRA hierarchy: Initiative -> Epic -> Story -> Task
+    """
     story_key: str
     story_summary: str
     story_description: str
+    # Task level (if the ticket is a Task under a Story)
+    task_key: Optional[str] = None
+    task_summary: Optional[str] = None
+    task_description: Optional[str] = None
+    # Parent level (direct parent - could be Story for Task, or Epic for Story)
     parent_key: Optional[str] = None
     parent_summary: Optional[str] = None
     parent_description: Optional[str] = None
+    # Epic level
     epic_key: Optional[str] = None
     epic_summary: Optional[str] = None
     epic_description: Optional[str] = None
+    # Initiative level (Pandora-specific - parent of Epic)
+    initiative_key: Optional[str] = None
+    initiative_summary: Optional[str] = None
+    initiative_description: Optional[str] = None
+    # Test cases
     linked_test_cases: List[Dict[str, Any]] = field(default_factory=list)
     related_test_cases: List[Dict[str, Any]] = field(default_factory=list)
     reusable_scenarios: List[str] = field(default_factory=list)
+    # Hierarchy metadata
+    hierarchy_level: str = "story"  # initiative, epic, story, task
 
     def to_requirements_context(self) -> str:
-        """Convert JIRA context to requirements text for test case generation."""
+        """Convert JIRA context to requirements text for test case generation.
+
+        Includes full Pandora JIRA hierarchy: Initiative -> Epic -> Story -> Task
+        """
         sections = []
 
-        # Story context
-        sections.append(f"## Story: {self.story_key}")
+        # Add hierarchy header for clarity
+        sections.append("# JIRA Hierarchy Context")
+        sections.append(f"**Hierarchy:** Initiative → Epic → Story → Task")
+        sections.append(f"**Current Level:** {self.hierarchy_level.title()}")
+
+        # Initiative context (top-level business objective)
+        if self.initiative_key:
+            sections.append(f"\n## Initiative: {self.initiative_key}")
+            sections.append(f"**Business Objective:** {self.initiative_summary or 'N/A'}")
+            if self.initiative_description:
+                sections.append(f"\n{self.initiative_description}")
+
+        # Epic context (feature scope)
+        if self.epic_key:
+            sections.append(f"\n## Epic: {self.epic_key}")
+            sections.append(f"**Feature Scope:** {self.epic_summary or 'N/A'}")
+            if self.epic_description:
+                sections.append(f"\n{self.epic_description}")
+
+        # Story context (user requirement)
+        sections.append(f"\n## Story: {self.story_key}")
         sections.append(f"**Summary:** {self.story_summary}")
         if self.story_description:
             sections.append(f"\n{self.story_description}")
 
-        # Parent context
-        if self.parent_key:
+        # Task context (if applicable)
+        if self.task_key:
+            sections.append(f"\n## Task: {self.task_key}")
+            sections.append(f"**Implementation:** {self.task_summary or 'N/A'}")
+            if self.task_description:
+                sections.append(f"\n{self.task_description}")
+
+        # Parent context (direct parent for additional context)
+        if self.parent_key and self.parent_key not in [self.epic_key, self.initiative_key]:
             sections.append(f"\n## Parent: {self.parent_key}")
             sections.append(f"**Summary:** {self.parent_summary or 'N/A'}")
             if self.parent_description:
                 sections.append(f"\n{self.parent_description}")
-
-        # Epic context
-        if self.epic_key:
-            sections.append(f"\n## Epic: {self.epic_key}")
-            sections.append(f"**Summary:** {self.epic_summary or 'N/A'}")
-            if self.epic_description:
-                sections.append(f"\n{self.epic_description}")
 
         # Existing test cases for reuse
         if self.linked_test_cases or self.related_test_cases:
@@ -351,36 +412,45 @@ def fetch_jira_context(
     jira_client: Any,
     include_parent: bool = True,
     include_epic: bool = True,
+    include_initiative: bool = True,
     include_existing_tests: bool = True,
 ) -> Optional[JiraContext]:
     """
-    Fetch comprehensive JIRA context including parent, epic, and existing test cases.
+    Fetch comprehensive JIRA context including full Pandora hierarchy and existing test cases.
+
+    Pandora JIRA Hierarchy: Initiative -> Epic -> Story -> Task
 
     Args:
-        story_key: JIRA story key (e.g., "OG-6606")
+        story_key: JIRA issue key (e.g., "FIND-4411")
         jira_client: JIRA client instance
         include_parent: Whether to fetch parent ticket details
         include_epic: Whether to fetch epic details
+        include_initiative: Whether to fetch initiative details (Pandora hierarchy)
         include_existing_tests: Whether to search for existing test cases
 
     Returns:
-        JiraContext object with all gathered information
+        JiraContext object with all gathered information including Initiative
     """
     if not jira_client:
         logger.warning("No JIRA client provided for context enrichment")
         return None
 
     try:
-        # Fetch the main story
+        # Fetch the main issue
         story = jira_client.get_issue(story_key)
         if not story:
-            logger.warning(f"Could not fetch story {story_key}")
+            logger.warning(f"Could not fetch issue {story_key}")
             return None
+
+        # Determine hierarchy level based on issue type
+        issue_type = _get_issue_type(story_key, jira_client)
+        hierarchy_level = _determine_hierarchy_level(issue_type)
 
         context = JiraContext(
             story_key=story_key,
             story_summary=story.summary,
             story_description=story.description or "",
+            hierarchy_level=hierarchy_level,
         )
 
         # Fetch parent ticket if exists
@@ -394,6 +464,7 @@ def fetch_jira_context(
                     context.parent_description = parent.description
 
         # Fetch epic if exists
+        epic_key = None
         if include_epic:
             epic_key = _get_epic_key(story_key, jira_client)
             if epic_key:
@@ -402,6 +473,16 @@ def fetch_jira_context(
                     context.epic_key = epic_key
                     context.epic_summary = epic.summary
                     context.epic_description = epic.description
+
+        # Fetch initiative if exists (Pandora hierarchy: Initiative -> Epic)
+        if include_initiative and epic_key:
+            initiative_key = _get_initiative_key(epic_key, jira_client)
+            if initiative_key:
+                initiative = jira_client.get_issue(initiative_key)
+                if initiative:
+                    context.initiative_key = initiative_key
+                    context.initiative_summary = initiative.summary
+                    context.initiative_description = initiative.description
 
         # Fetch existing test cases
         if include_existing_tests:
@@ -425,8 +506,13 @@ def fetch_jira_context(
                 linked_tests + related_tests
             )
 
-        logger.info(f"Fetched JIRA context for {story_key}: parent={context.parent_key}, epic={context.epic_key}, "
-                   f"linked_tests={len(context.linked_test_cases)}, related_tests={len(context.related_test_cases)}")
+        logger.info(
+            f"Fetched JIRA context for {story_key} (level={hierarchy_level}): "
+            f"initiative={context.initiative_key}, epic={context.epic_key}, "
+            f"parent={context.parent_key}, "
+            f"linked_tests={len(context.linked_test_cases)}, "
+            f"related_tests={len(context.related_test_cases)}"
+        )
 
         return context
 
@@ -477,6 +563,111 @@ def _get_epic_key(story_key: str, jira_client: Any) -> Optional[str]:
     except Exception as e:
         logger.debug(f"Could not get epic for {story_key}: {e}")
     return None
+
+
+def _get_initiative_key(epic_key: str, jira_client: Any) -> Optional[str]:
+    """
+    Get the initiative key for an epic.
+
+    In Pandora's JIRA hierarchy: Initiative -> Epic -> Story -> Task
+    The Initiative is the parent of an Epic.
+
+    Args:
+        epic_key: JIRA epic key
+        jira_client: JIRA client instance
+
+    Returns:
+        Initiative key if found, None otherwise
+    """
+    if not epic_key:
+        return None
+
+    try:
+        # Get the parent of the Epic (which should be the Initiative)
+        response = jira_client.client.get(
+            f"issue/{epic_key}",
+            params={"fields": "parent,issuetype"}
+        )
+        if response.status_code == 200:
+            data = response.json()
+            fields = data.get("fields", {})
+            parent = fields.get("parent")
+
+            if parent:
+                parent_key = parent.get("key")
+                # Verify it's an Initiative type
+                parent_type = parent.get("fields", {}).get("issuetype", {}).get("name", "")
+                if parent_type.lower() == "initiative" or parent_key:
+                    return parent_key
+
+        # Also try customfield for initiative link (some JIRA configs use this)
+        initiative_fields = ["customfield_10015", "customfield_10016", "initiative"]
+        response = jira_client.client.get(
+            f"issue/{epic_key}",
+            params={"fields": ",".join(initiative_fields)}
+        )
+        if response.status_code == 200:
+            data = response.json()
+            fields = data.get("fields", {})
+
+            for field in initiative_fields:
+                value = fields.get(field)
+                if value:
+                    if isinstance(value, str):
+                        return value
+                    elif isinstance(value, dict):
+                        return value.get("key")
+
+    except Exception as e:
+        logger.debug(f"Could not get initiative for epic {epic_key}: {e}")
+    return None
+
+
+def _get_issue_type(issue_key: str, jira_client: Any) -> Optional[str]:
+    """
+    Get the issue type for a JIRA ticket.
+
+    Args:
+        issue_key: JIRA issue key
+        jira_client: JIRA client instance
+
+    Returns:
+        Issue type name (e.g., 'Story', 'Task', 'Epic', 'Initiative')
+    """
+    try:
+        response = jira_client.client.get(
+            f"issue/{issue_key}",
+            params={"fields": "issuetype"}
+        )
+        if response.status_code == 200:
+            data = response.json()
+            return data.get("fields", {}).get("issuetype", {}).get("name")
+    except Exception as e:
+        logger.debug(f"Could not get issue type for {issue_key}: {e}")
+    return None
+
+
+def _determine_hierarchy_level(issue_type: str) -> str:
+    """
+    Determine the hierarchy level based on issue type.
+
+    Args:
+        issue_type: JIRA issue type name
+
+    Returns:
+        Hierarchy level: 'initiative', 'epic', 'story', or 'task'
+    """
+    if not issue_type:
+        return "story"
+
+    issue_type_lower = issue_type.lower()
+
+    for level, types in PANDORA_JIRA_HIERARCHY["issue_types"].items():
+        if any(t.lower() == issue_type_lower for t in types):
+            return level
+
+    # Default to story if not recognized
+    return "story"
 
 
 def _get_linked_test_cases(story_key: str, jira_client: Any) -> List[Dict[str, Any]]:
@@ -3569,10 +3760,14 @@ def run_jira_workflow(
         },
         "priority_level_table": test_suite.get_priority_level_table(),
         "jira_context": {
-            "parent_key": jira_context.parent_key if jira_context else None,
-            "parent_summary": jira_context.parent_summary if jira_context else None,
+            # Pandora JIRA Hierarchy: Initiative -> Epic -> Story -> Task
+            "hierarchy_level": jira_context.hierarchy_level if jira_context else None,
+            "initiative_key": jira_context.initiative_key if jira_context else None,
+            "initiative_summary": jira_context.initiative_summary if jira_context else None,
             "epic_key": jira_context.epic_key if jira_context else None,
             "epic_summary": jira_context.epic_summary if jira_context else None,
+            "parent_key": jira_context.parent_key if jira_context else None,
+            "parent_summary": jira_context.parent_summary if jira_context else None,
             "linked_test_cases_count": len(jira_context.linked_test_cases) if jira_context else 0,
             "related_test_cases_count": len(jira_context.related_test_cases) if jira_context else 0,
             "reusable_scenarios": jira_context.reusable_scenarios if jira_context else [],
