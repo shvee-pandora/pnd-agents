@@ -1,0 +1,73 @@
+{
+  "name": "pnd-agents-slash-commands",
+  "description": "Complete slash command suite for all PND Agents. Provides instant access to Task Management, Frontend Development, CMS Integration, Code Review, Testing, Performance Analysis, Product Management, and more. Install once, use everywhere - no MCP setup required.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Pandora Digital",
+    "email": "tech@pandora.net",
+    "url": "https://github.com/shvee-pandora"
+  },
+  "homepage": "https://github.com/shvee-pandora/pnd-agents",
+  "repository": "https://github.com/shvee-pandora/pnd-agents",
+  "license": "MIT",
+  "agents": [
+    "agents/task-manager.md",
+    "agents/frontend-engineer.md",
+    "agents/amplience-cms.md",
+    "agents/code-review.md",
+    "agents/performance.md",
+    "agents/unit-test.md",
+    "agents/qa.md",
+    "agents/backend.md",
+    "agents/commerce.md",
+    "agents/figma-reader.md",
+    "agents/broken-experience-detector.md",
+    "agents/sonar-validation.md",
+    "agents/analytics.md",
+    "agents/amplience-placement.md",
+    "agents/prd-to-jira.md",
+    "agents/exec-summary.md",
+    "agents/roadmap-review.md"
+  ],
+  "commands": [
+    "commands/task-manager.md",
+    "commands/frontend.md",
+    "commands/amplience.md",
+    "commands/code-review.md",
+    "commands/performance.md",
+    "commands/unit-test.md",
+    "commands/qa.md",
+    "commands/backend.md",
+    "commands/commerce.md",
+    "commands/figma.md",
+    "commands/bx-scan.md",
+    "commands/sonar.md",
+    "commands/analytics.md",
+    "commands/amplience-placement.md",
+    "commands/prd-to-jira.md",
+    "commands/exec-summary.md",
+    "commands/roadmap-review.md"
+  ],
+  "skills": [
+    "skills/pandora-coding-standards.md"
+  ],
+  "keywords": [
+    "pandora",
+    "agents",
+    "slash-commands",
+    "claude-desktop",
+    "task-management",
+    "frontend",
+    "cms",
+    "testing",
+    "code-review",
+    "product-management"
+  ],
+  "categories": [
+    "development",
+    "testing",
+    "cms",
+    "product-management",
+    "performance"
+  ]
+}
