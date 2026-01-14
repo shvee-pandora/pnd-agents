@@ -1,6 +1,6 @@
 # Test Case Writing Agent - Stakeholder Overview
 
-**Document Version:** 2.0
+**Document Version:** 2.1
 **Date:** January 2026
 **Prepared for:** Senior Stakeholders
 
@@ -15,10 +15,151 @@ The **Test Case Writing Agent** (qAIn - Quality AI Agent) is an AI-powered autom
 - Ensures consistent test coverage across all acceptance criteria
 - Provides traceability from requirements to test cases
 - Integrates seamlessly with existing JIRA workflows
-- **NEW:** Enriches context from Parent tickets and EPICs
+- **NEW v2.1:** Interactive workflow with user questions
+- **NEW v2.1:** Pandora JIRA Hierarchy support (Initiative → Epic → Story → Task)
+- **NEW v2.1:** Testing type recommendation mode
+- **NEW:** Enriches context from Parent tickets, EPICs, and Initiatives
 - **NEW:** Discovers and reuses existing test cases
 - **NEW:** Merges similar scenarios to reduce redundancy
 - **NEW:** Processes external documentation (Figma, Confluence)
+
+---
+
+## qAIn Interactive Workflow (NEW v2.1)
+
+When a user shares a JIRA ticket with qAIn, the agent follows an interactive two-step workflow:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      qAIn INTERACTIVE WORKFLOW                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+  USER SHARES JIRA TICKET
+          │
+          ▼
+  ┌───────────────────────────────────────────────────────────────────────┐
+  │  STEP 1: HIERARCHY REVIEW QUESTION                                     │
+  │                                                                        │
+  │  "Do you want qAIn to review Parent and Epic for broader context?"     │
+  │                                                                        │
+  │  ┌─────────────────────────────┐  ┌─────────────────────────────┐     │
+  │  │ ✓ Yes, review hierarchy     │  │   No, just this ticket      │     │
+  │  │   (Recommended)             │  │                             │     │
+  │  │                             │  │   Only analyze current      │     │
+  │  │   Fetch Initiative → Epic   │  │   ticket without hierarchy  │     │
+  │  │   → Story context           │  │   context                   │     │
+  │  └─────────────────────────────┘  └─────────────────────────────┘     │
+  └───────────────────────────────────────────────────────────────────────┘
+          │
+          ▼
+  ┌───────────────────────────────────────────────────────────────────────┐
+  │  STEP 2: ACTION SELECTION QUESTION                                     │
+  │                                                                        │
+  │  "What would you like qAIn to do?"                                     │
+  │                                                                        │
+  │  ┌─────────────────────────────┐  ┌─────────────────────────────┐     │
+  │  │   Recommend testing types   │  │ ✓ Create test cases         │     │
+  │  │                             │  │   (Recommended)             │     │
+  │  │   Review ticket and         │  │                             │     │
+  │  │   provide testing types     │  │   Create & link test cases  │     │
+  │  │   as a JIRA comment         │  │   with detailed coverage    │     │
+  │  │                             │  │   comment                   │     │
+  │  └─────────────────────────────┘  └─────────────────────────────┘     │
+  └───────────────────────────────────────────────────────────────────────┘
+          │
+          ▼
+  ┌───────────────────────────────────────────────────────────────────────┐
+  │  OUTPUT (Based on Selection)                                           │
+  │                                                                        │
+  │  Option 1: Testing Type        │  Option 2: Full Test Design          │
+  │  Recommendation                │                                       │
+  │  ─────────────────────────     │  ─────────────────────────────────   │
+  │  • Analyzes ticket content     │  • Generates comprehensive tests     │
+  │  • Recommends FT-UI, FT-API,   │  • Creates test cases in JIRA        │
+  │    E2E, SIT, A11Y, etc.        │  • Links to story                    │
+  │  • Posts comment to JIRA       │  • Posts coverage matrix comment     │
+  │  • No test cases created       │  • Full traceability                 │
+  └───────────────────────────────────────────────────────────────────────┘
+```
+
+### Workflow Modes
+
+| Mode | Description | Output |
+|------|-------------|--------|
+| **TESTING_TYPE_ONLY** | Reviews ticket and recommends testing types | JIRA comment with recommended types |
+| **FULL_TEST_DESIGN** | Creates comprehensive test cases | Test cases in JIRA + coverage comment |
+
+### Testing Type Auto-Detection
+
+qAIn analyzes ticket content to recommend appropriate testing types:
+
+| Testing Type | Detected Keywords |
+|--------------|-------------------|
+| **FT-UI** | ui, frontend, component, button, form, page, modal, drawer, figma |
+| **FT-API** | api, endpoint, request, response, rest, graphql, backend, service |
+| **E2E** | flow, journey, user journey, checkout, login, purchase, workflow |
+| **SIT** | integration, system, cross-component, data flow, third party |
+| **A11Y** | accessibility, a11y, wcag, screen reader, keyboard, aria, contrast |
+| **Performance** | performance, load, speed, latency, throughput, pwa, response time |
+| **Security** | security, authentication, authorization, token, csrf, xss, injection |
+
+---
+
+## Pandora JIRA Hierarchy Support (NEW v2.1)
+
+The agent supports Pandora's specific JIRA workflow hierarchy:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      PANDORA JIRA HIERARCHY                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+                    ┌─────────────────────┐
+                    │    INITIATIVE       │  ← Business Objective
+                    │   (Top Level)       │     High-level theme
+                    └──────────┬──────────┘
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │       EPIC          │  ← Feature Scope
+                    │                     │     Large body of work
+                    └──────────┬──────────┘
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │       STORY         │  ← User Requirement
+                    │                     │     User-facing feature
+                    └──────────┬──────────┘
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │       TASK          │  ← Implementation
+                    │   (Bottom Level)    │     Technical work item
+                    └─────────────────────┘
+```
+
+### Hierarchy Context Benefits
+
+| Level | Context Provided | Test Design Impact |
+|-------|------------------|-------------------|
+| **Initiative** | Business objective, strategic goals | Ensures tests align with business outcomes |
+| **Epic** | Feature scope, related stories | Identifies integration points |
+| **Story** | User requirements, acceptance criteria | Primary source for test scenarios |
+| **Task** | Technical implementation details | Informs technical test approach |
+
+### Configuration
+
+```python
+PANDORA_JIRA_HIERARCHY = {
+    "levels": ["Initiative", "Epic", "Story", "Task"],
+    "issue_types": {
+        "initiative": ["Initiative"],
+        "epic": ["Epic"],
+        "story": ["Story", "User Story"],
+        "task": ["Task", "Sub-task", "Technical Task"]
+    }
+}
+```
 
 ---
 
@@ -398,25 +539,42 @@ TestSuite
 └── coverage_gaps: ["Security not covered"]
 ```
 
-### JIRA Context Structure (NEW)
+### JIRA Context Structure (Updated v2.1)
 ```
-JiraContext
-├── story_key: "OG-7381"
-├── story_summary: "Product Set Engraving"
+JiraContext (Supports Pandora Hierarchy: Initiative → Epic → Story → Task)
+├── story_key: "FIND-4411"
+├── story_summary: "New Search UI | Search Suggestions"
 ├── story_description: "As a customer..."
-├── parent_key: "OG-7380"
-├── parent_summary: "Engraving Feature"
-├── parent_description: "Parent feature details..."
-├── epic_key: "OG-7000"
-├── epic_summary: "Q1 2026 Enhancements"
+├── hierarchy_level: "story"              # NEW: initiative, epic, story, task
+│
+├── # Initiative Level (NEW v2.1)
+├── initiative_key: "FIND-4000"
+├── initiative_summary: "Search Experience Improvements"
+├── initiative_description: "Business objective..."
+│
+├── # Epic Level
+├── epic_key: "FIND-4100"
+├── epic_summary: "Search Suggestions Feature"
 ├── epic_description: "Epic level objectives..."
+│
+├── # Parent Level
+├── parent_key: "FIND-4400"
+├── parent_summary: "Search UI Components"
+├── parent_description: "Parent feature details..."
+│
+├── # Task Level (if applicable)
+├── task_key: null
+├── task_summary: null
+├── task_description: null
+│
+├── # Test Case Discovery
 ├── linked_test_cases: [
-│   ├── key: "OG-7382"
-│   ├── summary: "Test engraving flow"
+│   ├── key: "FIND-4412"
+│   ├── summary: "Test search suggestions"
 │   └── status: "Ready"
 │   ]
 ├── related_test_cases: [...]
-└── reusable_scenarios: ["Engraving validation", "CTA visibility"]
+└── reusable_scenarios: ["Search validation", "Suggestions display"]
 ```
 
 ---
@@ -479,18 +637,70 @@ result = run_jira_workflow(
     feature_name="Product Set Engraving",
     test_types=["FT-UI", "E2E"],
     create_in_jira=True,
-    # NEW: Context enrichment options
+    # Context enrichment options
     include_parent_context=True,   # Fetch parent ticket
     include_epic_context=True,     # Fetch EPIC details
     include_existing_tests=True,   # Find existing test cases
     external_doc_links=[],         # Figma/Confluence URLs
 )
 
-# NEW: Result includes JIRA context info
+# Result includes JIRA context info
 print(f"Parent: {result['jira_context']['parent_key']}")
 print(f"Epic: {result['jira_context']['epic_key']}")
 print(f"Linked tests found: {result['jira_context']['linked_test_count']}")
 print(f"Related tests found: {result['jira_context']['related_test_count']}")
+```
+
+### 4. qAIn Interactive Workflow (NEW v2.1)
+```python
+from src.agents.test_case_writing_agent import (
+    QAInWorkflowMode,
+    run_qain_workflow,
+    get_qain_initial_questions,
+    get_qain_action_questions,
+    analyze_ticket_for_testing_types,
+)
+
+# Get workflow questions for UI
+initial_questions = get_qain_initial_questions()
+# Returns: "Do you want qAIn to review Parent and Epic?"
+
+action_questions = get_qain_action_questions()
+# Returns: "Recommend testing types" OR "Create test cases"
+
+# Run workflow based on user choices
+result = await run_qain_workflow(
+    story_key="FIND-4411",
+    jira_client=jira_client,
+    mode=QAInWorkflowMode.TESTING_TYPE_ONLY,  # or FULL_TEST_DESIGN
+    include_hierarchy=True,  # Fetch Initiative → Epic → Story
+)
+
+# Result structure
+print(f"Mode: {result['mode']}")
+print(f"Initiative: {result['jira_context']['initiative_key']}")
+print(f"Epic: {result['jira_context']['epic_key']}")
+print(f"Recommendations: {result['recommendations']['recommended_types']}")
+print(f"Comment posted: {result['success']}")
+```
+
+### 5. Testing Type Analysis (NEW v2.1)
+```python
+from src.agents.test_case_writing_agent import analyze_ticket_for_testing_types
+
+# Analyze ticket content to recommend testing types
+recommendations = analyze_ticket_for_testing_types(
+    description="UI components with API integration and accessibility requirements",
+    summary="Search Suggestions Feature",
+    labels=["AutomateFirst"]
+)
+
+print(recommendations)
+# {
+#     "recommended_types": ["FT-UI", "FT-API", "SIT", "A11Y"],
+#     "rationale": ["FT-UI: UI components mentioned", ...],
+#     "priority_order": ["FT-UI", "FT-API", "SIT", "A11Y"]
+# }
 ```
 
 ---
@@ -534,8 +744,22 @@ For questions about the Test Case Writing Agent, contact the **PG AI Squad**.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.1 | January 2026 | **qAIn Interactive Workflow:** Added two-step user questions (hierarchy review + action selection), Pandora JIRA Hierarchy support (Initiative → Epic → Story → Task), Testing type recommendation mode, `QAInWorkflowMode` enum, `analyze_ticket_for_testing_types()` function |
 | 2.0 | January 2026 | Added JIRA context enrichment (parent/EPIC), external doc processing (Figma/Confluence), scenario merging, 34 API test scenarios |
 | 1.0 | January 2026 | Initial release with core test case generation and JIRA integration |
+
+---
+
+## New Functions in v2.1
+
+| Function | Purpose |
+|----------|---------|
+| `get_qain_initial_questions()` | Get hierarchy review question |
+| `get_qain_action_questions()` | Get action selection question |
+| `get_qain_full_workflow_questions()` | Get all workflow questions |
+| `analyze_ticket_for_testing_types()` | Auto-detect required testing types |
+| `generate_testing_type_comment()` | Generate testing type JIRA comment |
+| `run_qain_workflow()` | Execute qAIn workflow based on user choices |
 
 ---
 
