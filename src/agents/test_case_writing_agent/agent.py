@@ -3308,6 +3308,406 @@ def generate_comprehensive_test_suite(
 
 # ==================== JIRA Integration Functions ====================
 
+# ==================== qAIn Interactive Workflow ====================
+
+class QAInWorkflowMode(Enum):
+    """Workflow modes for qAIn JIRA integration."""
+    TESTING_TYPE_ONLY = "testing_type_only"  # Review and recommend testing types only
+    FULL_TEST_DESIGN = "full_test_design"     # Create test cases with full coverage
+
+
+def get_qain_initial_questions() -> List[Dict[str, Any]]:
+    """
+    Get initial questions when user shares a JIRA ticket.
+
+    Step 1: Ask if user wants qAIn to review Parent and Epic (Pandora hierarchy)
+
+    Returns:
+        List of questions in AskUserQuestion format
+    """
+    return [
+        {
+            "question": "Do you want qAIn to review Parent and Epic for broader context?",
+            "header": "Hierarchy",
+            "options": [
+                {
+                    "label": "Yes, review hierarchy (Recommended)",
+                    "description": "Fetch Initiative → Epic → Story context for better test design"
+                },
+                {
+                    "label": "No, just this ticket",
+                    "description": "Only analyze the current ticket without hierarchy context"
+                },
+            ],
+            "multiSelect": False,
+        },
+    ]
+
+
+def get_qain_action_questions() -> List[Dict[str, Any]]:
+    """
+    Get action questions after hierarchy preference is set.
+
+    Step 2: Ask what action the user wants qAIn to perform.
+
+    Returns:
+        List of questions in AskUserQuestion format
+    """
+    return [
+        {
+            "question": "What would you like qAIn to do?",
+            "header": "Action",
+            "options": [
+                {
+                    "label": "Recommend testing types",
+                    "description": "Review ticket and provide recommended testing types as a comment"
+                },
+                {
+                    "label": "Create test cases (Recommended)",
+                    "description": "Create & link test cases with detailed coverage comment"
+                },
+            ],
+            "multiSelect": False,
+        },
+    ]
+
+
+def get_qain_full_workflow_questions() -> List[Dict[str, Any]]:
+    """
+    Get all qAIn workflow questions in sequence.
+
+    Combined questions for the interactive workflow:
+    1. JIRA ticket ID
+    2. Review Parent/Epic hierarchy?
+    3. Action: Testing types only OR Full test design
+
+    Returns:
+        List of questions in AskUserQuestion format
+    """
+    return [
+        {
+            "question": "What is the JIRA ticket ID? (e.g., FIND-4411, INS-2761)",
+            "header": "Ticket ID",
+            "options": [
+                {"label": "Enter ticket ID", "description": "I'll provide the JIRA ticket ID"},
+            ],
+            "multiSelect": False,
+        },
+        {
+            "question": "Do you want qAIn to review Parent and Epic for broader context?",
+            "header": "Hierarchy",
+            "options": [
+                {
+                    "label": "Yes, review hierarchy (Recommended)",
+                    "description": "Fetch Initiative → Epic → Story context for better test design"
+                },
+                {
+                    "label": "No, just this ticket",
+                    "description": "Only analyze the current ticket without hierarchy context"
+                },
+            ],
+            "multiSelect": False,
+        },
+        {
+            "question": "What would you like qAIn to do?",
+            "header": "Action",
+            "options": [
+                {
+                    "label": "Recommend testing types",
+                    "description": "Review ticket and provide recommended testing types as a comment"
+                },
+                {
+                    "label": "Create test cases (Recommended)",
+                    "description": "Create & link test cases with detailed coverage comment"
+                },
+            ],
+            "multiSelect": False,
+        },
+    ]
+
+
+def analyze_ticket_for_testing_types(
+    description: str,
+    summary: str,
+    issue_type: str = "Story",
+    labels: List[str] = None,
+) -> Dict[str, Any]:
+    """
+    Analyze a JIRA ticket and recommend appropriate testing types.
+
+    Args:
+        description: Ticket description/requirements
+        summary: Ticket summary
+        issue_type: Type of JIRA issue
+        labels: Ticket labels
+
+    Returns:
+        Dictionary with recommended testing types and rationale
+    """
+    labels = labels or []
+    text = f"{summary} {description}".lower()
+
+    recommendations = {
+        "recommended_types": [],
+        "rationale": [],
+        "priority_order": [],
+    }
+
+    # Analyze for UI testing
+    ui_indicators = ["ui", "frontend", "component", "button", "form", "page", "display",
+                     "modal", "drawer", "layout", "responsive", "mobile", "desktop", "figma"]
+    if any(indicator in text for indicator in ui_indicators):
+        recommendations["recommended_types"].append("FT-UI")
+        recommendations["rationale"].append("FT-UI: UI components or visual elements mentioned")
+
+    # Analyze for API testing
+    api_indicators = ["api", "endpoint", "request", "response", "rest", "graphql",
+                      "backend", "service", "integration"]
+    if any(indicator in text for indicator in api_indicators):
+        recommendations["recommended_types"].append("FT-API")
+        recommendations["rationale"].append("FT-API: API or backend integration mentioned")
+
+    # Analyze for E2E testing
+    e2e_indicators = ["flow", "journey", "user journey", "checkout", "login", "purchase",
+                      "end to end", "e2e", "workflow", "scenario"]
+    if any(indicator in text for indicator in e2e_indicators):
+        recommendations["recommended_types"].append("E2E")
+        recommendations["rationale"].append("E2E: User flow or journey mentioned")
+
+    # Analyze for Integration testing
+    sit_indicators = ["integration", "system", "cross-component", "data flow",
+                      "service integration", "third party"]
+    if any(indicator in text for indicator in sit_indicators):
+        recommendations["recommended_types"].append("SIT")
+        recommendations["rationale"].append("SIT: System integration or data flow mentioned")
+
+    # Analyze for Accessibility testing
+    a11y_indicators = ["accessibility", "a11y", "wcag", "screen reader", "keyboard",
+                       "aria", "contrast", "accessible"]
+    if any(indicator in text for indicator in a11y_indicators) or "accessibility" in [l.lower() for l in labels]:
+        recommendations["recommended_types"].append("A11Y")
+        recommendations["rationale"].append("A11Y: Accessibility requirements mentioned")
+
+    # Analyze for Performance testing
+    perf_indicators = ["performance", "load", "speed", "latency", "throughput",
+                       "concurrent", "response time", "pwa"]
+    if any(indicator in text for indicator in perf_indicators):
+        recommendations["recommended_types"].append("Performance")
+        recommendations["rationale"].append("Performance: Performance requirements mentioned")
+
+    # Analyze for Security testing
+    security_indicators = ["security", "authentication", "authorization", "token",
+                          "csrf", "xss", "injection", "encryption", "password"]
+    if any(indicator in text for indicator in security_indicators):
+        recommendations["recommended_types"].append("Security")
+        recommendations["rationale"].append("Security: Security-related functionality mentioned")
+
+    # Default to FT-UI if nothing specific found
+    if not recommendations["recommended_types"]:
+        recommendations["recommended_types"] = ["FT-UI"]
+        recommendations["rationale"] = ["FT-UI: Default for user-facing features"]
+
+    # Set priority order (most critical first)
+    priority_map = {
+        "FT-UI": 1, "FT-API": 2, "E2E": 3, "SIT": 4,
+        "A11Y": 5, "Performance": 6, "Security": 7
+    }
+    recommendations["priority_order"] = sorted(
+        recommendations["recommended_types"],
+        key=lambda x: priority_map.get(x, 99)
+    )
+
+    return recommendations
+
+
+def generate_testing_type_comment(
+    story_key: str,
+    summary: str,
+    recommendations: Dict[str, Any],
+    jira_context: Optional[JiraContext] = None,
+) -> str:
+    """
+    Generate a JIRA comment with recommended testing types.
+
+    Args:
+        story_key: JIRA ticket key
+        summary: Ticket summary
+        recommendations: Output from analyze_ticket_for_testing_types
+        jira_context: Optional hierarchy context
+
+    Returns:
+        Formatted comment for JIRA
+    """
+    # Build hierarchy context section
+    hierarchy_section = ""
+    if jira_context:
+        hierarchy_section = f"""
+### JIRA Hierarchy Context
+- **Level:** {jira_context.hierarchy_level.title()}
+"""
+        if jira_context.initiative_key:
+            hierarchy_section += f"- **Initiative:** {jira_context.initiative_key} - {jira_context.initiative_summary or 'N/A'}\n"
+        if jira_context.epic_key:
+            hierarchy_section += f"- **Epic:** {jira_context.epic_key} - {jira_context.epic_summary or 'N/A'}\n"
+        hierarchy_section += f"- **Story:** {story_key} - {summary}\n"
+
+    # Build recommended types table
+    types_table = "| Testing Type | Priority | Rationale |\n|-------------|----------|----------|\n"
+    for i, test_type in enumerate(recommendations["priority_order"], 1):
+        rationale_idx = recommendations["recommended_types"].index(test_type)
+        rationale = recommendations["rationale"][rationale_idx].split(": ", 1)[-1]
+        types_table += f"| {test_type} | {i} | {rationale} |\n"
+
+    comment = f"""{QAIN_SIGNATURE}
+
+## Testing Type Recommendation - {story_key}
+
+{hierarchy_section}
+---
+
+### Recommended Testing Types
+
+{types_table}
+
+### Summary
+- **Total Testing Types:** {len(recommendations["recommended_types"])}
+- **Primary Focus:** {recommendations["priority_order"][0] if recommendations["priority_order"] else "FT-UI"}
+
+### Next Steps
+1. Review the recommended testing types above
+2. Confirm or adjust based on your testing strategy
+3. When ready, ask qAIn to create test cases with: *"Create test cases for {story_key}"*
+
+---
+
+*This is a testing type analysis only. No test cases have been created yet.*
+*Generated by qAIn - Test Case Writing Agent v2.0*
+"""
+    return comment
+
+
+async def run_qain_workflow(
+    story_key: str,
+    jira_client: Any,
+    mode: QAInWorkflowMode = QAInWorkflowMode.FULL_TEST_DESIGN,
+    include_hierarchy: bool = True,
+    test_types: List[str] = None,
+    feature_label: str = None,
+) -> Dict[str, Any]:
+    """
+    Run the qAIn interactive workflow for a JIRA ticket.
+
+    Args:
+        story_key: JIRA ticket key
+        jira_client: JIRA client instance
+        mode: Workflow mode (TESTING_TYPE_ONLY or FULL_TEST_DESIGN)
+        include_hierarchy: Whether to fetch Initiative/Epic context
+        test_types: Optional list of testing types to use
+        feature_label: Optional feature label
+
+    Returns:
+        Workflow result with generated content
+    """
+    result = {
+        "success": False,
+        "mode": mode.value,
+        "story_key": story_key,
+        "jira_context": None,
+        "recommendations": None,
+        "comment": None,
+        "test_suite": None,
+        "created_test_cases": [],
+        "error": None,
+    }
+
+    try:
+        # Fetch JIRA context with hierarchy if requested
+        jira_context = fetch_jira_context(
+            story_key=story_key,
+            jira_client=jira_client,
+            include_parent=True,
+            include_epic=include_hierarchy,
+            include_initiative=include_hierarchy,
+            include_existing_tests=True,
+        )
+
+        if not jira_context:
+            result["error"] = f"Could not fetch JIRA context for {story_key}"
+            return result
+
+        result["jira_context"] = {
+            "hierarchy_level": jira_context.hierarchy_level,
+            "initiative_key": jira_context.initiative_key,
+            "initiative_summary": jira_context.initiative_summary,
+            "epic_key": jira_context.epic_key,
+            "epic_summary": jira_context.epic_summary,
+            "parent_key": jira_context.parent_key,
+            "parent_summary": jira_context.parent_summary,
+        }
+
+        # Get issue details
+        issue = jira_client.get_issue(story_key)
+        if not issue:
+            result["error"] = f"Could not fetch issue {story_key}"
+            return result
+
+        # Analyze ticket for testing types
+        recommendations = analyze_ticket_for_testing_types(
+            description=issue.description or "",
+            summary=issue.summary,
+            issue_type=issue.issue_type,
+            labels=issue.labels,
+        )
+        result["recommendations"] = recommendations
+
+        # Mode 1: Testing Type Recommendation Only
+        if mode == QAInWorkflowMode.TESTING_TYPE_ONLY:
+            comment = generate_testing_type_comment(
+                story_key=story_key,
+                summary=issue.summary,
+                recommendations=recommendations,
+                jira_context=jira_context,
+            )
+            result["comment"] = comment
+
+            # Add comment to JIRA
+            try:
+                jira_client.add_comment(story_key, comment)
+                result["success"] = True
+            except Exception as e:
+                result["error"] = f"Failed to add comment: {e}"
+                result["success"] = False
+
+        # Mode 2: Full Test Design
+        elif mode == QAInWorkflowMode.FULL_TEST_DESIGN:
+            # Use recommended types if none specified
+            if not test_types:
+                test_types = recommendations["priority_order"]
+
+            # Generate test cases using the existing workflow
+            workflow_result = await run_jira_workflow(
+                story_key=story_key,
+                requirements=jira_context.to_requirements_context(),
+                feature_name=feature_label or issue.summary,
+                test_types=test_types,
+                jira_client=jira_client,
+                create_in_jira=True,
+                include_parent_context=include_hierarchy,
+                include_epic_context=include_hierarchy,
+            )
+
+            result["test_suite"] = workflow_result.get("test_suite")
+            result["created_test_cases"] = workflow_result.get("created_test_cases", [])
+            result["comment"] = workflow_result.get("comment")
+            result["success"] = workflow_result.get("success", False)
+
+    except Exception as e:
+        result["error"] = str(e)
+        result["success"] = False
+
+    return result
+
+
 def get_workflow_questions() -> List[Dict[str, Any]]:
     """
     Get questions to ask the user before generating test cases.
