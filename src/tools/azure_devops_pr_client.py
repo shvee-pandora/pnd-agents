@@ -257,6 +257,11 @@ class AzureDevOpsPRClient:
     def client(self) -> httpx.Client:
         """Get or create HTTP client."""
         if self._client is None:
+            if not self.config.pat:
+                raise ValueError(
+                    "Azure DevOps PAT not configured. "
+                    "Set AZURE_DEVOPS_PAT or AZURE_DEVOPS_TOKEN environment variable."
+                )
             credentials = base64.b64encode(f":{self.config.pat}".encode()).decode()
             self._client = httpx.Client(
                 headers={
@@ -265,8 +270,27 @@ class AzureDevOpsPRClient:
                     "Content-Type": "application/json",
                 },
                 timeout=60.0,
+                follow_redirects=False,
             )
         return self._client
+    
+    def _handle_response(self, response: httpx.Response, url: str) -> None:
+        """Handle HTTP response and raise appropriate errors."""
+        if response.status_code in (301, 302, 303, 307, 308):
+            location = response.headers.get("Location", "")
+            if "_signin" in location or "login" in location.lower():
+                raise PermissionError(
+                    f"Authentication failed for Azure DevOps API. "
+                    f"The PAT may not have access to this project/repository, "
+                    f"or the PAT has expired. URL: {url}"
+                )
+            raise httpx.HTTPStatusError(
+                f"Redirect response '{response.status_code}' for url '{url}'. "
+                f"Redirect location: '{location}'",
+                request=response.request,
+                response=response,
+            )
+        response.raise_for_status()
     
     def close(self):
         """Close HTTP client."""
@@ -336,7 +360,7 @@ class AzureDevOpsPRClient:
         url = f"{api_base}/git/repositories/{repository}/pullrequests/{pr_id}"
         
         response = self.client.get(url, params={"api-version": self.API_VERSION})
-        response.raise_for_status()
+        self._handle_response(response, url)
         data = response.json()
         
         reviewers = []
@@ -398,7 +422,7 @@ class AzureDevOpsPRClient:
         url = f"{api_base}/git/repositories/{repository}/pullrequests/{pr_id}/iterations"
         
         response = self.client.get(url, params={"api-version": self.API_VERSION})
-        response.raise_for_status()
+        self._handle_response(response, url)
         data = response.json()
         
         return data.get("value", [])
@@ -436,7 +460,7 @@ class AzureDevOpsPRClient:
         url = f"{api_base}/git/repositories/{repository}/pullrequests/{pr_id}/iterations/{iteration_id}/changes"
         
         response = self.client.get(url, params={"api-version": self.API_VERSION})
-        response.raise_for_status()
+        self._handle_response(response, url)
         data = response.json()
         
         changes = []
@@ -491,11 +515,13 @@ class AzureDevOpsPRClient:
         
         try:
             response = self.client.get(url, params=params)
-            response.raise_for_status()
+            self._handle_response(response, url)
             return response.text
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
                 return None
+            raise
+        except PermissionError:
             raise
     
     def get_pr_diff(
