@@ -1,5 +1,5 @@
 """
-Func Test Auto Agent Package
+Test Auto Agent Func Package
 
 Generates Cypress automation tests following Pandora's testing standards.
 References pandora_cypress repository for coding conventions, patterns, and
@@ -17,7 +17,7 @@ new scenarios to ensure maximum reuse of existing automation code.
 
 from .agent import (
     # Main Agent Class
-    FuncTestAutoAgent,
+    TestAutoAgentFunc,
     # Enums
     TestLevel,
     ExecutionEnvironment,
@@ -50,7 +50,7 @@ from .agent import (
     AutomationTestCase,
     AutomationTestSuite,
     GeneratedCypressCode,
-    FuncTestAutoResult,
+    TestAutoResultFunc,
     # Convenience Functions
     run,
     get_context_instructions,
@@ -62,7 +62,7 @@ from .agent import (
 
 __all__ = [
     # Main Agent Class
-    "FuncTestAutoAgent",
+    "TestAutoAgentFunc",
     # Enums
     "TestLevel",
     "ExecutionEnvironment",
@@ -95,7 +95,7 @@ __all__ = [
     "AutomationTestCase",
     "AutomationTestSuite",
     "GeneratedCypressCode",
-    "FuncTestAutoResult",
+    "TestAutoResultFunc",
     # Convenience Functions
     "run",
     "get_context_instructions",

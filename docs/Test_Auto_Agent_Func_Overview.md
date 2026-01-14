@@ -1,4 +1,4 @@
-# Functional Test Automation Agent - Overview
+# Test Automation Agent (Functional) - Overview
 
 **Document Version:** 1.1
 **Date:** January 2026
@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-The **Functional Test Automation Agent** (func_test_auto) is an AI-powered tool that generates Cypress automation tests from manual test cases, requirements, or JIRA tickets. It always references the `pandora_cypress` repository to ensure generated code follows Pandora's established patterns and conventions, and **REUSES EXISTING STEP DEFINITIONS**.
+The **Test Automation Agent (Functional)** (test_auto_agent_func) is an AI-powered tool that generates Cypress automation tests from manual test cases, requirements, or JIRA tickets. It always references the `pandora_cypress` repository to ensure generated code follows Pandora's established patterns and conventions, and **REUSES EXISTING STEP DEFINITIONS**.
 
 **Key Value Proposition:**
 - Accelerates automation test creation by 60-70%

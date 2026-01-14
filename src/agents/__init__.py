@@ -8,7 +8,7 @@ from .analytics_agent import AnalyticsAgent
 from .broken_experience_detector_agent import BrokenExperienceDetectorAgent
 from .commerce_agent import CommerceAgent
 from .figma_reader_agent import FigmaReaderAgent
-from .func_test_auto_agent import FuncTestAutoAgent
+from .test_auto_agent_func import TestAutoAgentFunc
 from .qa_agent import QAAgent
 from .sonar_validation_agent import SonarValidationAgent
 from .task_manager_agent import TaskManagerAgent
@@ -20,7 +20,7 @@ __all__ = [
     "BrokenExperienceDetectorAgent",
     "CommerceAgent",
     "FigmaReaderAgent",
-    "FuncTestAutoAgent",
+    "TestAutoAgentFunc",
     "QAAgent",
     "SonarValidationAgent",
     "TaskManagerAgent",
