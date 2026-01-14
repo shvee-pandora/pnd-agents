@@ -12,6 +12,7 @@ from .agent import (
     PRReviewResult,
     ReviewFinding,
     review_pr,
+    review_pr_markdown,
 )
 
 __all__ = [
@@ -21,4 +22,5 @@ __all__ = [
     "PRReviewResult",
     "ReviewFinding",
     "review_pr",
+    "review_pr_markdown",
 ]
