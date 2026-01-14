@@ -18,6 +18,7 @@ from .agent import (
     TestingCycle,
     ComponentType,
     TestingTechnique,
+    QAInWorkflowMode,
     # Dataclasses
     TestStep,
     TestCase,
@@ -38,6 +39,13 @@ from .agent import (
     create_jira_test_cases,
     run_jira_workflow,
     fetch_jira_context,
+    # qAIn Interactive Workflow functions
+    get_qain_initial_questions,
+    get_qain_action_questions,
+    get_qain_full_workflow_questions,
+    analyze_ticket_for_testing_types,
+    generate_testing_type_comment,
+    run_qain_workflow,
     # Constants
     QAIN_SIGNATURE,
     PANDORA_JIRA_HIERARCHY,
@@ -54,6 +62,7 @@ __all__ = [
     "TestingCycle",
     "ComponentType",
     "TestingTechnique",
+    "QAInWorkflowMode",
     # Dataclasses
     "TestStep",
     "TestCase",
@@ -74,6 +83,13 @@ __all__ = [
     "create_jira_test_cases",
     "run_jira_workflow",
     "fetch_jira_context",
+    # qAIn Interactive Workflow functions
+    "get_qain_initial_questions",
+    "get_qain_action_questions",
+    "get_qain_full_workflow_questions",
+    "analyze_ticket_for_testing_types",
+    "generate_testing_type_comment",
+    "run_qain_workflow",
     # Constants
     "QAIN_SIGNATURE",
     "PANDORA_JIRA_HIERARCHY",
