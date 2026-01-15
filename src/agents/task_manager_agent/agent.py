@@ -119,8 +119,8 @@ class TaskManagerAgent:
             repo_root: Path to the target repository root.
         """
         try:
-            from src.agents.repo_profile import load_repo_profile, discover_repo_profile
-            from src.agents.repo_adapter import RepoAdapter
+            from src.agents.core.repo_profile import load_repo_profile, discover_repo_profile
+            from src.agents.core.repo_adapter import RepoAdapter
             
             profile_path = discover_repo_profile(repo_root)
             if profile_path:

@@ -29,8 +29,8 @@ import sys
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.agents.repo_profile import load_repo_profile, discover_repo_profile
-from src.agents.repo_adapter import RepoAdapter
+from src.agents.core.repo_profile import load_repo_profile, discover_repo_profile
+from src.agents.core.repo_adapter import RepoAdapter
 from workflows.workflow_engine import WorkflowEngine
 from workflows.agent_dispatcher import AgentDispatcher
 

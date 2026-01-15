@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 
-from ..coding_standards import (
+from ..core.coding_standards import (
     SONAR_RULES,
     DEFAULT_QUALITY_GATES,
     TEST_GENERATION_LIMITS,
