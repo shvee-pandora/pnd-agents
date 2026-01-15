@@ -35,6 +35,220 @@ The setup wizard will guide you through:
 2. Configuring environment variables (Figma token, Amplience settings)
 3. Updating your Claude configuration automatically
 
+---
+
+## Three Ways to Set Up PND Agents
+
+### 1. Claude Code Setup
+
+Claude Code uses `~/.claude.json` for MCP server configuration.
+
+**Automatic Setup:**
+```bash
+pnd-agents setup
+```
+
+**Manual Setup:**
+
+Add to `~/.claude.json`:
+```json
+{
+  "mcpServers": {
+    "pnd-agents": {
+      "command": "python3",
+      "args": ["/path/to/pnd-agents/main.py"],
+      "env": {
+        "PYTHONPATH": "/path/to/pnd-agents",
+        "FIGMA_ACCESS_TOKEN": "your-figma-token",
+        "SONAR_TOKEN": "your-sonarcloud-token"
+      }
+    }
+  }
+}
+```
+
+**Verification:**
+```bash
+# Check status
+pnd-agents status
+
+# In Claude Code, ask:
+"What pnd-agents tools do you have access to?"
+```
+
+### 2. Claude Desktop Setup
+
+Claude Desktop uses a platform-specific config file.
+
+**Config File Locations:**
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+- **Linux**: `~/.claude.json`
+
+**Automatic Setup:**
+```bash
+pnd-agents setup
+```
+
+**Manual Setup:**
+
+Add to your Claude Desktop config file:
+```json
+{
+  "mcpServers": {
+    "pnd-agents": {
+      "command": "/usr/bin/python3",
+      "args": ["/path/to/pnd-agents/main.py"],
+      "env": {
+        "PYTHONPATH": "/path/to/pnd-agents",
+        "FIGMA_ACCESS_TOKEN": "your-figma-token",
+        "SONAR_TOKEN": "your-sonarcloud-token"
+      }
+    }
+  }
+}
+```
+
+**Important:** Restart Claude Desktop after configuration changes.
+
+### 3. Slash Commands Setup
+
+Slash commands work automatically once pnd-agents is installed. They are defined in `.claude/commands/` and available in any repository.
+
+**Available Slash Commands:**
+
+| Command | Description |
+|---------|-------------|
+| `/tech-debt` | Analyze technical debt in current repository |
+| `/tech-debt summary` | Executive summary for leadership |
+| `/tech-debt register` | Detailed debt inventory for sprint planning |
+| `/figma` | Parse Figma designs and extract component specs |
+| `/frontend` | Generate React/Next.js components |
+| `/performance` | Analyze HAR files for performance issues |
+| `/exec-summary` | Generate executive summaries from sprint data |
+
+**Using Slash Commands:**
+
+In Claude Desktop or Claude Code, simply type the command:
+```
+/tech-debt
+```
+
+Claude will execute the corresponding agent and return results.
+
+---
+
+## Cross-Repository Usage
+
+**Once pnd-agents is installed, it works across ALL repositories on your machine.** You don't need to install it separately for each project.
+
+### How It Works
+
+1. **Install once**: Clone and install pnd-agents in any location
+2. **Configure once**: Run `pnd-agents setup` to configure Claude
+3. **Use everywhere**: Open any repository in Claude and use pnd-agents tools
+
+### Using Agents in Any Repository
+
+**Via Natural Language:**
+```
+"Analyze technical debt in this repository"
+"Generate unit tests for src/components/Button.tsx"
+"Review this code against Pandora standards"
+```
+
+**Via Slash Commands:**
+```
+/tech-debt              # Works in any repo
+/tech-debt summary      # Works in any repo
+```
+
+**Via Python API (from any directory):**
+```python
+from agents.technical_debt_agent import analyze_technical_debt
+
+# Analyze the current repository
+report = analyze_technical_debt(".")
+
+# Analyze a different repository
+report = analyze_technical_debt("/path/to/other/repo")
+```
+
+### Repository-Specific Configuration
+
+For repository-specific settings, create `.claude/repo-profile.json` in your project:
+
+```json
+{
+  "identity": {
+    "name": "my-project",
+    "type": "next-js-app"
+  },
+  "commands": {
+    "test": "pnpm test",
+    "lint": "pnpm lint"
+  },
+  "paths": {
+    "components": "src/components",
+    "tests": "src/__tests__"
+  }
+}
+```
+
+Agents will automatically use these settings when analyzing your repository.
+
+---
+
+## Installing New Agents (For Team Members)
+
+When new agents are added to pnd-agents, team members need to update their installation.
+
+### Updating to Get New Agents
+
+```bash
+# Navigate to your pnd-agents installation
+cd /path/to/pnd-agents
+
+# Pull the latest changes
+git pull origin main
+
+# Reinstall the package
+pip install -e .
+
+# Re-run setup to configure new agents
+pnd-agents setup
+```
+
+### Quick Update (If No New Configuration Needed)
+
+```bash
+cd /path/to/pnd-agents
+git pull origin main
+pip install -e .
+
+# Restart Claude Desktop/Code
+```
+
+### Verifying New Agents Are Available
+
+```bash
+# Check installation status
+pnd-agents status
+
+# In Claude, ask:
+"What pnd-agents tools do you have access to?"
+```
+
+### Team Notification Process
+
+When a new agent is added:
+1. The PR description will list new capabilities
+2. Team members should run `git pull && pip install -e .`
+3. Run `pnd-agents setup` if the agent requires new environment variables
+4. Restart Claude Desktop/Code
+
+---
+
 ## Installation Options
 
 ### Interactive Setup (Default)
@@ -88,9 +302,17 @@ The setup wizard lets you choose which agents to enable:
 | QA | Yes | Generates E2E and integration tests |
 | **Unit Test** | Yes | Generates unit tests with **100% coverage** target |
 | **Sonar Validation** | Yes | Validates against SonarCloud quality gates |
+| **Technical Debt** | Yes | Analyzes repositories for technical debt (READ-ONLY) |
 | Amplience CMS | No | Content types, JSON schemas |
+| Amplience Placement | No | Maps Figma designs to Amplience CMS modules (HITL) |
 | Performance | No | HAR analysis, Core Web Vitals |
 | Backend | No | API routes, Server Components |
+| Commerce | No | Product search, cart operations via SFCC |
+| PRD to Jira | No | Converts PRDs to Jira epics and stories |
+| Exec Summary | No | Generates executive summaries from sprint data |
+| Roadmap Review | No | Reviews roadmaps and OKRs for risks |
+| PR Review | No | Reviews Azure DevOps PRs |
+| Sprint AI Report | No | Generates AI contribution reports |
 
 ### Changing Agent Selection Later
 
@@ -458,6 +680,7 @@ The Task Manager automatically orchestrates agents based on task type:
 | Backend | Backend → Code Review → Unit Test → Sonar |
 | Unit Test | Unit Test → Sonar |
 | Sonar | Sonar → Code Review |
+| Technical Debt | Technical Debt (standalone, READ-ONLY analysis) |
 
 ### Quality Gates
 
