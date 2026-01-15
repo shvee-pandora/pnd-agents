@@ -13,6 +13,7 @@
     "sonar": ["sonar", "review"],
     "code_review": ["review", "sonar"],
     "performance": ["performance", "frontend", "unit_test", "review"],
+    "technical_debt": ["technical_debt"],
     "default": ["frontend", "unit_test", "review", "sonar"]
   },
   "parallel_groups": {
@@ -26,6 +27,7 @@
     "sonar": [["sonar"], ["review"]],
     "code_review": [["review"], ["sonar"]],
     "performance": [["performance"], ["frontend"], ["unit_test"], ["review"]],
+    "technical_debt": [["technical_debt"]],
     "default": [["frontend"], ["unit_test"], ["review"], ["sonar"]]
   },
   "keywords": {
@@ -129,6 +131,20 @@
       "lighthouse",
       "web vitals",
       "speed"
+    ],
+    "technical_debt": [
+      "technical debt",
+      "tech debt",
+      "debt analysis",
+      "debt register",
+      "todo comments",
+      "fixme",
+      "deprecated",
+      "complexity",
+      "code quality",
+      "maintainability",
+      "refactoring needed",
+      "legacy code"
     ]
   },
   "agents": {
@@ -201,6 +217,13 @@
       "handler": "amplience_placement_agent.run",
       "input": ["figma_url", "figma_file_id", "figma_node_id", "approval_status", "approved_by"],
       "output": ["placement_plan", "mappings", "confidence_scores", "review_summary", "draft_ids"]
+    },
+    "technical_debt": {
+      "name": "Technical Debt Agent",
+      "description": "READ-ONLY agent that identifies, classifies, and prioritizes technical debt across a repository using static analysis and optional SonarCloud integration",
+      "handler": "technical_debt_agent.run",
+      "input": ["repo_path", "include_sonarcloud", "sonar_project_key", "sonar_branch"],
+      "output": ["report", "summary", "register", "hotspots", "recommendations", "next_actions"]
     }
   },
   "defaults": {

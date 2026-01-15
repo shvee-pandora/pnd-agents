@@ -403,6 +403,47 @@
         "requires_coding": false,
         "target_audience": ["Product Managers", "TPMs", "Engineering Managers"]
       }
+    },
+    {
+      "id": "technical-debt",
+      "name": "Technical Debt Agent",
+      "description": "READ-ONLY agent that identifies, classifies, prioritizes, and explains technical debt across a repository using static analysis, repository context, and optional SonarCloud integration. Produces actionable reports for engineers, tech leads, and leadership.",
+      "role": "specialist",
+      "category": "Engineering Quality",
+      "capabilities": [
+        "repository-analysis",
+        "debt-classification",
+        "severity-scoring",
+        "impact-assessment",
+        "sonarcloud-integration",
+        "report-generation"
+      ],
+      "commands": [
+        "tech-debt-analyze",
+        "tech-debt-summary",
+        "tech-debt-register"
+      ],
+      "skills": [
+        "static-analysis",
+        "code-quality-assessment",
+        "technical-debt-patterns",
+        "sonarcloud-api"
+      ],
+      "tools": [
+        "filesystem"
+      ],
+      "model": "sonnet",
+      "priority": 2,
+      "metadata": {
+        "claude_desktop_friendly": true,
+        "requires_coding": false,
+        "read_only": true,
+        "target_audience": ["Engineers", "Tech Leads", "Engineering Managers"]
+      },
+      "constraints": {
+        "no_code_modification": true,
+        "read_only_analysis": true
+      }
     }
   ],
   "tools": [

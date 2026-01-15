@@ -1333,6 +1333,80 @@ def register_tools(server: Server) -> None:
                     "required": ["pr_url"]
                 }
             ),
+
+            # Technical Debt Agent Tools
+            types.Tool(
+                name="tech_debt_analyze",
+                description="Analyze a repository for technical debt. Identifies TODO/FIXME comments, deprecated code, high complexity, large files/functions, test coverage gaps, dependency issues, and architecture problems. Returns a comprehensive report with severity ratings, impact assessment, and prioritized recommendations. Optionally integrates with SonarCloud for enhanced analysis.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "repo_path": {
+                            "type": "string",
+                            "description": "Path to the repository to analyze (default: current working directory)"
+                        },
+                        "include_sonarcloud": {
+                            "type": "boolean",
+                            "description": "Whether to include SonarCloud data if SONAR_TOKEN is available (default: true)",
+                            "default": True
+                        },
+                        "sonar_project_key": {
+                            "type": "string",
+                            "description": "SonarCloud project key (optional, uses default if not provided)"
+                        },
+                        "sonar_branch": {
+                            "type": "string",
+                            "description": "Branch to analyze in SonarCloud (default: main)",
+                            "default": "main"
+                        },
+                        "output_format": {
+                            "type": "string",
+                            "description": "Output format: 'json' for machine-readable, 'markdown' for human-readable, 'both' for both formats (default: 'both')",
+                            "enum": ["json", "markdown", "both"],
+                            "default": "both"
+                        }
+                    },
+                    "required": []
+                }
+            ),
+            types.Tool(
+                name="tech_debt_summary",
+                description="Generate an executive summary of technical debt for leadership. Provides high-level risk assessment, key findings, and recommended actions in a concise format suitable for stakeholder communication.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "repo_path": {
+                            "type": "string",
+                            "description": "Path to the repository to analyze (default: current working directory)"
+                        },
+                        "include_sonarcloud": {
+                            "type": "boolean",
+                            "description": "Whether to include SonarCloud data if SONAR_TOKEN is available (default: true)",
+                            "default": True
+                        }
+                    },
+                    "required": []
+                }
+            ),
+            types.Tool(
+                name="tech_debt_register",
+                description="Generate a detailed technical debt register (inventory). Lists all identified debt items in a tabular format with ID, title, category, severity, effort, and location. Useful for tracking and sprint planning.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "repo_path": {
+                            "type": "string",
+                            "description": "Path to the repository to analyze (default: current working directory)"
+                        },
+                        "include_sonarcloud": {
+                            "type": "boolean",
+                            "description": "Whether to include SonarCloud data if SONAR_TOKEN is available (default: true)",
+                            "default": True
+                        }
+                    },
+                    "required": []
+                }
+            ),
         ]
 
     # Register call_tool handler
@@ -2183,6 +2257,68 @@ AI Productivity Tracker Agent v1.0"""
                     return [types.TextContent(type="text", text=json.dumps(tech_stack.to_dict(), indent=2))]
                 except Exception as pr_error:
                     return [types.TextContent(type="text", text=f"Tech Stack Detection Error: {str(pr_error)}")]
+
+            # Technical Debt Agent Tools
+            elif name == "tech_debt_analyze":
+                import json
+                try:
+                    from agents.technical_debt_agent import TechnicalDebtAgent
+                    
+                    repo_path = arguments.get("repo_path") or os.getcwd()
+                    include_sonarcloud = arguments.get("include_sonarcloud", True)
+                    sonar_project_key = arguments.get("sonar_project_key")
+                    sonar_branch = arguments.get("sonar_branch", "main")
+                    output_format = arguments.get("output_format", "both")
+                    
+                    agent = TechnicalDebtAgent()
+                    report = agent.analyze(
+                        repo_path=repo_path,
+                        include_sonarcloud=include_sonarcloud,
+                        sonar_project_key=sonar_project_key,
+                        sonar_branch=sonar_branch,
+                        output_format=output_format
+                    )
+                    
+                    if output_format == "json":
+                        return [types.TextContent(type="text", text=json.dumps(report.to_dict(), indent=2))]
+                    elif output_format == "markdown":
+                        return [types.TextContent(type="text", text=report.to_markdown())]
+                    else:  # both
+                        result = {
+                            "json": report.to_dict(),
+                            "markdown": report.to_markdown()
+                        }
+                        return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as td_error:
+                    return [types.TextContent(type="text", text=f"Technical Debt Analysis Error: {str(td_error)}")]
+
+            elif name == "tech_debt_summary":
+                try:
+                    from agents.technical_debt_agent import TechnicalDebtAgent
+                    
+                    repo_path = arguments.get("repo_path") or os.getcwd()
+                    include_sonarcloud = arguments.get("include_sonarcloud", True)
+                    
+                    agent = TechnicalDebtAgent()
+                    summary = agent.generate_summary(repo_path, include_sonarcloud=include_sonarcloud)
+                    
+                    return [types.TextContent(type="text", text=summary)]
+                except Exception as td_error:
+                    return [types.TextContent(type="text", text=f"Technical Debt Summary Error: {str(td_error)}")]
+
+            elif name == "tech_debt_register":
+                try:
+                    from agents.technical_debt_agent import TechnicalDebtAgent
+                    
+                    repo_path = arguments.get("repo_path") or os.getcwd()
+                    include_sonarcloud = arguments.get("include_sonarcloud", True)
+                    
+                    agent = TechnicalDebtAgent()
+                    register = agent.generate_register(repo_path, include_sonarcloud=include_sonarcloud)
+                    
+                    return [types.TextContent(type="text", text=register)]
+                except Exception as td_error:
+                    return [types.TextContent(type="text", text=f"Technical Debt Register Error: {str(td_error)}")]
 
             else:
                 raise ValueError(f"Unknown tool: {name}")

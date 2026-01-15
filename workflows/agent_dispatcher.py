@@ -42,6 +42,7 @@ class AgentDispatcher:
         self.register("performance", self._performance_handler)
         self.register("unit_test", self._unit_test_handler)
         self.register("sonar", self._sonar_handler)
+        self.register("technical_debt", self._technical_debt_handler)
     
     def register(self, name: str, handler: Callable[[Dict[str, Any]], AgentResult]):
         """
@@ -886,6 +887,69 @@ class AgentDispatcher:
             return AgentResult(
                 status="error",
                 error=f"Amplience placement failed: {str(e)}"
+            )
+    
+    def _technical_debt_handler(self, context: Dict[str, Any]) -> AgentResult:
+        """
+        Technical Debt Agent handler.
+        
+        Analyzes repositories for technical debt including TODO/FIXME comments,
+        deprecated code, high complexity, large files/functions, test coverage gaps,
+        dependency issues, and architecture problems.
+        
+        This is a READ-ONLY agent that produces actionable reports for engineers,
+        tech leads, and leadership without modifying any code.
+        """
+        task = context.get("task", "")
+        input_data = context.get("input", {})
+        metadata = context.get("metadata", {})
+        
+        try:
+            from agents.technical_debt_agent import TechnicalDebtAgent
+            
+            repo_path = input_data.get("repo_path") or metadata.get("repo_path") or os.getcwd()
+            include_sonarcloud = input_data.get("include_sonarcloud", True)
+            
+            agent = TechnicalDebtAgent()
+            
+            task_lower = task.lower()
+            if "register" in task_lower:
+                result = agent.generate_register(repo_path, include_sonarcloud=include_sonarcloud)
+                return AgentResult(
+                    status="success",
+                    data={
+                        "register": result,
+                        "format": "markdown",
+                    }
+                )
+            elif "summary" in task_lower or "leadership" in task_lower or "executive" in task_lower:
+                result = agent.generate_summary(repo_path, include_sonarcloud=include_sonarcloud)
+                return AgentResult(
+                    status="success",
+                    data={
+                        "summary": result,
+                        "format": "markdown",
+                    }
+                )
+            else:
+                report = agent.analyze(repo_path, include_sonarcloud=include_sonarcloud)
+                return AgentResult(
+                    status=report.status,
+                    data={
+                        "report": report.to_dict(),
+                        "markdown": report.to_markdown(),
+                    },
+                    error=report.error
+                )
+        except ImportError:
+            return AgentResult(
+                status="error",
+                error="TechnicalDebtAgent not available. Please ensure the agent is properly installed."
+            )
+        except Exception as e:
+            return AgentResult(
+                status="error",
+                error=f"Technical debt analysis failed: {str(e)}"
             )
     
     # ==================== Helper Methods ====================
