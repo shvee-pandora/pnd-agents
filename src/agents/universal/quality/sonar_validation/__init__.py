@@ -1,0 +1,1 @@
+"""sonar_validation module."""

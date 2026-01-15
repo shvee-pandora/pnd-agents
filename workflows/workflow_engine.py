@@ -23,7 +23,7 @@ from typing import Dict, List, Any, Optional, Callable, TYPE_CHECKING
 from dataclasses import dataclass, field
 
 if TYPE_CHECKING:
-    from src.agents.repo_adapter import RepoAdapter
+    from src.agents.core.repo_adapter import RepoAdapter
 
 # Configure logging
 logger = logging.getLogger("pnd_agents.workflow")
