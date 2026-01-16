@@ -277,5 +277,5 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   });
 }
 
-export { SnykPredictorAgent, parseCliArgs };
+export { parseCliArgs };
 export default SnykPredictorAgent;
