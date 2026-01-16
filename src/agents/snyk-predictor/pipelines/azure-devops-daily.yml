@@ -1,0 +1,130 @@
+trigger: none
+
+schedules:
+  - cron: "0 6 * * *"
+    displayName: Daily Snyk Predictor Scan
+    branches:
+      include:
+        - main
+        - master
+    always: true
+
+pool:
+  vmImage: "ubuntu-latest"
+
+variables:
+  - group: snyk-credentials
+  - name: NODE_VERSION
+    value: "20.x"
+  - name: PACKAGE_MANAGER
+    value: "pnpm"
+
+parameters:
+  - name: repositories
+    type: object
+    default:
+      - name: pandora-ecom-web
+        path: $(Build.SourcesDirectory)/pandora-ecom-web
+        packageManager: pnpm
+      - name: pandora-api
+        path: $(Build.SourcesDirectory)/pandora-api
+        packageManager: npm
+
+stages:
+  - stage: SnykPredictorScan
+    displayName: "Snyk Predictor Daily Scan"
+    jobs:
+      - job: ScanRepositories
+        displayName: "Scan All Repositories"
+        timeoutInMinutes: 30
+        steps:
+          - task: NodeTool@0
+            displayName: "Install Node.js"
+            inputs:
+              versionSpec: $(NODE_VERSION)
+
+          - script: |
+              npm install -g pnpm
+              npm install -g snyk
+            displayName: "Install Global Dependencies"
+
+          - script: |
+              snyk auth $(SNYK_TOKEN)
+            displayName: "Authenticate with Snyk"
+            env:
+              SNYK_TOKEN: $(SNYK_TOKEN)
+
+          - script: |
+              git clone https://github.com/shvee-pandora/pnd-agents.git
+              cd pnd-agents
+              npm install
+              npm run build
+            displayName: "Setup PND Agents"
+
+          - ${{ each repo in parameters.repositories }}:
+              - script: |
+                  echo "Scanning repository: ${{ repo.name }}"
+                  cd pnd-agents
+                  npx ts-node src/agents/snyk-predictor/index.ts \
+                    --repo "${{ repo.name }}" \
+                    --repoPath "${{ repo.path }}" \
+                    --packageManager "${{ repo.packageManager }}" \
+                    --notify teams \
+                    --severity high,critical \
+                    --output "$(Build.ArtifactStagingDirectory)/${{ repo.name }}-report.json"
+                displayName: "Scan ${{ repo.name }}"
+                env:
+                  SNYK_TOKEN: $(SNYK_TOKEN)
+                  TEAMS_WEBHOOK_URL: $(TEAMS_WEBHOOK_URL)
+                continueOnError: true
+
+          - task: PublishBuildArtifacts@1
+            displayName: "Publish Scan Reports"
+            inputs:
+              pathToPublish: "$(Build.ArtifactStagingDirectory)"
+              artifactName: "snyk-predictor-reports"
+              publishLocation: "Container"
+
+      - job: NotifySummary
+        displayName: "Send Summary Notification"
+        dependsOn: ScanRepositories
+        condition: always()
+        steps:
+          - script: |
+              echo "Sending summary notification to Teams..."
+              curl -H "Content-Type: application/json" \
+                -d '{
+                  "type": "message",
+                  "attachments": [{
+                    "contentType": "application/vnd.microsoft.card.adaptive",
+                    "content": {
+                      "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                      "type": "AdaptiveCard",
+                      "version": "1.4",
+                      "body": [{
+                        "type": "TextBlock",
+                        "text": "Snyk Predictor Daily Scan Complete",
+                        "weight": "bolder",
+                        "size": "large"
+                      }, {
+                        "type": "TextBlock",
+                        "text": "Build: $(Build.BuildNumber)",
+                        "wrap": true
+                      }, {
+                        "type": "TextBlock",
+                        "text": "View detailed reports in Azure DevOps artifacts.",
+                        "wrap": true
+                      }],
+                      "actions": [{
+                        "type": "Action.OpenUrl",
+                        "title": "View Build",
+                        "url": "$(System.TeamFoundationCollectionUri)$(System.TeamProject)/_build/results?buildId=$(Build.BuildId)"
+                      }]
+                    }
+                  }]
+                }' \
+                $(TEAMS_WEBHOOK_URL)
+            displayName: "Send Teams Summary"
+            env:
+              TEAMS_WEBHOOK_URL: $(TEAMS_WEBHOOK_URL)
+            condition: always()
