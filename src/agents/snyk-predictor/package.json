@@ -1,0 +1,35 @@
+{
+  "name": "@pnd-agents/snyk-predictor",
+  "version": "1.0.0",
+  "description": "Snyk Predictor Agent - Proactively detect and predict Snyk vulnerabilities",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "snyk",
+    "security",
+    "vulnerability",
+    "dependency",
+    "scanner",
+    "predictor",
+    "teams",
+    "notification"
+  ],
+  "author": "PND Agents Team",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

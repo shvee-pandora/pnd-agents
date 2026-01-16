@@ -89,6 +89,12 @@ AGENTS = {
         "role": "specialist",
         "default": True,
     },
+    "snyk-predictor": {
+        "name": "Snyk Predictor Agent",
+        "description": "Predict Snyk vulnerabilities before CI/CD pipelines are blocked",
+        "role": "security",
+        "default": False,
+    },
 }
 
 # Environment variables
@@ -107,6 +113,16 @@ ENV_VARS = {
         "description": "Amplience base URL",
         "required_for": ["amplience-cms"],
         "sensitive": False,
+    },
+    "SNYK_TOKEN": {
+        "description": "Snyk API token for vulnerability scanning",
+        "required_for": ["snyk-predictor"],
+        "sensitive": True,
+    },
+    "TEAMS_WEBHOOK_URL": {
+        "description": "Microsoft Teams webhook URL for notifications",
+        "required_for": ["snyk-predictor"],
+        "sensitive": True,
     },
 }
 
@@ -815,6 +831,54 @@ def cmd_sprint_report(args):
         return 1
 
 
+def cmd_run(args):
+    """Run a specific agent."""
+    import subprocess
+    
+    agent_name = args.agent
+    pnd_agents_path = get_pnd_agents_path()
+    
+    if agent_name == "snyk-predictor":
+        agent_path = pnd_agents_path / "src" / "agents" / "snyk-predictor" / "index.ts"
+        
+        if not agent_path.exists():
+            print(color(f"Error: Snyk Predictor agent not found at {agent_path}", Colors.RED))
+            return 1
+        
+        cmd = ["npx", "ts-node", str(agent_path)]
+        
+        if args.repo:
+            cmd.extend(["--repo", args.repo])
+        if args.repo_path:
+            cmd.extend(["--repoPath", args.repo_path])
+        if args.package_manager:
+            cmd.extend(["--packageManager", args.package_manager])
+        if args.notify:
+            cmd.extend(["--notify", args.notify])
+        if args.severity:
+            cmd.extend(["--severity", args.severity])
+        if args.output:
+            cmd.extend(["--output", args.output])
+        
+        print(color("\n" + "=" * 60, Colors.CYAN))
+        print(color("PND AGENTS - Running Snyk Predictor", Colors.BOLD))
+        print(color("=" * 60, Colors.CYAN))
+        
+        try:
+            result = subprocess.run(cmd, cwd=str(pnd_agents_path))
+            return result.returncode
+        except FileNotFoundError:
+            print(color("Error: npx or ts-node not found. Please install Node.js and run: npm install -g ts-node", Colors.RED))
+            return 1
+        except Exception as e:
+            print(color(f"Error running agent: {e}", Colors.RED))
+            return 1
+    else:
+        print(color(f"Error: Unknown agent '{agent_name}'", Colors.RED))
+        print(f"Available agents: snyk-predictor")
+        return 1
+
+
 def cmd_uninstall(args):
     """Remove pnd-agents configuration."""
     print(color("\nUninstall PND Agents Configuration", Colors.BOLD))
@@ -870,6 +934,7 @@ Examples:
   pnd-agents sprint-report --sprint-id 16597    Generate AI report for sprint
   pnd-agents sprint-report --board-id 795       Generate AI report for active sprint
   pnd-agents sprint-report --sprint-id 16597 --format json -o report.json
+  pnd-agents run snyk-predictor --repo my-app --repoPath ./my-app --packageManager pnpm --notify teams
         """
     )
     
@@ -1001,6 +1066,42 @@ Examples:
         help="Save report to file"
     )
     sprint_parser.set_defaults(func=cmd_sprint_report)
+
+    # Run command (for specific agents like snyk-predictor)
+    run_parser = subparsers.add_parser("run", help="Run a specific agent")
+    run_parser.add_argument(
+        "agent",
+        help="Agent to run (e.g., 'snyk-predictor')"
+    )
+    run_parser.add_argument(
+        "--repo",
+        help="Repository name for reporting"
+    )
+    run_parser.add_argument(
+        "--repoPath",
+        dest="repo_path",
+        help="Path to the repository to scan"
+    )
+    run_parser.add_argument(
+        "--packageManager",
+        dest="package_manager",
+        choices=["npm", "pnpm", "yarn"],
+        help="Package manager (npm, pnpm, yarn)"
+    )
+    run_parser.add_argument(
+        "--notify",
+        choices=["teams", "none"],
+        help="Notification channel (teams, none)"
+    )
+    run_parser.add_argument(
+        "--severity",
+        help="Severity levels to report (comma-separated: low,medium,high,critical)"
+    )
+    run_parser.add_argument(
+        "--output",
+        help="Output file path for report (JSON)"
+    )
+    run_parser.set_defaults(func=cmd_run)
 
     args = parser.parse_args()
     

@@ -444,6 +444,50 @@
         "no_code_modification": true,
         "read_only_analysis": true
       }
+    },
+    {
+      "id": "snyk-predictor",
+      "name": "Snyk Predictor Agent",
+      "description": "Proactively detect and predict Snyk vulnerabilities before CI/CD pipelines are blocked. Analyzes dependencies, calculates risk scores using heuristics, and sends Microsoft Teams notifications.",
+      "role": "security",
+      "category": "Security / DevSecOps",
+      "capabilities": [
+        "dependency-scanning",
+        "vulnerability-prediction",
+        "risk-scoring",
+        "teams-notification",
+        "snyk-integration",
+        "report-generation"
+      ],
+      "commands": [
+        "snyk-predictor-scan",
+        "snyk-predictor-report"
+      ],
+      "skills": [
+        "snyk-cli",
+        "dependency-analysis",
+        "risk-assessment",
+        "teams-webhooks"
+      ],
+      "tools": [
+        "filesystem",
+        "command-runner",
+        "http-client"
+      ],
+      "model": "sonnet",
+      "priority": 2,
+      "metadata": {
+        "claude_desktop_friendly": true,
+        "requires_coding": false,
+        "read_only": true,
+        "target_audience": ["Engineers", "DevOps", "Security Teams"]
+      },
+      "constraints": {
+        "no_pipeline_blocking": true,
+        "no_auto_merge": true,
+        "heuristics_only": true,
+        "read_only_analysis": true
+      }
     }
   ],
   "tools": [
