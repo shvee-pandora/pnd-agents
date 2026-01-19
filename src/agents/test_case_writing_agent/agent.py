@@ -1,35 +1,17 @@
-"""
-Test Case Writing Agent
-
-A dedicated agent for generating comprehensive test cases from requirements,
-user stories, acceptance criteria, or code analysis. This agent creates
-structured test cases that can be used by QA teams or automated testing.
-
-Key principles:
-- Generate test cases from requirements, user stories, or code
-- Cover positive, negative, edge cases, and boundary conditions
-- Follow BDD/Gherkin style when appropriate
-- Produce actionable, clear test cases
-- Consider accessibility and security testing scenarios
-- Integrate with JIRA for test case management
-"""
+"""Test Case Writing Agent - Generates test cases from requirements, user stories, or code.
+Supports JIRA integration, BDD/Gherkin format, and accessibility/security testing."""
 
 import re
 import logging
 from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-# JIRA Integration signature comment
 QAIN_SIGNATURE = "I'm your Junior Quality Engineer - qAIn"
 
-
-# =============================================================================
-# External Documentation Link Processing
-# =============================================================================
+# --- External Documentation Link Processing ---
 
 def extract_links_from_text(text: str) -> Dict[str, List[str]]:
     """
@@ -117,124 +99,32 @@ def fetch_external_doc_content(url: str, auth_token: Optional[str] = None) -> Di
 
 
 def _extract_figma_context(url: str) -> str:
-    """
-    Extract context from Figma URL for test case generation.
-
-    Note: Full Figma API integration requires authentication.
-    This provides structured guidance for manual review.
-
-    Args:
-        url: Figma file/design URL
-
-    Returns:
-        Context string for test case generation
-    """
-    # Extract file key from URL
+    """Extract context from Figma URL for test case generation."""
     file_key_match = re.search(r'figma\.com/(?:file|design|proto)/([^/]+)', url)
     file_key = file_key_match.group(1) if file_key_match else "unknown"
 
-    context = f"""
-## Figma Design Reference
-**URL:** {url}
-**File Key:** {file_key}
+    return f"""## Figma Design Reference
+**URL:** {url} | **File Key:** {file_key}
 
-### Design Review Checklist for Test Cases:
-1. **Visual Elements:**
-   - Verify all UI components match the design
-   - Check color schemes, typography, and spacing
-   - Validate responsive breakpoints if specified
-
-2. **Interactive Elements:**
-   - Identify all clickable/tappable elements
-   - Note hover states and transitions
-   - Document form fields and validation requirements
-
-3. **User Flows:**
-   - Map out primary user journey from design
-   - Identify entry and exit points
-   - Note conditional paths and error states
-
-4. **Accessibility Considerations:**
-   - Check color contrast ratios
-   - Verify touch target sizes
-   - Note any animation/motion requirements
-
-5. **Edge Cases from Design:**
-   - Empty states
-   - Loading states
-   - Error states
-   - Maximum content scenarios
-
-### Recommended Test Scenarios:
-- Validate UI matches Figma design specifications
-- Test all interactive elements identified in design
-- Verify responsive behavior across breakpoints
-- Test accessibility compliance per design annotations
-"""
-    return context
+**Review Checklist:** Visual elements, Interactive elements, User flows, Accessibility, Edge cases (empty/loading/error states)
+**Test Scenarios:** UI matches design, Interactive elements work, Responsive behavior, Accessibility compliance"""
 
 
 def _extract_confluence_context(url: str, auth_token: Optional[str] = None) -> str:
-    """
-    Extract context from Confluence URL for test case generation.
-
-    Args:
-        url: Confluence page URL
-        auth_token: Optional Confluence API token
-
-    Returns:
-        Context string for test case generation
-    """
-    # Try to extract page info from URL
+    """Extract context from Confluence URL for test case generation."""
     page_match = re.search(r'/pages/(\d+)', url)
     page_id = page_match.group(1) if page_match else None
-
     space_match = re.search(r'/spaces/([^/]+)', url)
     space_key = space_match.group(1) if space_match else None
 
-    context = f"""
-## Confluence Documentation Reference
-**URL:** {url}
-**Page ID:** {page_id or 'Not extracted'}
-**Space:** {space_key or 'Not extracted'}
+    context = f"""## Confluence Documentation Reference
+**URL:** {url} | **Page ID:** {page_id or 'N/A'} | **Space:** {space_key or 'N/A'}
 
-### Documentation Review for Test Cases:
-1. **Requirements Extraction:**
-   - Identify functional requirements
-   - Note acceptance criteria
-   - Extract business rules
+**Review:** Requirements, Technical specs (API/schemas), User stories, Test considerations
+**Actions:** Extract acceptance criteria, Identify API specs, Note cross-references"""
 
-2. **Technical Specifications:**
-   - API endpoints and contracts
-   - Data models and schemas
-   - Integration points
-
-3. **User Stories:**
-   - Parse user story format (As a... I want... So that...)
-   - Extract acceptance criteria
-   - Identify personas and use cases
-
-4. **Test Considerations:**
-   - Documented test scenarios
-   - Known edge cases
-   - Performance requirements
-
-### Recommended Actions:
-- Review linked Confluence page for detailed requirements
-- Extract acceptance criteria for test case generation
-- Identify any referenced API specifications or schemas
-- Note any cross-references to other documentation
-"""
-
-    # If we have auth token, we could make API call
     if auth_token and page_id:
-        context += """
-### API Integration Available:
-- Confluence API token provided
-- Can fetch page content programmatically
-- Contact administrator for API access if needed
-"""
-
+        context += "\n**API Integration:** Token provided, can fetch programmatically"
     return context
 
 
@@ -243,17 +133,7 @@ def enrich_requirements_with_external_docs(
     external_links: List[str],
     auth_tokens: Optional[Dict[str, str]] = None
 ) -> Tuple[str, List[Dict[str, Any]]]:
-    """
-    Enrich requirements text with content from external documentation links.
-
-    Args:
-        requirements: Original requirements text
-        external_links: List of external documentation URLs
-        auth_tokens: Optional dict with 'figma' and 'confluence' tokens
-
-    Returns:
-        Tuple of (enriched requirements string, list of fetched doc metadata)
-    """
+    """Enrich requirements with content from external docs (Figma/Confluence)."""
     if not external_links:
         # Try to extract links from requirements text
         extracted = extract_links_from_text(requirements)
@@ -287,24 +167,12 @@ def enrich_requirements_with_external_docs(
     return enriched_requirements, fetched_docs
 
 
-# =============================================================================
-# JIRA Context Enrichment (Parent, Epic, Initiative, Existing Test Cases)
-# =============================================================================
+# --- JIRA Context Enrichment ---
 
-# Pandora JIRA Workflow Hierarchy Configuration
-# The hierarchy is: Initiative -> Epic -> Story -> Task
+# Pandora JIRA Hierarchy: Initiative -> Epic -> Story -> Task
 PANDORA_JIRA_HIERARCHY = {
     "levels": ["Initiative", "Epic", "Story", "Task"],
-    "description": """
-    Pandora JIRA Workflow Hierarchy:
-    - Initiative: High-level business objective or theme (top-level)
-    - Epic: Large body of work that can be broken down into Stories
-    - Story: User-facing feature or requirement
-    - Task: Technical implementation item under a Story
-
-    This hierarchy helps provide context for test case generation by understanding
-    the broader business objective (Initiative) and feature scope (Epic).
-    """,
+    "description": "Initiative (business objective) -> Epic (feature scope) -> Story (user requirement) -> Task (implementation)",
     "issue_types": {
         "initiative": ["Initiative"],
         "epic": ["Epic"],
@@ -415,22 +283,7 @@ def fetch_jira_context(
     include_initiative: bool = True,
     include_existing_tests: bool = True,
 ) -> Optional[JiraContext]:
-    """
-    Fetch comprehensive JIRA context including full Pandora hierarchy and existing test cases.
-
-    Pandora JIRA Hierarchy: Initiative -> Epic -> Story -> Task
-
-    Args:
-        story_key: JIRA issue key (e.g., "FIND-4411")
-        jira_client: JIRA client instance
-        include_parent: Whether to fetch parent ticket details
-        include_epic: Whether to fetch epic details
-        include_initiative: Whether to fetch initiative details (Pandora hierarchy)
-        include_existing_tests: Whether to search for existing test cases
-
-    Returns:
-        JiraContext object with all gathered information including Initiative
-    """
+    """Fetch JIRA context with Pandora hierarchy (Initiative->Epic->Story->Task) and existing tests."""
     if not jira_client:
         logger.warning("No JIRA client provided for context enrichment")
         return None
@@ -566,19 +419,7 @@ def _get_epic_key(story_key: str, jira_client: Any) -> Optional[str]:
 
 
 def _get_initiative_key(epic_key: str, jira_client: Any) -> Optional[str]:
-    """
-    Get the initiative key for an epic.
-
-    In Pandora's JIRA hierarchy: Initiative -> Epic -> Story -> Task
-    The Initiative is the parent of an Epic.
-
-    Args:
-        epic_key: JIRA epic key
-        jira_client: JIRA client instance
-
-    Returns:
-        Initiative key if found, None otherwise
-    """
+    """Get initiative key (Epic's parent in Pandora hierarchy)."""
     if not epic_key:
         return None
 
@@ -624,16 +465,7 @@ def _get_initiative_key(epic_key: str, jira_client: Any) -> Optional[str]:
 
 
 def _get_issue_type(issue_key: str, jira_client: Any) -> Optional[str]:
-    """
-    Get the issue type for a JIRA ticket.
-
-    Args:
-        issue_key: JIRA issue key
-        jira_client: JIRA client instance
-
-    Returns:
-        Issue type name (e.g., 'Story', 'Task', 'Epic', 'Initiative')
-    """
+    """Get JIRA issue type name (Story, Task, Epic, Initiative)."""
     try:
         response = jira_client.client.get(
             f"issue/{issue_key}",
@@ -648,15 +480,7 @@ def _get_issue_type(issue_key: str, jira_client: Any) -> Optional[str]:
 
 
 def _determine_hierarchy_level(issue_type: str) -> str:
-    """
-    Determine the hierarchy level based on issue type.
-
-    Args:
-        issue_type: JIRA issue type name
-
-    Returns:
-        Hierarchy level: 'initiative', 'epic', 'story', or 'task'
-    """
+    """Determine hierarchy level from issue type (initiative/epic/story/task)."""
     if not issue_type:
         return "story"
 
@@ -772,16 +596,7 @@ def _identify_reusable_scenarios(test_cases: List[Dict[str, Any]]) -> List[str]:
 
 
 def merge_similar_scenarios(scenarios: List[Dict[str, Any]], similarity_threshold: float = 0.6) -> List[Dict[str, Any]]:
-    """
-    Merge similar test scenarios to reduce redundancy.
-
-    Args:
-        scenarios: List of scenario dictionaries with 'name' and 'steps' keys
-        similarity_threshold: Threshold for considering scenarios similar (0-1)
-
-    Returns:
-        List of merged scenarios
-    """
+    """Merge similar test scenarios to reduce redundancy using Jaccard similarity."""
     if len(scenarios) <= 1:
         return scenarios
 
@@ -1799,15 +1614,7 @@ class TestCaseWritingAgent:
         return f"{prefix}-{self._test_case_counter:04d}"
 
     def extract_requirements(self, text: str) -> List[Dict[str, str]]:
-        """
-        Extract testable requirements from text.
-
-        Args:
-            text: Text containing requirements or user stories
-
-        Returns:
-            List of extracted requirements with their context
-        """
+        """Extract testable requirements from text (user stories, acceptance criteria)."""
         requirements = []
 
         for pattern in self.REQUIREMENT_PATTERNS:
@@ -1842,16 +1649,7 @@ class TestCaseWritingAgent:
         requirements: List[Dict[str, str]],
         feature_name: str,
     ) -> List[TestCase]:
-        """
-        Generate functional test cases from requirements.
-
-        Args:
-            requirements: List of extracted requirements
-            feature_name: Name of the feature being tested
-
-        Returns:
-            List of functional test cases
-        """
+        """Generate functional test cases from extracted requirements."""
         test_cases = []
 
         for req in requirements:
@@ -1992,15 +1790,7 @@ class TestCaseWritingAgent:
         return test_cases
 
     def generate_edge_case_tests(self, feature_name: str) -> List[TestCase]:
-        """
-        Generate edge case test scenarios.
-
-        Args:
-            feature_name: Name of the feature being tested
-
-        Returns:
-            List of edge case test cases
-        """
+        """Generate edge case test scenarios."""
         test_cases = []
 
         for scenario in self.EDGE_CASE_SCENARIOS:
@@ -2031,15 +1821,7 @@ class TestCaseWritingAgent:
         return test_cases
 
     def generate_accessibility_tests(self, feature_name: str) -> List[TestCase]:
-        """
-        Generate accessibility test scenarios.
-
-        Args:
-            feature_name: Name of the feature being tested
-
-        Returns:
-            List of accessibility test cases
-        """
+        """Generate accessibility (a11y/WCAG) test scenarios."""
         test_cases = []
 
         for scenario in self.ACCESSIBILITY_SCENARIOS:
@@ -2073,15 +1855,7 @@ class TestCaseWritingAgent:
         return test_cases
 
     def generate_security_tests(self, feature_name: str) -> List[TestCase]:
-        """
-        Generate security test scenarios.
-
-        Args:
-            feature_name: Name of the feature being tested
-
-        Returns:
-            List of security test cases
-        """
+        """Generate security test scenarios (XSS, CSRF, injection, etc.)."""
         test_cases = []
 
         for scenario in self.SECURITY_SCENARIOS:
@@ -2126,18 +1900,7 @@ class TestCaseWritingAgent:
         min_value: Optional[Any] = None,
         max_value: Optional[Any] = None,
     ) -> List[TestCase]:
-        """
-        Generate boundary value test cases.
-
-        Args:
-            feature_name: Name of the feature being tested
-            field_name: Name of the field being tested
-            min_value: Minimum valid value (if known)
-            max_value: Maximum valid value (if known)
-
-        Returns:
-            List of boundary test cases
-        """
+        """Generate boundary value analysis (BVA) test cases."""
         test_cases = []
 
         for scenario_name, boundary_type, priority in self.BOUNDARY_SCENARIOS:
@@ -2185,12 +1948,7 @@ class TestCaseWritingAgent:
         feature_name: str,
         dependencies: Optional[List[str]] = None,
     ) -> List[TestCase]:
-        """
-        Generate integration test cases.
-
-        Args:
-            feature_name: Name of the feature being tested
-            dependencies: List of dependent components/services
+        """Generate system integration (SIT) test cases.
 
         Returns:
             List of integration test cases
@@ -2245,15 +2003,7 @@ class TestCaseWritingAgent:
         return test_cases
 
     def generate_performance_tests(self, feature_name: str) -> List[TestCase]:
-        """
-        Generate performance test cases.
-
-        Args:
-            feature_name: Name of the feature being tested
-
-        Returns:
-            List of performance test cases
-        """
+        """Generate performance test cases (load, response time, throughput)."""
         test_cases = []
 
         for scenario_name, threshold, priority in self.PERFORMANCE_SCENARIOS:
@@ -2309,13 +2059,7 @@ class TestCaseWritingAgent:
         endpoint: str = "/api/endpoint",
         http_method: str = "POST",
     ) -> List[TestCase]:
-        """
-        Generate API-specific test cases.
-
-        Args:
-            feature_name: Name of the feature/API being tested
-            endpoint: API endpoint path
-            http_method: HTTP method (GET, POST, PUT, DELETE, etc.)
+        """Generate API test cases (request/response validation, error handling).
 
         Returns:
             List of API test cases
@@ -2553,14 +2297,7 @@ class TestCaseWritingAgent:
 
     def generate_cross_browser_tests(self, feature_name: str) -> List[TestCase]:
         """
-        Generate cross-browser/device test cases.
-
-        Args:
-            feature_name: Name of the feature being tested
-
-        Returns:
-            List of cross-browser test cases
-        """
+Generate cross-browser/device test cases."""
         test_cases = []
 
         for browser, device_type, priority in self.CROSS_BROWSER_SCENARIOS:
@@ -2614,23 +2351,7 @@ class TestCaseWritingAgent:
         feature_name: str,
         input_fields: List[Dict[str, Any]],
     ) -> List[TestCase]:
-        """
-        Generate data-driven test cases based on input field specifications.
-
-        Args:
-            feature_name: Name of the feature being tested
-            input_fields: List of field specifications with structure:
-                {
-                    "name": "field_name",
-                    "type": "text|number|email|date|etc",
-                    "required": True|False,
-                    "min_length": int (optional),
-                    "max_length": int (optional),
-                    "min_value": number (optional),
-                    "max_value": number (optional),
-                    "pattern": "regex" (optional),
-                    "valid_values": ["list", "of", "values"] (optional),
-                }
+        """Generate data-driven test cases from field specs (required, length, format validation).
 
         Returns:
             List of data-driven test cases
@@ -2864,18 +2585,7 @@ class TestCaseWritingAgent:
         include_all_types: bool = False,
         external_doc_links: Optional[List[str]] = None,
     ) -> TestSuite:
-        """
-        Generate a complete test suite from requirements text.
-
-        Args:
-            text: Text containing requirements or user stories
-            feature_name: Name of the feature being tested
-            include_all_types: Override settings to include all test types
-            external_doc_links: Optional list of Figma/Confluence URLs to enrich requirements
-
-        Returns:
-            Complete test suite with all applicable test cases
-        """
+        """Generate complete test suite from requirements (with optional Figma/Confluence enrichment)."""
         # Enrich requirements with external documentation (Figma, Confluence)
         enriched_text, external_docs = enrich_requirements_with_external_docs(
             text,
@@ -2971,34 +2681,20 @@ class TestCaseWritingAgent:
         )
 
     def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Run the test case writing agent as part of a workflow.
-
-        Args:
-            context: Workflow context with:
-                - task_description: Description of what to generate tests for
-                - input_data: Dictionary with:
-                    - requirements: Text with requirements/user stories
-                    - feature_name: Name of the feature
-                    - acceptance_criteria: List of acceptance criteria
-                    - include_security: Whether to include security tests
-                    - include_accessibility: Whether to include a11y tests
-                    - include_performance: Whether to include performance tests
-                    - include_integration: Whether to include integration tests
-                    - include_api: Whether to include API tests
-                    - include_cross_browser: Whether to include cross-browser tests
-                    - include_all: Whether to include all test types
-                    - input_fields: List of field specs for data-driven tests
-                    - state_type: Type of state machine for state transition tests
-
-        Returns:
-            Workflow-compatible result with generated test cases
-        """
+        """Run agent as workflow step. Activates qAIn workflow on minimal invocation."""
         logger.info("TestCaseWritingAgent.run called")
 
         try:
             task_description = context.get("task_description", "")
             input_data = context.get("input_data", {})
+
+            # Check if this is a minimal invocation (user just typed "test_case_writing_agent")
+            # In this case, activate the qAIn Interactive Workflow
+            is_minimal_invocation = self._is_minimal_invocation(task_description, input_data)
+
+            if is_minimal_invocation:
+                logger.info("Minimal invocation detected - activating qAIn Interactive Workflow")
+                return self._activate_qain_workflow(context)
 
             # Extract parameters
             requirements_text = input_data.get("requirements", task_description)
@@ -3105,16 +2801,66 @@ class TestCaseWritingAgent:
 
         return "Feature"
 
-    def format_output(self, test_suite: TestSuite) -> str:
+    def _is_minimal_invocation(self, task_description: str, input_data: Dict[str, Any]) -> bool:
         """
-        Format test suite output based on configured format.
+        Check if this is a minimal invocation that should trigger qAIn workflow.
+
+        A minimal invocation is when the user just types "test_case_writing_agent"
+        without providing specific requirements or context.
 
         Args:
-            test_suite: Test suite to format
+            task_description: The task description from context
+            input_data: The input data dictionary
 
         Returns:
-            Formatted string output
+            True if this is a minimal invocation, False otherwise
         """
+        # No task description or generic invocation
+        if not task_description or task_description.strip().lower() in [
+            "",
+            "test_case_writing_agent",
+            "test case writing agent",
+            "test_case_writing",
+            "test case writing",
+            "qain",
+            "qa",
+        ]:
+            # Also check if there's no meaningful input data
+            has_requirements = bool(input_data.get("requirements", "").strip())
+            has_feature_name = bool(input_data.get("feature_name", "").strip())
+            has_jira_ticket = bool(input_data.get("jira_ticket", "").strip())
+            has_acceptance_criteria = bool(input_data.get("acceptance_criteria", []))
+
+            # If none of these are provided, it's a minimal invocation
+            if not any([has_requirements, has_feature_name, has_jira_ticket, has_acceptance_criteria]):
+                return True
+
+        return False
+
+    def _activate_qain_workflow(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Activate qAIn Interactive Workflow with initial questions."""
+        return {
+            "status": "qain_workflow",
+            "data": {
+                "workflow_type": "qain_interactive",
+                "message": f"{QAIN_SIGNATURE} 👋\n\nI'll help you create comprehensive test cases. Let me gather some information first.",
+                "initial_questions": get_qain_initial_questions(),
+                "action_questions": get_qain_action_questions(),
+                "full_workflow_questions": get_qain_full_workflow_questions(),
+                "instructions": [
+                    "1. Share a JIRA ticket ID (e.g., FIND-4411, INS-2761)",
+                    "2. I'll ask if you want me to review the Parent/Epic hierarchy for context",
+                    "3. Choose whether you want testing type recommendations or full test case design",
+                ],
+                "source_context": context,  # Preserve original context for session continuity
+            },
+            "next": "ask_user_question",
+            "questions": get_qain_initial_questions(),
+            "error": None,
+        }
+
+    def format_output(self, test_suite: TestSuite) -> str:
+        """Format test suite as Gherkin, Markdown, or structured JSON."""
         if self.output_format == TestCaseFormat.GHERKIN:
             lines = [f"Feature: {test_suite.name}", "", test_suite.description, ""]
             for tc in test_suite.test_cases:
@@ -3306,25 +3052,16 @@ def generate_comprehensive_test_suite(
     }
 
 
-# ==================== JIRA Integration Functions ====================
-
-# ==================== qAIn Interactive Workflow ====================
+# --- JIRA Integration & qAIn Interactive Workflow ---
 
 class QAInWorkflowMode(Enum):
     """Workflow modes for qAIn JIRA integration."""
-    TESTING_TYPE_ONLY = "testing_type_only"  # Review and recommend testing types only
-    FULL_TEST_DESIGN = "full_test_design"     # Create test cases with full coverage
+    TESTING_TYPE_ONLY = "testing_type_only"
+    FULL_TEST_DESIGN = "full_test_design"
 
 
 def get_qain_initial_questions() -> List[Dict[str, Any]]:
-    """
-    Get initial questions when user shares a JIRA ticket.
-
-    Step 1: Ask if user wants qAIn to review Parent and Epic (Pandora hierarchy)
-
-    Returns:
-        List of questions in AskUserQuestion format
-    """
+    """Get initial questions (Step 1: hierarchy preference)."""
     return [
         {
             "question": "Do you want qAIn to review Parent and Epic for broader context?",
@@ -3345,14 +3082,7 @@ def get_qain_initial_questions() -> List[Dict[str, Any]]:
 
 
 def get_qain_action_questions() -> List[Dict[str, Any]]:
-    """
-    Get action questions after hierarchy preference is set.
-
-    Step 2: Ask what action the user wants qAIn to perform.
-
-    Returns:
-        List of questions in AskUserQuestion format
-    """
+    """Get action questions (Step 2: testing types or full test design)."""
     return [
         {
             "question": "What would you like qAIn to do?",
@@ -3373,17 +3103,7 @@ def get_qain_action_questions() -> List[Dict[str, Any]]:
 
 
 def get_qain_full_workflow_questions() -> List[Dict[str, Any]]:
-    """
-    Get all qAIn workflow questions in sequence.
-
-    Combined questions for the interactive workflow:
-    1. JIRA ticket ID
-    2. Review Parent/Epic hierarchy?
-    3. Action: Testing types only OR Full test design
-
-    Returns:
-        List of questions in AskUserQuestion format
-    """
+    """Get all qAIn workflow questions (ticket ID, hierarchy, action)."""
     return [
         {
             "question": "What is the JIRA ticket ID? (e.g., FIND-4411, INS-2761)",
@@ -3429,21 +3149,10 @@ def get_qain_full_workflow_questions() -> List[Dict[str, Any]]:
 def analyze_ticket_for_testing_types(
     description: str,
     summary: str,
-    issue_type: str = "Story",
+    issue_type: str = "Story",  # noqa: ARG001
     labels: List[str] = None,
 ) -> Dict[str, Any]:
-    """
-    Analyze a JIRA ticket and recommend appropriate testing types.
-
-    Args:
-        description: Ticket description/requirements
-        summary: Ticket summary
-        issue_type: Type of JIRA issue
-        labels: Ticket labels
-
-    Returns:
-        Dictionary with recommended testing types and rationale
-    """
+    """Analyze JIRA ticket and recommend testing types (FT-UI, FT-API, E2E, SIT, A11Y, etc.)."""
     labels = labels or []
     text = f"{summary} {description}".lower()
 
@@ -3526,19 +3235,7 @@ def generate_testing_type_comment(
     recommendations: Dict[str, Any],
     jira_context: Optional[JiraContext] = None,
 ) -> str:
-    """
-    Generate a JIRA comment with recommended testing types.
-
-    Args:
-        story_key: JIRA ticket key
-        summary: Ticket summary
-        recommendations: Output from analyze_ticket_for_testing_types
-        jira_context: Optional hierarchy context
-
-    Returns:
-        Formatted comment for JIRA
-    """
-    # Build hierarchy context section
+    """Generate JIRA comment with recommended testing types."""
     hierarchy_section = ""
     if jira_context:
         hierarchy_section = f"""
@@ -3594,20 +3291,7 @@ async def run_qain_workflow(
     test_types: List[str] = None,
     feature_label: str = None,
 ) -> Dict[str, Any]:
-    """
-    Run the qAIn interactive workflow for a JIRA ticket.
-
-    Args:
-        story_key: JIRA ticket key
-        jira_client: JIRA client instance
-        mode: Workflow mode (TESTING_TYPE_ONLY or FULL_TEST_DESIGN)
-        include_hierarchy: Whether to fetch Initiative/Epic context
-        test_types: Optional list of testing types to use
-        feature_label: Optional feature label
-
-    Returns:
-        Workflow result with generated content
-    """
+    """Run qAIn workflow for a JIRA ticket (testing types or full test design)."""
     result = {
         "success": False,
         "mode": mode.value,
