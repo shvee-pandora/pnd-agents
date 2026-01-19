@@ -236,31 +236,75 @@ export class TeamsNotifier {
       vulnSummary = ` (${vulnSummary})`;
     }
 
+    // Get unique vulnerability titles (up to 3)
+    const vulnTitles = [...new Set(dep.vulnerabilities.map((v) => v.title))].slice(0, 3);
+    const vulnTitlesText = vulnTitles.length > 0 
+      ? vulnTitles.join(', ') + (dep.vulnerabilities.length > 3 ? '...' : '')
+      : '';
+
+    // Get the most severe vulnerability description (truncated)
+    const mostSevereVuln = dep.vulnerabilities.find((v) => v.severity === 'critical') 
+      || dep.vulnerabilities.find((v) => v.severity === 'high')
+      || dep.vulnerabilities[0];
+    const description = mostSevereVuln?.description 
+      ? this.truncateText(mostSevereVuln.description, 150)
+      : '';
+
+    const items: AdaptiveCardElement[] = [
+      {
+        type: 'TextBlock',
+        text: `• **${dep.name}@${dep.version}**`,
+        wrap: true,
+      },
+    ];
+
+    // Add vulnerability titles
+    if (vulnTitlesText) {
+      items.push({
+        type: 'TextBlock',
+        text: `🔍 ${vulnTitlesText}`,
+        wrap: true,
+        size: 'small',
+        color: 'attention',
+      });
+    }
+
+    // Add brief description
+    if (description) {
+      items.push({
+        type: 'TextBlock',
+        text: description,
+        wrap: true,
+        size: 'small',
+      });
+    }
+
+    // Add fix suggestion
+    items.push({
+      type: 'TextBlock',
+      text: risk.suggestedFix
+        ? `✅ Fix: ${risk.suggestedFix}`
+        : `⚠️ ${vulnCount} vulnerabilities${vulnSummary}`,
+      wrap: true,
+      size: 'small',
+      color: 'accent',
+    });
+
     return {
       type: 'ColumnSet',
       columns: [
         {
           type: 'Column',
           width: 'stretch',
-          items: [
-            {
-              type: 'TextBlock',
-              text: `• **${dep.name}@${dep.version}**`,
-              wrap: true,
-            },
-            {
-              type: 'TextBlock',
-              text: risk.suggestedFix
-                ? `→ ${risk.suggestedFix}`
-                : `${vulnCount} vulnerabilities${vulnSummary}`,
-              wrap: true,
-              size: 'small',
-              color: 'accent',
-            },
-          ],
+          items,
         },
       ],
     };
+  }
+
+  private truncateText(text: string, maxLength: number): string {
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength - 3) + '...';
   }
 
   private buildFixBlock(fix: SuggestedFix): AdaptiveCardElement {
