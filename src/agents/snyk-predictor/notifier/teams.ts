@@ -147,6 +147,22 @@ export class TeamsNotifier {
           color: 'attention',
         });
       }
+    } else {
+      body.push({
+        type: 'TextBlock',
+        text: '✅ No High Risk Dependencies Found',
+        weight: 'bolder',
+        size: 'medium',
+        spacing: 'large',
+        separator: true,
+        color: 'good',
+      });
+      body.push({
+        type: 'TextBlock',
+        text: 'All dependencies passed the security scan. No immediate action required.',
+        wrap: true,
+        size: 'small',
+      });
     }
 
     if (notification.suggestedFixes.length > 0) {
@@ -164,13 +180,23 @@ export class TeamsNotifier {
       }
     }
 
-    body.push({
-      type: 'TextBlock',
-      text: '**Action:** Fix before next deployment',
-      wrap: true,
-      spacing: 'large',
-      color: 'attention',
-    });
+    if (hasHighRisk) {
+      body.push({
+        type: 'TextBlock',
+        text: '**Action:** Fix before next deployment',
+        wrap: true,
+        spacing: 'large',
+        color: 'attention',
+      });
+    } else {
+      body.push({
+        type: 'TextBlock',
+        text: '**Status:** Ready for deployment',
+        wrap: true,
+        spacing: 'large',
+        color: 'good',
+      });
+    }
 
     return {
       type: 'message',

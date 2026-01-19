@@ -70,7 +70,7 @@ export class SnykPredictorAgent {
       }
 
       console.log('\n[4/4] Sending notifications...');
-      if (this.config.notify === 'teams' && filteredPrediction.highRiskDependencies.length > 0) {
+      if (this.config.notify === 'teams') {
         try {
           notificationSent = await sendTeamsNotification(
             filteredPrediction,
@@ -82,8 +82,6 @@ export class SnykPredictorAgent {
         }
       } else if (this.config.notify === 'none') {
         console.log('     Notifications disabled');
-      } else {
-        console.log('     No high-risk dependencies to notify about');
       }
 
       console.log(`\n${'='.repeat(60)}`);
