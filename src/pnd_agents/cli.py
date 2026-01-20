@@ -185,6 +185,40 @@ AGENTS = {
     },
 }
 
+# Agent Packs - Groups of agents that can be installed together
+AGENT_PACKS = {
+    "core": {
+        "name": "Core Pack",
+        "description": "Essential orchestration agent (always recommended)",
+        "agents": ["task-manager"],
+        "default": True,
+    },
+    "developer": {
+        "name": "Developer Pack",
+        "description": "Frontend/backend development, Figma, testing, code review, QA",
+        "agents": ["frontend-engineer", "backend", "figma-reader", "unit-test", "code-review", "qa", "pr-review"],
+        "default": True,
+    },
+    "quality": {
+        "name": "Quality & Security Pack",
+        "description": "SonarCloud validation, tech debt analysis, security scanning, performance",
+        "agents": ["sonar-validation", "technical-debt", "snyk-predictor", "performance", "broken-experience-detector"],
+        "default": False,
+    },
+    "product": {
+        "name": "Product Management Pack",
+        "description": "PRD to Jira, executive summaries, roadmap review, analytics",
+        "agents": ["prd-to-jira", "exec-summary", "roadmap-review", "analytics"],
+        "default": False,
+    },
+    "platform": {
+        "name": "Pandora Platform Pack",
+        "description": "Pandora-specific: e-commerce, Amplience CMS integrations",
+        "agents": ["commerce", "amplience-cms", "amplience-placement"],
+        "default": False,
+    },
+}
+
 # Environment variables
 ENV_VARS = {
     # Figma Integration
@@ -351,55 +385,57 @@ def prompt_input(prompt: str, default: str = "", sensitive: bool = False) -> str
 
 
 def select_agents(preset: Optional[str] = None) -> dict[str, bool]:
-    """Interactive agent selection."""
+    """Interactive agent selection using agent packs."""
     selected = {}
     
+    # Initialize all agents as disabled
+    for agent_id in AGENTS:
+        selected[agent_id] = False
+    
     if preset == "minimal":
-        # Only essential agents
-        for agent_id in AGENTS:
-            selected[agent_id] = agent_id in ["task-manager", "frontend-engineer", "code-review"]
+        # Only core pack
+        for agent_id in AGENT_PACKS["core"]["agents"]:
+            selected[agent_id] = True
     elif preset == "full":
-        # All agents
+        # All agents from all packs
         for agent_id in AGENTS:
             selected[agent_id] = True
     elif preset == "default":
-        # Default selection
-        for agent_id, info in AGENTS.items():
-            selected[agent_id] = info["default"]
+        # Default packs (core + developer)
+        for pack_id, pack_info in AGENT_PACKS.items():
+            if pack_info["default"]:
+                for agent_id in pack_info["agents"]:
+                    selected[agent_id] = True
     else:
-        # Interactive selection - group by category
-        print(color("\nSelect agents to enable:", Colors.BOLD))
-        print(color("(Press Enter to accept default, 'y' to enable, 'n' to disable)\n", Colors.CYAN))
+        # Interactive selection by pack
+        print(color("\nSelect agent packs to install:", Colors.BOLD))
+        print(color("(Each pack contains multiple agents - select 'y' to install all agents in that pack)\n", Colors.CYAN))
         
-        # Group agents by category
-        categories: dict[str, list[tuple[str, dict]]] = {}
-        for agent_id, info in AGENTS.items():
-            category = info.get("category", "Other")
-            if category not in categories:
-                categories[category] = []
-            categories[category].append((agent_id, info))
-        
-        # Display agents grouped by category
-        for category, agents in categories.items():
-            print(color(f"\n  === {category} ===", Colors.HEADER))
+        for pack_id, pack_info in AGENT_PACKS.items():
+            pack_name = color(pack_info["name"], Colors.BOLD)
+            pack_desc = pack_info["description"]
+            default = pack_info["default"]
+            agent_count = len(pack_info["agents"])
             
-            for agent_id, info in agents:
-                role_color = {
-                    "orchestrator": Colors.YELLOW,
-                    "specialist": Colors.BLUE,
-                    "validator": Colors.GREEN,
-                    "security": Colors.RED,
-                }.get(info["role"], Colors.ENDC)
-                
-                role_badge = color(f"[{info['role']}]", role_color)
-                name = color(info["name"], Colors.BOLD)
-                desc = info["description"]
-                default = info["default"]
-                
-                print(f"  {role_badge} {name}")
-                print(f"      {desc}")
-                selected[agent_id] = prompt_yes_no(f"      Enable {agent_id}?", default)
-                print()
+            # Show pack header
+            print(color(f"\n  {'=' * 50}", Colors.CYAN))
+            print(f"  {pack_name} ({agent_count} agents)")
+            print(f"  {pack_desc}")
+            
+            # List agents in this pack
+            print(color("  Includes:", Colors.YELLOW))
+            for agent_id in pack_info["agents"]:
+                agent_name = AGENTS[agent_id]["name"]
+                print(f"    - {agent_name}")
+            
+            # Ask to enable the pack
+            enable_pack = prompt_yes_no(f"\n  Install {pack_info['name']}?", default)
+            
+            # Enable all agents in the pack if selected
+            if enable_pack:
+                for agent_id in pack_info["agents"]:
+                    selected[agent_id] = True
+            print()
     
     return selected
 
