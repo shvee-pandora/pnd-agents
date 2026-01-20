@@ -305,7 +305,7 @@ pnd-agents/
 │   │   ├── code_review/           # Code Review Agent
 │   │   ├── unit_test_agent/       # Unit Test Agent
 │   │   ├── sonar_validation_agent/# Sonar Validation Agent
-│   │   ├── test_case_writing_agent/ # Test Case Writing Agent
+│   │   ├── test_analysis_design/ # Test Case Writing Agent
 │   │   ├── qa_agent/              # QA Agent
 │   │   ├── performance/           # Performance Agent
 │   │   ├── backend/               # Backend Agent
@@ -688,7 +688,7 @@ The Test Case Writing Agent (qAIn - Quality AI Agent) is an AI-powered automatio
 ### Usage
 
 ```python
-from src.agents.test_case_writing_agent import generate_test_cases, run_jira_workflow
+from src.agents.test_analysis_design import generate_test_cases, run_jira_workflow
 
 # Generate test cases from requirements
 result = generate_test_cases(

@@ -1,0 +1,25 @@
+[
+  {
+    "eventId": "FIND-4223_1768913245.223045",
+    "eventType": "task_started",
+    "agentName": "Test Case Writing Agent (qAIn)",
+    "timestamp": "2026-01-20T13:47:25.223045",
+    "data": {
+      "jira_ticket": "FIND-4223",
+      "workflow": "qAIn",
+      "mode": "FULL_TEST_DESIGN"
+    }
+  },
+  {
+    "eventId": "FIND-4223_1768913245.979696",
+    "eventType": "task_failed",
+    "agentName": "Test Case Writing Agent (qAIn)",
+    "timestamp": "2026-01-20T13:47:25.979696",
+    "data": {
+      "jira_ticket": "FIND-4223",
+      "duration_seconds": 0.756651,
+      "error": "Could not fetch JIRA context for FIND-4223",
+      "success": false
+    }
+  }
+]

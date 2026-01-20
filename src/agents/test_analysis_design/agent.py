@@ -287,6 +287,48 @@ class JiraContext:
         return "\n".join(sections)
 
 
+def verify_jira_connection(jira_client: Any) -> Tuple[bool, str]:
+    """
+    Verify JIRA connection before performing any operations.
+
+    This check MUST be performed at the start of any workflow that uses JIRA.
+
+    Args:
+        jira_client: JIRA client instance
+
+    Returns:
+        Tuple of (success: bool, message: str)
+    """
+    if not jira_client:
+        return False, "No JIRA client provided. Cannot proceed without JIRA connection."
+
+    try:
+        # Use the test_connection method if available
+        if hasattr(jira_client, 'test_connection'):
+            if jira_client.test_connection():
+                logger.info("JIRA connection verified successfully")
+                return True, "JIRA connection verified successfully"
+            else:
+                return False, "JIRA connection test failed. Please check credentials and network."
+
+        # Fallback: try to access the "myself" endpoint directly
+        if hasattr(jira_client, 'client'):
+            response = jira_client.client.get("myself")
+            response.raise_for_status()
+            user = response.json()
+            username = user.get('displayName', user.get('name', 'Unknown'))
+            logger.info(f"JIRA connection verified - authenticated as {username}")
+            return True, f"JIRA connection verified - authenticated as {username}"
+
+        # Last resort: try a simple operation
+        return False, "Unable to verify JIRA connection - client does not have expected methods"
+
+    except Exception as e:
+        error_msg = f"JIRA connection verification failed: {str(e)}"
+        logger.error(error_msg)
+        return False, error_msg
+
+
 def fetch_jira_context(
     story_key: str,
     jira_client: Any,
@@ -1196,7 +1238,7 @@ class JiraTestCaseCreationResult:
     errors: List[str] = field(default_factory=list)
 
 
-class TestCaseWritingAgent:
+class TestAnalysisDesignAgent:
     """
     Agent for generating comprehensive test cases from requirements,
     user stories, acceptance criteria, or code analysis.
@@ -2694,7 +2736,7 @@ Generate cross-browser/device test cases."""
 
     def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Run agent as workflow step. Always requires qAIn interactive workflow questions."""
-        logger.info("TestCaseWritingAgent.run called")
+        logger.info("TestAnalysisDesignAgent.run called")
 
         try:
             task_description = context.get("task_description", "")
@@ -2728,7 +2770,7 @@ Generate cross-browser/device test cases."""
                     return self._generate_testing_type_recommendation(context, workflow_state)
 
             # --- Legacy: Minimal Invocation Check (when QAIN_WORKFLOW_MANDATORY is False) ---
-            # Check if this is a minimal invocation (user just typed "test_case_writing_agent")
+            # Check if this is a minimal invocation (user just typed "test_analysis_design")
             # In this case, activate the qAIn Interactive Workflow
             if not QAIN_WORKFLOW_MANDATORY:
                 is_minimal_invocation = self._is_minimal_invocation(task_description, input_data)
@@ -2814,7 +2856,7 @@ Generate cross-browser/device test cases."""
             }
 
         except Exception as e:
-            logger.error(f"TestCaseWritingAgent.run failed: {e}")
+            logger.error(f"TestAnalysisDesignAgent.run failed: {e}")
             return {
                 "status": "error",
                 "data": None,
@@ -2845,7 +2887,7 @@ Generate cross-browser/device test cases."""
         """
         Check if this is a minimal invocation that should trigger qAIn workflow.
 
-        A minimal invocation is when the user just types "test_case_writing_agent"
+        A minimal invocation is when the user just types "test_analysis_design"
         without providing specific requirements or context.
 
         Args:
@@ -2858,10 +2900,9 @@ Generate cross-browser/device test cases."""
         # No task description or generic invocation
         if not task_description or task_description.strip().lower() in [
             "",
-            "test_case_writing_agent",
-            "test case writing agent",
-            "test_case_writing",
-            "test case writing",
+            "test_analysis_design",
+            "test analysis design",
+            "test analysis design agent",
             "qain",
             "qa",
         ]:
@@ -3046,83 +3087,8 @@ def run(context: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Workflow-compatible result
     """
-    agent = TestCaseWritingAgent()
+    agent = TestAnalysisDesignAgent()
     return agent.run(context)
-
-
-def generate_test_cases(
-    requirements: str,
-    feature_name: str = "Feature",
-    include_edge_cases: bool = True,
-    include_security: bool = False,
-    include_accessibility: bool = False,
-    include_boundary: bool = True,
-    include_integration: bool = False,
-    include_performance: bool = False,
-    include_api: bool = False,
-    include_cross_browser: bool = False,
-    include_all: bool = False,
-    output_format: str = "structured",
-    default_label: str = "qAIn",
-    external_doc_links: Optional[List[str]] = None,
-) -> Dict[str, Any]:
-    """
-    Generate test cases from requirements.
-
-    Convenience function for independent usage.
-
-    Args:
-        requirements: Text containing requirements or user stories
-        feature_name: Name of the feature being tested
-        include_edge_cases: Whether to include edge case tests
-        include_security: Whether to include security tests
-        include_accessibility: Whether to include accessibility tests
-        include_boundary: Whether to include boundary value tests
-        include_integration: Whether to include integration tests
-        include_performance: Whether to include performance tests
-        include_api: Whether to include API tests
-        include_cross_browser: Whether to include cross-browser tests
-        include_all: Whether to include all test types
-        output_format: Output format (structured, gherkin, markdown)
-        default_label: Default label to add to all test cases
-        external_doc_links: Optional list of Figma/Confluence URLs for additional context
-
-    Returns:
-        Generated test cases with coverage summary
-    """
-    format_map = {
-        "structured": TestCaseFormat.STRUCTURED,
-        "gherkin": TestCaseFormat.GHERKIN,
-        "markdown": TestCaseFormat.MARKDOWN,
-    }
-
-    agent = TestCaseWritingAgent(
-        output_format=format_map.get(output_format, TestCaseFormat.STRUCTURED),
-        include_edge_cases=include_edge_cases,
-        include_security=include_security,
-        include_accessibility=include_accessibility,
-        include_boundary=include_boundary,
-        include_integration=include_integration,
-        include_performance=include_performance,
-        include_api=include_api,
-        include_cross_browser=include_cross_browser,
-        default_label=default_label,
-    )
-
-    test_suite = agent.generate_test_suite(
-        requirements,
-        feature_name,
-        include_all,
-        external_doc_links=external_doc_links
-    )
-
-    return {
-        "testSuite": test_suite.to_dict(),
-        "formatted": agent.format_output(test_suite),
-        "priorityLevelTable": test_suite.get_priority_level_table(),
-        "traceabilityMatrix": test_suite._build_traceability_matrix(),
-        "coverageMatrix": test_suite._build_coverage_matrix(),
-    }
 
 
 def generate_comprehensive_test_suite(
@@ -3164,7 +3130,7 @@ def generate_comprehensive_test_suite(
         "markdown": TestCaseFormat.MARKDOWN,
     }
 
-    agent = TestCaseWritingAgent(
+    agent = TestAnalysisDesignAgent(
         output_format=format_map.get(output_format, TestCaseFormat.GHERKIN),
         include_edge_cases=True,
         include_security=True,
@@ -3458,7 +3424,17 @@ async def run_qain_workflow(
         "test_suite": None,
         "created_test_cases": [],
         "error": None,
+        "jira_connection_failed": False,
     }
+
+    # MANDATORY: Verify JIRA connection before any operations
+    connection_ok, connection_msg = verify_jira_connection(jira_client)
+    if not connection_ok:
+        logger.error(f"JIRA connection check failed: {connection_msg}")
+        result["error"] = connection_msg
+        result["jira_connection_failed"] = True
+        return result
+    logger.info(f"JIRA connection verified for qAIn workflow: {connection_msg}")
 
     try:
         # Fetch JIRA context with hierarchy if requested
@@ -3786,6 +3762,14 @@ async def create_jira_test_cases(
     """
     result = JiraTestCaseCreationResult()
 
+    # MANDATORY: Verify JIRA connection before any operations
+    connection_ok, connection_msg = verify_jira_connection(jira_client)
+    if not connection_ok:
+        logger.error(f"JIRA connection check failed: {connection_msg}")
+        result.error_messages.append(f"JIRA connection failed: {connection_msg}")
+        return result
+    logger.info(f"JIRA connection verified for test case creation: {connection_msg}")
+
     # Get existing test cases to avoid duplicates
     existing_tests = jira_client.search_test_cases(
         project_key=config.project_key,
@@ -3894,6 +3878,20 @@ def run_jira_workflow(
     Returns:
         Workflow result with test suite and JIRA comments
     """
+    # MANDATORY: Verify JIRA connection before any operations
+    if jira_client:
+        connection_ok, connection_msg = verify_jira_connection(jira_client)
+        if not connection_ok:
+            logger.error(f"JIRA connection check failed: {connection_msg}")
+            return {
+                "status": "error",
+                "error": connection_msg,
+                "story_key": story_key,
+                "test_suite": None,
+                "jira_connection_failed": True,
+            }
+        logger.info(f"JIRA connection verified for workflow: {connection_msg}")
+
     # Parse project key from story key
     project_key = story_key.split("-")[0] if "-" in story_key else "PANDORA"
 
@@ -3935,7 +3933,7 @@ def run_jira_workflow(
     )
 
     # Create agent with appropriate settings
-    agent = TestCaseWritingAgent(
+    agent = TestAnalysisDesignAgent(
         output_format=TestCaseFormat.GHERKIN,
         include_edge_cases=True,
         include_security=config.include_security,

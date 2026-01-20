@@ -523,6 +523,44 @@
         "read_only_analysis": true
       },
       "enabled": false
+    },
+    {
+      "id": "test-analysis-design",
+      "name": "Test Analysis Design Agent (qAIn)",
+      "description": "Junior Quality Engineer agent that generates comprehensive test cases from JIRA tickets, requirements, user stories, or code. Supports full Pandora JIRA hierarchy (Initiative->Epic->Story->Task), BDD/Gherkin format, Figma/Confluence documentation integration, and accessibility/security testing scenarios.",
+      "role": "specialist",
+      "capabilities": [
+        "test-case-generation",
+        "jira-hierarchy-analysis",
+        "bdd-gherkin-format",
+        "figma-doc-integration",
+        "confluence-doc-integration",
+        "accessibility-test-scenarios",
+        "security-test-scenarios",
+        "existing-test-reuse"
+      ],
+      "commands": [
+        "generate-test-cases",
+        "analyze-jira-hierarchy",
+        "fetch-external-docs"
+      ],
+      "skills": [
+        "bdd-gherkin",
+        "jira-integration",
+        "pandora-jira-hierarchy",
+        "test-case-design",
+        "accessibility-testing",
+        "security-testing"
+      ],
+      "tools": [
+        "filesystem",
+        "jira-api",
+        "figma-parser",
+        "confluence-api"
+      ],
+      "model": "sonnet",
+      "priority": 2,
+      "enabled": true
     }
   ],
   "tools": [

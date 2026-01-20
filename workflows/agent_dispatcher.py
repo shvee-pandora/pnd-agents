@@ -43,7 +43,7 @@ class AgentDispatcher:
         self.register("unit_test", self._unit_test_handler)
         self.register("sonar", self._sonar_handler)
         self.register("technical_debt", self._technical_debt_handler)
-        self.register("test_case_writing", self._test_case_writing_handler)
+        self.register("test_analysis_design", self._test_analysis_design_handler)
     
     def register(self, name: str, handler: Callable[[Dict[str, Any]], AgentResult]):
         """
@@ -953,20 +953,20 @@ class AgentDispatcher:
                 error=f"Technical debt analysis failed: {str(e)}"
             )
 
-    def _test_case_writing_handler(self, context: Dict[str, Any]) -> AgentResult:
+    def _test_analysis_design_handler(self, context: Dict[str, Any]) -> AgentResult:
         """
-        Test Case Writing Agent handler.
+        Test Analysis Design Agent (qAIn) handler.
 
         Generates comprehensive test cases from requirements, user stories,
-        or acceptance criteria.
+        or acceptance criteria using the qAIn workflow.
         """
         task = context.get("task", "")
         input_data = context.get("input", {})
 
         try:
-            from agents.test_case_writing_agent import TestCaseWritingAgent
+            from agents.test_analysis_design import TestAnalysisDesignAgent
 
-            agent = TestCaseWritingAgent()
+            agent = TestAnalysisDesignAgent()
 
             # Build context for the agent
             agent_context = {

@@ -183,6 +183,14 @@ AGENTS = {
         "category": "Platform (Pandora)",
         "default": False,
     },
+    # Test Analysis
+    "test-analysis": {
+        "name": "Test Analysis Agent (qAIn)",
+        "description": "Review the acceptance criteria from JIRA and provide test analysis",
+        "role": "specialist",
+        "category": "Quality",
+        "default": True,
+    },
 }
 
 # Agent Packs - Groups of agents that can be installed together
@@ -196,7 +204,7 @@ AGENT_PACKS = {
     "developer": {
         "name": "Developer Pack",
         "description": "Frontend/backend development, Figma, testing, code review, QA",
-        "agents": ["frontend-engineer", "backend", "figma-reader", "unit-test", "code-review", "qa", "pr-review"],
+        "agents": ["frontend-engineer", "backend", "figma-reader", "unit-test", "code-review", "qa", "pr-review", "test-analysis"],
         "default": True,
     },
     "quality": {

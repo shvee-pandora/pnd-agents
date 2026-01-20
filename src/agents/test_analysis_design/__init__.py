@@ -34,7 +34,6 @@ from .agent import (
     JiraContext,
     # Convenience functions
     run,
-    generate_test_cases,
     generate_comprehensive_test_suite,
     # JIRA integration functions
     get_workflow_questions,
@@ -86,7 +85,6 @@ __all__ = [
     "JiraContext",
     # Convenience functions
     "run",
-    "generate_test_cases",
     "generate_comprehensive_test_suite",
     # JIRA integration functions
     "get_workflow_questions",
