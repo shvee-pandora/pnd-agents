@@ -11,6 +11,18 @@ logger = logging.getLogger(__name__)
 
 QAIN_SIGNATURE = "I'm your Junior Quality Engineer - qAIn"
 
+# --- qAIn Interactive Workflow Configuration ---
+# When True, the agent MUST ask the interactive workflow questions before generating test cases
+# This ensures proper context gathering (hierarchy review, action selection) for every invocation
+QAIN_WORKFLOW_MANDATORY = True
+
+# Workflow state keys for tracking question answers in context
+WORKFLOW_STATE_KEY = "qain_workflow_state"
+WORKFLOW_HIERARCHY_ANSWERED = "hierarchy_question_answered"
+WORKFLOW_ACTION_ANSWERED = "action_question_answered"
+WORKFLOW_HIERARCHY_CHOICE = "hierarchy_choice"  # "yes" or "no"
+WORKFLOW_ACTION_CHOICE = "action_choice"  # "recommend" or "create"
+
 # --- External Documentation Link Processing ---
 
 def extract_links_from_text(text: str) -> Dict[str, List[str]]:
@@ -2681,20 +2693,48 @@ Generate cross-browser/device test cases."""
         )
 
     def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Run agent as workflow step. Activates qAIn workflow on minimal invocation."""
+        """Run agent as workflow step. Always requires qAIn interactive workflow questions."""
         logger.info("TestCaseWritingAgent.run called")
 
         try:
             task_description = context.get("task_description", "")
             input_data = context.get("input_data", {})
 
+            # --- MANDATORY qAIn Interactive Workflow ---
+            # When QAIN_WORKFLOW_MANDATORY is True, ALWAYS check if workflow questions
+            # have been answered before proceeding with test case generation
+            if QAIN_WORKFLOW_MANDATORY:
+                workflow_state = input_data.get(WORKFLOW_STATE_KEY, {})
+                hierarchy_answered = workflow_state.get(WORKFLOW_HIERARCHY_ANSWERED, False)
+                action_answered = workflow_state.get(WORKFLOW_ACTION_ANSWERED, False)
+
+                # Step 1: Check if hierarchy question has been answered
+                if not hierarchy_answered:
+                    logger.info("qAIn Workflow: Hierarchy question not answered - asking now")
+                    return self._ask_hierarchy_question(context)
+
+                # Step 2: Check if action question has been answered
+                if not action_answered:
+                    logger.info("qAIn Workflow: Action question not answered - asking now")
+                    return self._ask_action_question(context, workflow_state)
+
+                # Both questions answered - log the choices and proceed
+                hierarchy_choice = workflow_state.get(WORKFLOW_HIERARCHY_CHOICE, "yes")
+                action_choice = workflow_state.get(WORKFLOW_ACTION_CHOICE, "create")
+                logger.info(f"qAIn Workflow: Questions answered - hierarchy={hierarchy_choice}, action={action_choice}")
+
+                # If user chose "recommend testing types only", handle that mode
+                if action_choice == "recommend":
+                    return self._generate_testing_type_recommendation(context, workflow_state)
+
+            # --- Legacy: Minimal Invocation Check (when QAIN_WORKFLOW_MANDATORY is False) ---
             # Check if this is a minimal invocation (user just typed "test_case_writing_agent")
             # In this case, activate the qAIn Interactive Workflow
-            is_minimal_invocation = self._is_minimal_invocation(task_description, input_data)
-
-            if is_minimal_invocation:
-                logger.info("Minimal invocation detected - activating qAIn Interactive Workflow")
-                return self._activate_qain_workflow(context)
+            if not QAIN_WORKFLOW_MANDATORY:
+                is_minimal_invocation = self._is_minimal_invocation(task_description, input_data)
+                if is_minimal_invocation:
+                    logger.info("Minimal invocation detected - activating qAIn Interactive Workflow")
+                    return self._activate_qain_workflow(context)
 
             # Extract parameters
             requirements_text = input_data.get("requirements", task_description)
@@ -2856,6 +2896,122 @@ Generate cross-browser/device test cases."""
             },
             "next": "ask_user_question",
             "questions": get_qain_initial_questions(),
+            "error": None,
+        }
+
+    def _ask_hierarchy_question(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Return the hierarchy review question (Step 1 of qAIn Interactive Workflow).
+
+        This is a MANDATORY question that must be answered before test case generation.
+        """
+        return {
+            "status": "qain_workflow_question",
+            "data": {
+                "workflow_step": 1,
+                "workflow_step_name": "hierarchy_review",
+                "message": f"{QAIN_SIGNATURE}\n\nBefore I generate test cases, I need to understand the context.",
+                "question_type": "hierarchy",
+            },
+            "next": "ask_user_question",
+            "questions": get_qain_initial_questions(),
+            "mandatory": True,
+            "workflow_state_key": WORKFLOW_STATE_KEY,
+            "answer_key": WORKFLOW_HIERARCHY_ANSWERED,
+            "choice_key": WORKFLOW_HIERARCHY_CHOICE,
+            "source_context": context,
+            "error": None,
+        }
+
+    def _ask_action_question(self, context: Dict[str, Any], workflow_state: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Return the action selection question (Step 2 of qAIn Interactive Workflow).
+
+        This is a MANDATORY question that must be answered before test case generation.
+        """
+        hierarchy_choice = workflow_state.get(WORKFLOW_HIERARCHY_CHOICE, "yes")
+        hierarchy_msg = "I'll review the Parent/Epic hierarchy for broader context." if hierarchy_choice == "yes" else "I'll focus only on this ticket."
+
+        return {
+            "status": "qain_workflow_question",
+            "data": {
+                "workflow_step": 2,
+                "workflow_step_name": "action_selection",
+                "message": f"{QAIN_SIGNATURE}\n\n{hierarchy_msg}\n\nNow, what would you like me to do?",
+                "question_type": "action",
+                "hierarchy_choice": hierarchy_choice,
+            },
+            "next": "ask_user_question",
+            "questions": get_qain_action_questions(),
+            "mandatory": True,
+            "workflow_state_key": WORKFLOW_STATE_KEY,
+            "answer_key": WORKFLOW_ACTION_ANSWERED,
+            "choice_key": WORKFLOW_ACTION_CHOICE,
+            "source_context": context,
+            "previous_state": workflow_state,
+            "error": None,
+        }
+
+    def _generate_testing_type_recommendation(
+        self, context: Dict[str, Any], workflow_state: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Generate testing type recommendations without creating full test cases.
+
+        This is used when the user selects "Recommend testing types" in the action question.
+        """
+        input_data = context.get("input_data", {})
+        task_description = context.get("task_description", "")
+
+        # Get ticket info from context
+        jira_ticket = input_data.get("jira_ticket", "")
+        summary = input_data.get("summary", task_description)
+        description = input_data.get("description", "")
+        labels = input_data.get("labels", [])
+
+        # Analyze ticket for testing types
+        recommendations = analyze_ticket_for_testing_types(
+            description=description,
+            summary=summary,
+            issue_type=input_data.get("issue_type", "Story"),
+            labels=labels,
+        )
+
+        # Build recommendation message
+        recommended_types = recommendations.get("recommended_types", [])
+        rationale = recommendations.get("rationale", [])
+        priority_order = recommendations.get("priority_order", recommended_types)
+
+        message_lines = [
+            f"{QAIN_SIGNATURE}",
+            "",
+            f"**Testing Type Recommendations for {jira_ticket or 'this ticket'}**",
+            "",
+            "Based on my analysis of the ticket content, I recommend the following testing types:",
+            "",
+        ]
+
+        for i, test_type in enumerate(priority_order, 1):
+            rationale_text = rationale[i - 1] if i <= len(rationale) else ""
+            message_lines.append(f"{i}. **{test_type}** - {rationale_text}")
+
+        message_lines.extend([
+            "",
+            "---",
+            "",
+            "Would you like me to proceed with **full test case design** for these testing types?",
+        ])
+
+        return {
+            "status": "qain_recommendation",
+            "data": {
+                "workflow_type": "testing_type_recommendation",
+                "message": "\n".join(message_lines),
+                "recommendations": recommendations,
+                "jira_ticket": jira_ticket,
+                "workflow_state": workflow_state,
+            },
+            "next": "user_decision",  # User can choose to proceed or stop here
             "error": None,
         }
 
