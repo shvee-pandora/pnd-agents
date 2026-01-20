@@ -1,8 +1,8 @@
 {
   "$schema": "./agents.schema.json",
   "version": "1.0.0",
-  "name": "PG AI Squad",
-  "description": "Pandora Group AI Squad - A production-grade agentic system for building the Pandora Group Site",
+  "name": "Pandora AI Squad",
+  "description": "Pandora AI Squad - A production-grade agentic system for building the Pandora Group Site",
   "agents": [
     {
       "id": "task-manager",
@@ -26,7 +26,8 @@
         "task-decomposition-patterns"
       ],
       "model": "sonnet",
-      "priority": 1
+      "priority": 1,
+      "enabled": true
     },
     {
       "id": "frontend-engineer",
@@ -57,7 +58,8 @@
         "figma-parser"
       ],
       "model": "sonnet",
-      "priority": 2
+      "priority": 2,
+      "enabled": true
     },
     {
       "id": "amplience-cms",
@@ -86,7 +88,8 @@
         "amplience-api"
       ],
       "model": "sonnet",
-      "priority": 2
+      "priority": 2,
+      "enabled": false
     },
     {
       "id": "code-review",
@@ -116,7 +119,8 @@
         "command-runner"
       ],
       "model": "sonnet",
-      "priority": 3
+      "priority": 3,
+      "enabled": true
     },
     {
       "id": "performance",
@@ -145,7 +149,8 @@
         "har-analyzer"
       ],
       "model": "sonnet",
-      "priority": 3
+      "priority": 3,
+      "enabled": false
     },
     {
       "id": "unit-test",
@@ -176,7 +181,8 @@
         "command-runner"
       ],
       "model": "sonnet",
-      "priority": 2
+      "priority": 2,
+      "enabled": true
     },
     {
       "id": "qa",
@@ -206,7 +212,8 @@
         "command-runner"
       ],
       "model": "sonnet",
-      "priority": 3
+      "priority": 3,
+      "enabled": true
     },
     {
       "id": "backend",
@@ -236,7 +243,8 @@
         "command-runner"
       ],
       "model": "sonnet",
-      "priority": 2
+      "priority": 2,
+      "enabled": true
     },
     {
       "id": "commerce",
@@ -263,7 +271,8 @@
         "commerce-api"
       ],
       "model": "sonnet",
-      "priority": 2
+      "priority": 2,
+      "enabled": false
     },
     {
       "id": "amplience-placement",
@@ -302,7 +311,8 @@
         "no_content_creation_from_scratch": true,
         "draft_mode_only": true,
         "human_approval_required": true
-      }
+      },
+      "enabled": false
     },
     {
       "id": "prd-to-jira",
@@ -335,8 +345,13 @@
       "metadata": {
         "claude_desktop_friendly": true,
         "requires_coding": false,
-        "target_audience": ["Product Managers", "TPMs", "Engineering Managers"]
-      }
+        "target_audience": [
+          "Product Managers",
+          "TPMs",
+          "Engineering Managers"
+        ]
+      },
+      "enabled": false
     },
     {
       "id": "exec-summary",
@@ -368,8 +383,13 @@
       "metadata": {
         "claude_desktop_friendly": true,
         "requires_coding": false,
-        "target_audience": ["Product Managers", "TPMs", "Engineering Managers"]
-      }
+        "target_audience": [
+          "Product Managers",
+          "TPMs",
+          "Engineering Managers"
+        ]
+      },
+      "enabled": false
     },
     {
       "id": "roadmap-review",
@@ -401,8 +421,13 @@
       "metadata": {
         "claude_desktop_friendly": true,
         "requires_coding": false,
-        "target_audience": ["Product Managers", "TPMs", "Engineering Managers"]
-      }
+        "target_audience": [
+          "Product Managers",
+          "TPMs",
+          "Engineering Managers"
+        ]
+      },
+      "enabled": false
     },
     {
       "id": "technical-debt",
@@ -438,12 +463,17 @@
         "claude_desktop_friendly": true,
         "requires_coding": false,
         "read_only": true,
-        "target_audience": ["Engineers", "Tech Leads", "Engineering Managers"]
+        "target_audience": [
+          "Engineers",
+          "Tech Leads",
+          "Engineering Managers"
+        ]
       },
       "constraints": {
         "no_code_modification": true,
         "read_only_analysis": true
-      }
+      },
+      "enabled": false
     },
     {
       "id": "snyk-predictor",
@@ -480,14 +510,19 @@
         "claude_desktop_friendly": true,
         "requires_coding": false,
         "read_only": true,
-        "target_audience": ["Engineers", "DevOps", "Security Teams"]
+        "target_audience": [
+          "Engineers",
+          "DevOps",
+          "Security Teams"
+        ]
       },
       "constraints": {
         "no_pipeline_blocking": true,
         "no_auto_merge": true,
         "heuristics_only": true,
         "read_only_analysis": true
-      }
+      },
+      "enabled": false
     }
   ],
   "tools": [
