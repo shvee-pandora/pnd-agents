@@ -388,6 +388,7 @@ class JiraClient:
         inward_issue: str,
         outward_issue: str,
         link_type: str = "Tests",
+        add_qain_label: bool = True,
     ) -> bool:
         """
         Create a link between two JIRA issues.
@@ -396,6 +397,7 @@ class JiraClient:
             inward_issue: The issue key that receives the inward link (e.g., test case)
             outward_issue: The issue key that receives the outward link (e.g., story)
             link_type: Type of link (e.g., "Tests", "Blocks", "Relates", "is tested by")
+            add_qain_label: If True (default), adds qAIn label to the outward issue (story)
 
         Returns:
             True if successful
@@ -411,6 +413,11 @@ class JiraClient:
             response.raise_for_status()
 
             logger.info(f"Linked {inward_issue} to {outward_issue} with '{link_type}'")
+
+            # MANDATORY: Add qAIn label to the story when linking test cases
+            if add_qain_label:
+                self.ensure_qain_label(outward_issue)
+
             return True
         except httpx.HTTPStatusError as e:
             logger.error(f"Failed to link issues: {e.response.text}")
@@ -477,38 +484,113 @@ class JiraClient:
 
         return self.search_issues(jql, max_results=max_results)
 
+    # ==================== Label Operations ====================
+
+    # Mandatory label for all qAIn agent interactions
+    QAIN_LABEL = "qAIn"
+
+    def add_label(
+        self,
+        issue_key: str,
+        label: str,
+    ) -> bool:
+        """
+        Add a label to a JIRA issue if not already present.
+
+        Args:
+            issue_key: Issue key (e.g., "EPA-123")
+            label: Label to add
+
+        Returns:
+            True if successful
+        """
+        try:
+            # Use the update endpoint with add operation for labels
+            payload = {
+                "update": {
+                    "labels": [{"add": label}]
+                }
+            }
+
+            response = self.client.put(f"issue/{issue_key}", json=payload)
+            response.raise_for_status()
+
+            logger.info(f"Added label '{label}' to {issue_key}")
+            return True
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 400:
+                # Label might already exist or field not editable
+                logger.warning(f"Could not add label to {issue_key}: {e.response.text}")
+                return False
+            logger.error(f"Failed to add label to {issue_key}: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Failed to add label to {issue_key}: {e}")
+            return False
+
+    def ensure_qain_label(self, issue_key: str) -> bool:
+        """
+        Ensure the qAIn label is present on a JIRA issue.
+
+        This is MANDATORY for all qAIn agent interactions (comments, test cases).
+
+        Args:
+            issue_key: Issue key (e.g., "EPA-123")
+
+        Returns:
+            True if label is present (added or already existed)
+        """
+        try:
+            # First check if label already exists
+            issue = self.get_issue(issue_key, fields=["labels"])
+            if issue and self.QAIN_LABEL in issue.labels:
+                logger.debug(f"qAIn label already exists on {issue_key}")
+                return True
+
+            # Add the label
+            return self.add_label(issue_key, self.QAIN_LABEL)
+        except Exception as e:
+            logger.warning(f"Could not ensure qAIn label on {issue_key}: {e}")
+            return False
+
     # ==================== Comment Operations ====================
 
     def add_comment(
         self,
         issue_key: str,
         body: str,
-        visibility: Optional[Dict[str, str]] = None
+        visibility: Optional[Dict[str, str]] = None,
+        add_qain_label: bool = True,
     ) -> Dict[str, Any]:
         """
         Add a comment to a JIRA issue.
-        
+
         Args:
             issue_key: Issue key (e.g., "EPA-123")
             body: Comment body (supports markdown)
             visibility: Optional visibility restriction
-            
+            add_qain_label: If True (default), adds the qAIn label to the ticket
+
         Returns:
             API response data
         """
         try:
+            # MANDATORY: Add qAIn label to the ticket when commenting
+            if add_qain_label:
+                self.ensure_qain_label(issue_key)
+
             # Convert markdown to Atlassian Document Format (ADF)
             payload = {
                 "body": self._markdown_to_adf(body)
             }
-            
+
             if visibility:
                 payload["visibility"] = visibility
-            
+
             response = self.client.post(f"issue/{issue_key}/comment", json=payload)
             response.raise_for_status()
-            
-            logger.info(f"Added comment to {issue_key}")
+
+            logger.info(f"Added comment to {issue_key} (qAIn label: {add_qain_label})")
             return response.json()
         except Exception as e:
             logger.error(f"Failed to add comment to {issue_key}: {e}")
