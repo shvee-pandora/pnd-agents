@@ -1,8 +1,8 @@
 {
   "$schema": "./agents.schema.json",
   "version": "1.0.0",
-  "name": "PG AI Squad",
-  "description": "Pandora Group AI Squad - A production-grade agentic system for building the Pandora Group Site",
+  "name": "Pandora AI Squad",
+  "description": "Pandora AI Squad - A production-grade agentic system for building the Pandora Group Site",
   "agents": [
     {
       "id": "task-manager",

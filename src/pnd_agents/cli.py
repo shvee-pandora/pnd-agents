@@ -35,90 +35,225 @@ def color(text: str, color_code: str) -> str:
 
 # Agent definitions
 AGENTS = {
+    # Orchestration
     "task-manager": {
         "name": "Task Manager Agent",
         "description": "Orchestrates tasks, decomposes work, routes to other agents",
         "role": "orchestrator",
+        "category": "Orchestration",
         "default": True,
     },
+    # Development
     "frontend-engineer": {
         "name": "Frontend Engineer Agent",
         "description": "React/Next.js components, Storybook, accessibility",
         "role": "specialist",
-        "default": True,
-    },
-    "amplience-cms": {
-        "name": "Amplience CMS Agent",
-        "description": "Content types, JSON schemas, CMS integration",
-        "role": "specialist",
-        "default": False,
-    },
-    "code-review": {
-        "name": "Code Review Agent",
-        "description": "Code standards validation, PR reviews",
-        "role": "validator",
-        "default": True,
-    },
-    "performance": {
-        "name": "Performance Agent",
-        "description": "HAR analysis, Core Web Vitals, optimization",
-        "role": "specialist",
-        "default": False,
-    },
-    "qa": {
-        "name": "QA Agent",
-        "description": "Unit tests, integration tests, Playwright E2E",
-        "role": "validator",
+        "category": "Development",
         "default": True,
     },
     "backend": {
         "name": "Backend Agent",
         "description": "API routes, Server Components, mock APIs",
         "role": "specialist",
+        "category": "Development",
         "default": False,
     },
     "figma-reader": {
         "name": "Figma Reader Agent",
         "description": "Extract component metadata from Figma designs",
         "role": "specialist",
+        "category": "Development",
         "default": True,
+    },
+    # Quality & Validation
+    "code-review": {
+        "name": "Code Review Agent",
+        "description": "Code standards validation, PR reviews",
+        "role": "validator",
+        "category": "Quality",
+        "default": True,
+    },
+    "unit-test": {
+        "name": "Unit Test Agent",
+        "description": "Generates comprehensive unit tests with 100% coverage target",
+        "role": "validator",
+        "category": "Quality",
+        "default": True,
+    },
+    "sonar-validation": {
+        "name": "Sonar Validation Agent",
+        "description": "Validates code against SonarCloud quality gates",
+        "role": "validator",
+        "category": "Quality",
+        "default": False,
+    },
+    "qa": {
+        "name": "QA Agent",
+        "description": "Validates implementation against acceptance criteria",
+        "role": "validator",
+        "category": "Quality",
+        "default": True,
+    },
+    "pr-review": {
+        "name": "PR Review Agent",
+        "description": "Reviews Azure DevOps pull requests with multi-role analysis",
+        "role": "validator",
+        "category": "Quality",
+        "default": False,
+    },
+    "technical-debt": {
+        "name": "Technical Debt Agent",
+        "description": "Identifies, classifies, and prioritizes technical debt",
+        "role": "validator",
+        "category": "Quality",
+        "default": False,
+    },
+    # Performance
+    "performance": {
+        "name": "Performance Agent",
+        "description": "HAR analysis, Core Web Vitals, optimization",
+        "role": "specialist",
+        "category": "Performance",
+        "default": False,
     },
     "broken-experience-detector": {
         "name": "Broken Experience Detector Agent",
         "description": "Scan URLs for performance, accessibility, SEO, and UX issues",
         "role": "specialist",
+        "category": "Performance",
         "default": True,
     },
+    # Product Management
+    "prd-to-jira": {
+        "name": "PRD to Jira Agent",
+        "description": "Converts PRDs to Jira epics, stories with Gherkin acceptance criteria",
+        "role": "specialist",
+        "category": "Product Management",
+        "default": False,
+    },
+    "exec-summary": {
+        "name": "Executive Summary Agent",
+        "description": "Creates stakeholder updates and executive summaries",
+        "role": "specialist",
+        "category": "Product Management",
+        "default": False,
+    },
+    "roadmap-review": {
+        "name": "Roadmap Review Agent",
+        "description": "Critiques roadmaps and OKRs, identifies risks and dependencies",
+        "role": "specialist",
+        "category": "Product Management",
+        "default": False,
+    },
+    # Analytics
+    "analytics": {
+        "name": "Analytics Agent",
+        "description": "Tracks agent performance metrics and generates reports",
+        "role": "specialist",
+        "category": "Analytics",
+        "default": False,
+    },
+    # Security
     "snyk-predictor": {
         "name": "Snyk Predictor Agent",
         "description": "Predict Snyk vulnerabilities before CI/CD pipelines are blocked",
         "role": "security",
+        "category": "Security",
+        "default": False,
+    },
+    # Platform-Specific (Pandora)
+    "commerce": {
+        "name": "Commerce Agent",
+        "description": "Pandora e-commerce integration, product search, cart operations",
+        "role": "specialist",
+        "category": "Platform (Pandora)",
+        "default": False,
+    },
+    "amplience-cms": {
+        "name": "Amplience CMS Agent",
+        "description": "Content types, JSON schemas, CMS integration",
+        "role": "specialist",
+        "category": "Platform (Pandora)",
+        "default": False,
+    },
+    "amplience-placement": {
+        "name": "Amplience Placement Agent",
+        "description": "Maps Figma designs to Amplience modules with human approval",
+        "role": "specialist",
+        "category": "Platform (Pandora)",
         "default": False,
     },
 }
 
 # Environment variables
 ENV_VARS = {
+    # Figma Integration
     "FIGMA_ACCESS_TOKEN": {
         "description": "Figma API token for reading designs",
-        "required_for": ["figma-reader", "frontend-engineer"],
+        "required_for": ["figma-reader", "frontend-engineer", "amplience-placement"],
         "sensitive": True,
     },
+    # Amplience CMS Integration
     "AMPLIENCE_HUB_NAME": {
         "description": "Amplience hub name",
-        "required_for": ["amplience-cms"],
+        "required_for": ["amplience-cms", "amplience-placement"],
         "sensitive": False,
     },
     "AMPLIENCE_BASE_URL": {
         "description": "Amplience base URL",
-        "required_for": ["amplience-cms"],
+        "required_for": ["amplience-cms", "amplience-placement"],
         "sensitive": False,
     },
+    # Jira Integration
+    "JIRA_BASE_URL": {
+        "description": "Jira instance base URL (e.g., https://your-domain.atlassian.net)",
+        "required_for": ["prd-to-jira", "exec-summary", "analytics"],
+        "sensitive": False,
+    },
+    "JIRA_EMAIL": {
+        "description": "Email address for Jira authentication",
+        "required_for": ["prd-to-jira", "exec-summary", "analytics"],
+        "sensitive": False,
+    },
+    "JIRA_API_TOKEN": {
+        "description": "Jira API token (create at id.atlassian.com/manage-profile/security/api-tokens)",
+        "required_for": ["prd-to-jira", "exec-summary", "analytics"],
+        "sensitive": True,
+    },
+    "JIRA_CLOUD_ID": {
+        "description": "Jira Cloud ID (optional, for cloud instances)",
+        "required_for": [],
+        "sensitive": False,
+    },
+    # SonarCloud Integration
+    "SONAR_TOKEN": {
+        "description": "SonarCloud API token for code quality analysis",
+        "required_for": ["sonar-validation", "technical-debt"],
+        "sensitive": True,
+    },
+    # Azure DevOps Integration
+    "AZURE_DEVOPS_PAT": {
+        "description": "Azure DevOps Personal Access Token for PR reviews",
+        "required_for": ["pr-review"],
+        "sensitive": True,
+    },
+    "AZURE_DEVOPS_ORG": {
+        "description": "Azure DevOps organization name (default: pandora-jewelry)",
+        "required_for": ["pr-review"],
+        "sensitive": False,
+    },
+    "AZURE_DEVOPS_PROJECT": {
+        "description": "Azure DevOps project name (default: Spark)",
+        "required_for": ["pr-review"],
+        "sensitive": False,
+    },
+    # Snyk Security Integration
     "SNYK_TOKEN": {
         "description": "Snyk API token for vulnerability scanning",
         "required_for": ["snyk-predictor"],
         "sensitive": True,
     },
+    # Microsoft Teams Notifications
     "TEAMS_WEBHOOK_URL": {
         "description": "Microsoft Teams webhook URL for notifications",
         "required_for": ["snyk-predictor"],
@@ -164,7 +299,7 @@ def get_pnd_agents_path() -> Path:
 
 
 def print_banner():
-    """Print the PND Agents banner."""
+    """Print the Pandora AI Squad banner."""
     banner = """
     ╔═══════════════════════════════════════════════════════════╗
     ║                                                           ║
@@ -175,7 +310,7 @@ def print_banner():
     ║   ██║     ██║ ╚████║██████╔╝    ██║  ██║╚██████╔╝███████╗ ║
     ║   ╚═╝     ╚═╝  ╚═══╝╚═════╝     ╚═╝  ╚═╝ ╚═════╝ ╚══════╝ ║
     ║                                                           ║
-    ║              PG AI Squad - Setup Wizard                   ║
+    ║           Pandora AI Squad - Setup Wizard                 ║
     ╚═══════════════════════════════════════════════════════════╝
     """
     print(color(banner, Colors.CYAN))
@@ -232,26 +367,39 @@ def select_agents(preset: Optional[str] = None) -> dict[str, bool]:
         for agent_id, info in AGENTS.items():
             selected[agent_id] = info["default"]
     else:
-        # Interactive selection
+        # Interactive selection - group by category
         print(color("\nSelect agents to enable:", Colors.BOLD))
         print(color("(Press Enter to accept default, 'y' to enable, 'n' to disable)\n", Colors.CYAN))
         
+        # Group agents by category
+        categories: dict[str, list[tuple[str, dict]]] = {}
         for agent_id, info in AGENTS.items():
-            role_color = {
-                "orchestrator": Colors.YELLOW,
-                "specialist": Colors.BLUE,
-                "validator": Colors.GREEN,
-            }.get(info["role"], Colors.ENDC)
+            category = info.get("category", "Other")
+            if category not in categories:
+                categories[category] = []
+            categories[category].append((agent_id, info))
+        
+        # Display agents grouped by category
+        for category, agents in categories.items():
+            print(color(f"\n  === {category} ===", Colors.HEADER))
             
-            role_badge = color(f"[{info['role']}]", role_color)
-            name = color(info["name"], Colors.BOLD)
-            desc = info["description"]
-            default = info["default"]
-            
-            print(f"  {role_badge} {name}")
-            print(f"      {desc}")
-            selected[agent_id] = prompt_yes_no(f"      Enable {agent_id}?", default)
-            print()
+            for agent_id, info in agents:
+                role_color = {
+                    "orchestrator": Colors.YELLOW,
+                    "specialist": Colors.BLUE,
+                    "validator": Colors.GREEN,
+                    "security": Colors.RED,
+                }.get(info["role"], Colors.ENDC)
+                
+                role_badge = color(f"[{info['role']}]", role_color)
+                name = color(info["name"], Colors.BOLD)
+                desc = info["description"]
+                default = info["default"]
+                
+                print(f"  {role_badge} {name}")
+                print(f"      {desc}")
+                selected[agent_id] = prompt_yes_no(f"      Enable {agent_id}?", default)
+                print()
     
     return selected
 
