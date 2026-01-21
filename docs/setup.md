@@ -37,6 +37,304 @@ The setup wizard will guide you through:
 
 ---
 
+## Three Usage Modes
+
+Pandora AI Squad agents can be used in three different ways, each with different capabilities and requirements. This section provides detailed information about each mode to help you choose the right approach.
+
+### Usage Mode Comparison
+
+| Feature | MCP Mode (Claude) | Python API Mode | CLI Mode |
+|---------|-------------------|-----------------|----------|
+| **Natural language interaction** | Yes | No | No |
+| **Slash commands** | Yes | No | No |
+| **Multi-agent orchestration** | Yes | Manual | No |
+| **CI/CD integration** | No | Yes | Yes |
+| **Batch processing** | No | Yes | Limited |
+| **Requires Claude Desktop/Code** | Yes | No | No |
+| **Programmatic access** | No | Yes | Limited |
+
+### Agent Availability by Mode
+
+Not all agents support all usage modes. The table below shows which agents can be used in each mode:
+
+| Agent | MCP Mode | Python API | CLI | Implementation Type |
+|-------|----------|------------|-----|---------------------|
+| **Task Manager** | Yes | Yes | No | Python module |
+| **Frontend Engineer** | Yes | No | No | Markdown (slash commands) |
+| **Backend** | Yes | No | No | Markdown (slash commands) |
+| **Figma Reader** | Yes | Yes | No | Python module |
+| **Code Review** | Yes | No | No | Markdown (slash commands) |
+| **Unit Test** | Yes | Yes | No | Python module |
+| **Sonar Validation** | Yes | Yes | No | Python module |
+| **QA** | Yes | Yes | No | Python module |
+| **PR Review** | Yes | Yes | No | Python module |
+| **Technical Debt** | Yes | Yes | Yes | Python module |
+| **Performance** | Yes | No | No | Markdown (slash commands) |
+| **Broken Experience Detector** | Yes | Yes | No | Python module |
+| **PRD to Jira** | Yes | Yes | No | Python module |
+| **Exec Summary** | Yes | Yes | No | Python module |
+| **Roadmap Review** | Yes | Yes | No | Python module |
+| **Analytics** | Yes | Yes | Yes | Python module |
+| **Commerce** | Yes | Yes | No | Python module |
+| **Amplience CMS** | Yes | No | No | Markdown (slash commands) |
+| **Amplience Placement** | Yes | Yes | No | Python module |
+
+**Legend:**
+- **Python module**: Has `agent.py` with classes and functions that can be imported directly
+- **Markdown (slash commands)**: Defined as markdown files in `agents/` and `commands/` directories, only works through MCP
+
+---
+
+### Mode 1: MCP Mode (Claude Desktop/Code)
+
+This is the **recommended mode** for interactive use. Agents run as MCP (Model Context Protocol) servers that Claude Desktop or Claude Code connects to.
+
+**How it works:**
+1. The `main.py` file starts an MCP server that exposes agent tools
+2. Claude Desktop/Code connects to this server via the configuration in `claude_desktop_config.json` or `~/.claude.json`
+3. When you ask Claude to perform a task, it calls the appropriate MCP tool
+4. The tool executes the agent logic and returns results to Claude
+5. Claude presents the results in natural language
+
+**Technical details:**
+- MCP uses JSON-RPC 2.0 over stdio for communication
+- Tools are registered in `src/tools/registry.py`
+- Each tool maps to an agent function or workflow
+- Environment variables are passed from the Claude config to the MCP server process
+
+**Capabilities:**
+- All 20 agents available
+- Natural language interaction ("Analyze technical debt in this repo")
+- Slash commands (`/tech-debt`, `/frontend`, `/figma`)
+- Multi-agent workflows via Task Manager
+- Context-aware (knows your current working directory)
+- Follow-up questions and iterative refinement
+
+**Limitations:**
+- Requires Claude Desktop or Claude Code
+- Cannot be automated in CI/CD pipelines
+- No batch processing
+- Single-threaded interaction
+
+**Best for:**
+- Interactive development workflows
+- Ad-hoc analysis and code generation
+- Learning and exploring agent capabilities
+- Tasks requiring human judgment and iteration
+
+---
+
+### Mode 2: Python API Mode
+
+For programmatic access, you can import agent classes directly into your Python code. This mode is ideal for automation, CI/CD integration, and custom tooling.
+
+**How it works:**
+1. Import the agent class from the appropriate module
+2. Instantiate the agent with any required configuration (tokens, paths)
+3. Call agent methods to perform analysis or generation
+4. Process the returned results (dict, dataclass, or markdown)
+
+**Technical details:**
+- Agent classes are located in `src/agents/<agent_name>/agent.py`
+- Most agents follow a similar pattern: `__init__()`, `analyze()`, `run()`
+- Results are typically returned as dataclasses with `to_dict()` and `to_markdown()` methods
+- Environment variables are read automatically if not passed explicitly
+
+**Available agents with Python API:**
+
+```python
+# Technical Debt Agent
+from agents.technical_debt_agent.agent import TechnicalDebtAgent, analyze_technical_debt
+
+agent = TechnicalDebtAgent(token="optional-sonar-token")
+report = agent.analyze("/path/to/repo")
+print(report.to_markdown())
+
+# Or use the convenience function
+report = analyze_technical_debt("/path/to/repo")
+```
+
+```python
+# Analytics Agent
+from agents.analytics_agent.agent import AnalyticsAgent
+
+agent = AnalyticsAgent(log_dir="/path/to/logs")
+agent.on_task_started("frontend-engineer", "Create Button component", jira_task_id="PROJ-123")
+# ... task executes ...
+agent.on_task_completed("frontend-engineer", jira_task_id="PROJ-123", metrics={"duration": 5000})
+report = agent.generate_sprint_report("Sprint 42", "2026-01-01", "2026-01-14")
+```
+
+```python
+# Sonar Validation Agent
+from agents.sonar_validation_agent.agent import SonarValidationAgent
+
+agent = SonarValidationAgent(token="your-token", project_key="your-project")
+status = agent.fetch_quality_gate_status()
+issues = agent.fetch_issues(severities=["BLOCKER", "CRITICAL"])
+result = agent.validate()
+```
+
+```python
+# Unit Test Agent
+from agents.unit_test_agent.agent import UnitTestAgent
+
+agent = UnitTestAgent()
+analysis = agent.analyze_file("/path/to/component.tsx")
+tests = agent.generate_tests("/path/to/component.tsx", framework="jest", coverage_target=100)
+```
+
+```python
+# QA Agent
+from agents.qa_agent.agent import QAAgent
+
+agent = QAAgent()
+result = agent.validate(
+    implementation_path="/path/to/component.tsx",
+    acceptance_criteria="Given... When... Then..."
+)
+```
+
+```python
+# Figma Reader Agent
+from agents.figma_reader_agent.agent import FigmaReaderAgent
+
+agent = FigmaReaderAgent(token="your-figma-token")
+metadata = agent.extract_component("https://www.figma.com/design/ABC123/Design?node-id=123-456")
+```
+
+```python
+# PR Review Agent
+from agents.pr_review_agent.agent import PRReviewAgent
+
+agent = PRReviewAgent(pat="your-azure-devops-pat", organization="your-org", project="your-project")
+review = agent.review_pr(pr_id=12345)
+```
+
+```python
+# PM Agents (PRD to Jira, Exec Summary, Roadmap Review)
+from agents.pm_agent_pack.prd_to_jira_agent import PRDToJiraAgent
+from agents.pm_agent_pack.exec_summary_agent import ExecSummaryAgent
+from agents.pm_agent_pack.roadmap_review_agent import RoadmapReviewAgent
+
+prd_agent = PRDToJiraAgent()
+summary_agent = ExecSummaryAgent()
+roadmap_agent = RoadmapReviewAgent()
+```
+
+```python
+# Broken Experience Detector Agent
+from agents.broken_experience_detector_agent.agent import BrokenExperienceDetectorAgent
+
+agent = BrokenExperienceDetectorAgent()
+results = agent.scan_urls(["https://example.com/page1", "https://example.com/page2"])
+```
+
+```python
+# Commerce Agent (Pandora-specific)
+from agents.commerce_agent.agent import CommerceAgent
+
+agent = CommerceAgent()
+# Pandora e-commerce operations
+```
+
+```python
+# Amplience Placement Agent (Pandora-specific)
+from agents.amplience_placement_agent.agent import AmpliencePlacementAgent
+
+agent = AmpliencePlacementAgent()
+# Amplience module mapping operations
+```
+
+**Capabilities:**
+- 14 agents with full Python API support
+- Programmatic access for automation
+- CI/CD pipeline integration
+- Batch processing multiple files/repos
+- Custom error handling and retry logic
+- Integration with other Python tools
+
+**Limitations:**
+- No natural language interaction
+- No slash commands
+- Manual orchestration required for multi-agent workflows
+- Must handle environment setup manually
+
+**Best for:**
+- CI/CD pipelines (GitHub Actions, Azure Pipelines)
+- Automated code quality checks
+- Batch analysis of multiple repositories
+- Custom tooling and integrations
+- Scheduled reports and monitoring
+
+---
+
+### Mode 3: CLI Mode
+
+Some agents provide command-line interfaces for quick operations without writing Python code.
+
+**How it works:**
+1. Run the pnd-agents CLI command with appropriate arguments
+2. The CLI parses arguments and calls the underlying agent
+3. Results are printed to stdout or saved to files
+
+**Available CLI commands:**
+
+```bash
+# Installation and configuration
+pnd-agents setup              # Run setup wizard
+pnd-agents status             # Check installation status
+pnd-agents config --show      # View current configuration
+pnd-agents config --agents    # Reconfigure agents
+pnd-agents config --env       # Reconfigure environment variables
+pnd-agents uninstall          # Remove from Claude config
+
+# Analysis commands
+pnd-agents scan               # Scan current directory for issues
+pnd-agents scan --path /repo  # Scan specific directory
+
+# Task execution (experimental)
+pnd-agents run-task "description"    # Run a task
+pnd-agents analyze-task "description" # Analyze without executing
+
+# Reporting
+pnd-agents sprint-report --sprint "Sprint 42" --start "2026-01-01" --end "2026-01-14"
+```
+
+**Direct module execution:**
+
+```bash
+# Technical Debt Agent
+python -m agents.technical_debt_agent.agent analyze /path/to/repo
+python -m agents.technical_debt_agent.agent summary /path/to/repo
+python -m agents.technical_debt_agent.agent register /path/to/repo
+
+# Analytics Agent
+python -m agents.analytics_agent.agent track-start frontend-engineer "Create component"
+python -m agents.analytics_agent.agent track-end frontend-engineer
+python -m agents.analytics_agent.agent report --days 7
+python -m agents.analytics_agent.agent list
+```
+
+**Capabilities:**
+- Quick operations without writing code
+- Scriptable for shell automation
+- Works in any terminal
+
+**Limitations:**
+- Limited to 2-3 agents with CLI support
+- Less flexible than Python API
+- No interactive features
+- Limited output formatting options
+
+**Best for:**
+- Quick one-off analysis
+- Shell scripts and automation
+- Developers who prefer CLI over Python
+- Simple CI/CD integration
+
+---
+
 ## Three Ways to Set Up PND Agents
 
 ### 1. Claude Code Setup

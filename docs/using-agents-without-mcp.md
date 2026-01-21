@@ -45,6 +45,41 @@ However, you gain:
 - Batch processing capabilities
 - Reproducible, scriptable analysis
 
+### Agent Compatibility
+
+Not all agents support non-MCP usage. The table below shows which agents have Python API support:
+
+| Agent | Python API | CLI | Implementation Type |
+|-------|------------|-----|---------------------|
+| **Task Manager** | Yes | No | Python module |
+| **Frontend Engineer** | No | No | Markdown (MCP only) |
+| **Backend** | No | No | Markdown (MCP only) |
+| **Figma Reader** | Yes | No | Python module |
+| **Code Review** | No | No | Markdown (MCP only) |
+| **Unit Test** | Yes | No | Python module |
+| **Sonar Validation** | Yes | No | Python module |
+| **QA** | Yes | No | Python module |
+| **PR Review** | Yes | No | Python module |
+| **Technical Debt** | Yes | Yes | Python module |
+| **Performance** | No | No | Markdown (MCP only) |
+| **Broken Experience Detector** | Yes | No | Python module |
+| **PRD to Jira** | Yes | No | Python module |
+| **Exec Summary** | Yes | No | Python module |
+| **Roadmap Review** | Yes | No | Python module |
+| **Analytics** | Yes | Yes | Python module |
+| **Commerce** | Yes | No | Python module |
+| **Amplience CMS** | No | No | Markdown (MCP only) |
+| **Amplience Placement** | Yes | No | Python module |
+
+**Summary:**
+- **14 agents** support Python API (can be used without MCP)
+- **6 agents** are MCP-only (markdown-based slash commands)
+- **2 agents** have CLI support (Technical Debt, Analytics)
+
+**Legend:**
+- **Python module**: Has `agent.py` with classes and functions that can be imported directly
+- **Markdown (MCP only)**: Defined as markdown files, only works through Claude Desktop/Code
+
 ---
 
 ## Python API
