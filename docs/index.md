@@ -1,18 +1,18 @@
 # Documentation Index
 
-Welcome to the PG AI Squad documentation. This index provides an overview of all available documentation and guides you to the right resource based on your needs.
+Welcome to the **Pandora AI Squad** documentation. This index provides an overview of all available documentation and guides you to the right resource based on your needs.
 
 ## Quick Navigation
 
 | Document | Description | Best For |
 |----------|-------------|----------|
 | [Setup Guide](./setup.md) | Complete installation and configuration | First-time setup |
-| [Claude Usage](./claude-usage.md) | Using agents with Claude without cloning | Remote usage via Claude |
 | [Quick Reference](./quick-reference.md) | One-page quick reference card | Quick lookup, sharing |
 | [Architecture](./architecture.md) | System architecture and design | Understanding the system |
-| [Publishing](./publishing.md) | Publishing to Azure Artifacts | Maintainers |
-| [Setup Diagram](./setup-diagram.md) | Visual ASCII setup flow | Visual learners |
+| [How Agents Work](./how-agents-work.md) | Low-level agent internals | Developers, contributors |
 | [Agents Overview](./agents-overview.md) | All agents and their capabilities | Agent reference |
+| [Publishing](./publishing.md) | Publishing to Azure Artifacts | Maintainers |
+| [Delivery Reports](./delivery-reports-guide.md) | Sprint and delivery reporting tools | Project managers |
 
 ## Getting Started
 
@@ -20,31 +20,32 @@ Welcome to the PG AI Squad documentation. This index provides an overview of all
 1. Start with the [Quick Reference](./quick-reference.md) for a 4-step setup
 2. Follow the [Setup Guide](./setup.md) for detailed installation
 3. Review the [Architecture](./architecture.md) to understand the system
+4. Read [How Agents Work](./how-agents-work.md) for low-level details
 
-### Using Claude Without Cloning
-If you want to use the agents directly in Claude Desktop/Code without cloning the repository:
-1. Follow the [Claude Usage Guide](./claude-usage.md)
-2. Use the [Quick Reference](./quick-reference.md) for a condensed version
-
-### Visual Learners
-Check out the [Setup Diagram](./setup-diagram.md) for ASCII diagrams of the setup flow and agent capabilities.
+### For Developers & Contributors
+If you want to understand how agents work internally or contribute to the project:
+1. Read [How Agents Work](./how-agents-work.md) for agent internals
+2. Review [Architecture](./architecture.md) for system design
+3. Check [Agents Overview](./agents-overview.md) for all available agents
 
 ## Documentation by Topic
 
 ### Setup & Configuration
 - [Setup Guide](./setup.md) - Complete installation with prerequisites, options, and troubleshooting
-- [Claude Usage](./claude-usage.md) - Remote usage via Claude Desktop/Code
 - [Quick Reference](./quick-reference.md) - Condensed setup steps and common commands
-- [Setup Diagram](./setup-diagram.md) - Visual representation of setup flow
 
 ### Architecture & Design
 - [Architecture](./architecture.md) - System architecture, agent design, tools, and MCP integration
+- [How Agents Work](./how-agents-work.md) - Low-level agent internals, standards workflow, Context7 integration
 
 ### Agents
 - [Agents Overview](./agents-overview.md) - Complete list of all agents with capabilities and documentation links
 
 ### Publishing & Distribution
 - [Publishing](./publishing.md) - Guide for publishing to Azure Artifacts
+
+### Reporting
+- [Delivery Reports Guide](./delivery-reports-guide.md) - Sprint and delivery reporting tools
 
 ## Configuration Files
 
@@ -88,6 +89,9 @@ Working examples are available in the `/examples/` directory:
 
 All agents enforce these quality standards:
 
+- **Pandora Coding Standards** (from `coding_standards.py`) - Primary source of truth
+- **Context7 Framework Standards** - Latest best practices for any JS/TS framework
+- **Universal JS/TS Standards** - General best practices
 - Next.js App Router patterns
 - Atomic Design methodology
 - TypeScript Strict Mode
@@ -96,6 +100,29 @@ All agents enforce these quality standards:
 - ESLint Rules
 - Design Tokens
 
+## Directory Structure
+
+The agent system uses a categorized directory structure:
+
+```
+src/agents/
+├── core/                    # Shared infrastructure
+│   ├── coding_standards.py  # Pandora coding standards
+│   ├── repo_adapter.py      # Cross-repo utilities
+│   ├── clients/             # External service clients
+│   └── analyzers/           # Shared analysis utilities
+├── universal/               # Framework-agnostic agents
+│   ├── orchestration/       # Task Manager
+│   ├── development/         # Frontend, Backend, Figma
+│   ├── quality/             # Code Review, Unit Test, QA, Sonar
+│   ├── performance/         # Performance, Broken Experience
+│   ├── product_management/  # PRD to Jira, Exec Summary, Roadmap
+│   └── analytics/           # Analytics, Technical Debt
+└── platform/                # Platform-specific agents
+    ├── commerce/            # Pandora Commerce
+    └── cms/                 # Amplience CMS
+```
+
 ## Links
 
 - **Repository**: [github.com/shvee-pandora/pnd-agents](https://github.com/shvee-pandora/pnd-agents)
@@ -103,6 +130,6 @@ All agents enforce these quality standards:
 
 ---
 
-**Last Updated**: December 2025  
-**Version**: 1.0.0  
+**Last Updated**: January 2026  
+**Version**: 2.0.0  
 **Maintained by**: Pandora Group

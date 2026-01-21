@@ -1,15 +1,16 @@
 # Architecture
 
-This document describes the architecture and design decisions of the PG AI Squad agent system.
+This document describes the architecture and design decisions of the Pandora AI Squad agent system.
 
 ## Overview
 
-PG AI Squad follows a plugin-based architecture inspired by the [wshobson/agents](https://github.com/wshobson/agents) framework. The system is designed to be:
+Pandora AI Squad follows a plugin-based architecture inspired by the [wshobson/agents](https://github.com/wshobson/agents) framework. The system is designed to be:
 
 - **Modular**: Each agent is a self-contained unit with specific capabilities
 - **Extensible**: New agents and tools can be added without modifying existing code
 - **MCP-Compatible**: Agents can be loaded as Claude Desktop plugins via MCP
 - **Standards-Compliant**: All generated code follows Pandora coding standards
+- **Universal**: Most agents work with any JavaScript/TypeScript framework via Context7 integration
 
 ## System Architecture
 
@@ -22,57 +23,128 @@ PG AI Squad follows a plugin-based architecture inspired by the [wshobson/agents
                                 │ MCP Protocol
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                      PG AI Squad Server                          │
+│                   Pandora AI Squad Server                        │
 │                    (MCP Server Interface)                        │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
-│  │    Task     │  │  Frontend   │  │  Amplience  │              │
-│  │   Manager   │  │  Engineer   │  │    CMS      │              │
-│  │    Agent    │  │    Agent    │  │    Agent    │              │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘              │
-│         │                │                │                      │
-│  ┌──────┴──────┐  ┌──────┴──────┐  ┌──────┴──────┐              │
-│  │    Code     │  │ Performance │  │     QA      │              │
-│  │   Review    │  │    Agent    │  │    Agent    │              │
-│  │    Agent    │  │             │  │             │              │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘              │
-│         │                │                │                      │
-│         └────────────────┼────────────────┘                      │
-│                          │                                       │
-│                          ▼                                       │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │                      Tools Layer                             ││
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐       ││
-│  │  │Filesystem│ │ Command  │ │  Figma   │ │Amplience │       ││
-│  │  │   Tool   │ │  Runner  │ │  Parser  │ │   API    │       ││
-│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘       ││
-│  │                    ┌──────────┐                              ││
-│  │                    │   HAR    │                              ││
-│  │                    │ Analyzer │                              ││
-│  │                    └──────────┘                              ││
-│  └─────────────────────────────────────────────────────────────┘│
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │                    Universal Agents                        │  │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐     │  │
+│  │  │  Task    │ │ Frontend │ │  Code    │ │   Unit   │     │  │
+│  │  │ Manager  │ │ Engineer │ │  Review  │ │   Test   │     │  │
+│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘     │  │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐     │  │
+│  │  │ Backend  │ │  Sonar   │ │   QA     │ │ PR Review│     │  │
+│  │  │ Engineer │ │Validation│ │  Agent   │ │  Agent   │     │  │
+│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘     │  │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐     │  │
+│  │  │Performance│ │  Figma  │ │ PRD to   │ │Analytics │     │  │
+│  │  │ Analyzer │ │  Reader │ │  Jira    │ │  Agent   │     │  │
+│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘     │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                  │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │                   Platform Agents                          │  │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐                   │  │
+│  │  │ Commerce │ │Amplience │ │Amplience │                   │  │
+│  │  │  Agent   │ │   CMS    │ │Placement │                   │  │
+│  │  └──────────┘ └──────────┘ └──────────┘                   │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                  │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │                      Tools Layer                           │  │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐     │  │
+│  │  │Filesystem│ │ Command  │ │  Figma   │ │Amplience │     │  │
+│  │  │   Tool   │ │  Runner  │ │  Parser  │ │   API    │     │  │
+│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘     │  │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐     │  │
+│  │  │   HAR    │ │  Sonar   │ │   JIRA   │ │  Azure   │     │  │
+│  │  │ Analyzer │ │  Client  │ │  Client  │ │  DevOps  │     │  │
+│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘     │  │
+│  └───────────────────────────────────────────────────────────┘  │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Agent Architecture
+## Directory Structure
 
-Each agent follows a consistent structure:
+The agent system uses a categorized directory structure that separates universal agents from platform-specific ones:
 
 ```
-agents/{agent_name}/
+src/agents/
+├── core/                              # Shared infrastructure
+│   ├── __init__.py
+│   ├── base_agent.py                  # Abstract base class
+│   ├── coding_standards.py            # Pandora coding standards
+│   ├── repo_adapter.py                # Cross-repo utilities
+│   ├── repo_profile.py                # Repository detection
+│   ├── clients/                       # External service clients
+│   │   ├── sonar_client.py            # SonarCloud API client
+│   │   ├── azure_devops_client.py     # Azure DevOps client
+│   │   ├── jira_client.py             # JIRA API client
+│   │   └── figma_client.py            # Figma API client
+│   └── analyzers/                     # Shared analysis utilities
+│       ├── coverage_analyzer.py       # Code coverage analysis
+│       ├── tech_stack_detector.py     # Technology detection
+│       └── pattern_matcher.py         # Regex pattern matching
+│
+├── universal/                         # Framework-agnostic agents
+│   ├── orchestration/
+│   │   └── task_manager/              # Task orchestration
+│   ├── development/
+│   │   ├── frontend/                  # React/Next.js components
+│   │   ├── backend/                   # API routes, Server Components
+│   │   └── figma_reader/              # Figma design extraction
+│   ├── quality/
+│   │   ├── code_review/               # Code standards validation
+│   │   ├── unit_test/                 # Test generation
+│   │   ├── qa/                        # E2E and integration tests
+│   │   ├── sonar_validation/          # SonarCloud quality gates
+│   │   ├── pr_review/                 # PR review automation
+│   │   └── technical_debt/            # Tech debt analysis
+│   ├── performance/
+│   │   ├── performance_analyzer/      # HAR analysis, Core Web Vitals
+│   │   └── broken_experience_detector/ # UX issue detection
+│   ├── product_management/
+│   │   ├── prd_to_jira/               # PRD to JIRA conversion
+│   │   ├── exec_summary/              # Executive summaries
+│   │   └── roadmap_review/            # Roadmap analysis
+│   └── analytics/
+│       └── analytics/                 # Task tracking and metrics
+│
+└── platform/                          # Platform-specific agents
+    ├── commerce/                      # Pandora Commerce (SFCC)
+    ├── amplience_cms/                 # Amplience CMS
+    └── amplience_placement/           # Amplience module mapping
+```
+
+## Agent Architecture
+
+Each agent follows a consistent structure based on its type:
+
+### Markdown-Based Agents (Slash Command Agents)
+
+```
+{agent_name}/
 ├── agents/
 │   └── {agent-name}-agent.md    # Agent definition with capabilities
 ├── commands/
 │   ├── command-1.md             # Command definitions
-│   ├── command-2.md
-│   └── command-3.md
+│   └── command-2.md
 └── skills/                      # Optional skills directory
     └── skill-name/
         ├── metadata.md
-        ├── instructions.md
-        └── resources/
+        └── instructions.md
+```
+
+### Python Module Agents
+
+```
+{agent_name}/
+├── __init__.py
+├── agent.py                     # Main agent implementation
+├── models.py                    # Data models (optional)
+└── utils.py                     # Utility functions (optional)
 ```
 
 ### Agent Definition
@@ -200,16 +272,33 @@ The system integrates with Claude Desktop via the Model Context Protocol (MCP):
 ```json
 {
   "mcpServers": {
-    "pg-ai-squad": {
-      "command": "python",
-      "args": ["-m", "pnd_agents.server"],
+    "pnd-agents": {
+      "command": "pnd-agents",
+      "args": ["serve"],
       "env": {
-        "PYTHONPATH": "${workspaceFolder}"
+        "FIGMA_ACCESS_TOKEN": "your-figma-token",
+        "JIRA_BASE_URL": "https://your-org.atlassian.net",
+        "JIRA_EMAIL": "your-email@company.com",
+        "JIRA_API_TOKEN": "your-jira-token"
       }
+    },
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"]
     }
   }
 }
 ```
+
+### Context7 Integration (Optional)
+
+The Code Review Agent can optionally use Context7 MCP to fetch the latest coding standards for any JavaScript/TypeScript framework. When Context7 is configured, the agent uses a standards hierarchy:
+
+1. **Pandora Standards** (from `coding_standards.py`) - ALWAYS enforced, highest priority
+2. **Context7 Framework Standards** - Latest best practices for detected framework
+3. **Universal JS/TS Standards** - General best practices (fallback)
+
+If Context7 is not available, the agent falls back to Pandora standards and built-in framework knowledge.
 
 ### Agent Registration
 

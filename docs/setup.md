@@ -1,6 +1,6 @@
 # Setup Guide
 
-This guide provides detailed instructions for setting up the PG AI Squad agent system.
+This guide provides detailed instructions for setting up the **Pandora AI Squad** agent system.
 
 ## Prerequisites
 
@@ -291,28 +291,30 @@ pnd-agents setup --skip-env --preset default
 
 ## Agent Selection
 
-The setup wizard lets you choose which agents to enable:
+The setup wizard uses **pack-based selection** for easier configuration. Instead of selecting individual agents, you choose from 5 agent packs:
 
-| Agent | Default | Description |
-|-------|---------|-------------|
-| Task Manager | Yes | Orchestrates tasks, routes to other agents |
-| Frontend Engineer | Yes | React/Next.js components, Storybook |
-| Figma Reader | Yes | Extracts design metadata from Figma API |
-| Code Review | Yes | Validates code against standards |
-| QA | Yes | Generates E2E and integration tests |
-| **Unit Test** | Yes | Generates unit tests with **100% coverage** target |
-| **Sonar Validation** | Yes | Validates against SonarCloud quality gates |
-| **Technical Debt** | Yes | Analyzes repositories for technical debt (READ-ONLY) |
-| Amplience CMS | No | Content types, JSON schemas |
-| Amplience Placement | No | Maps Figma designs to Amplience CMS modules (HITL) |
-| Performance | No | HAR analysis, Core Web Vitals |
-| Backend | No | API routes, Server Components |
-| Commerce | No | Product search, cart operations via SFCC |
-| PRD to Jira | No | Converts PRDs to Jira epics and stories |
-| Exec Summary | No | Generates executive summaries from sprint data |
-| Roadmap Review | No | Reviews roadmaps and OKRs for risks |
-| PR Review | No | Reviews Azure DevOps PRs |
-| Sprint AI Report | No | Generates AI contribution reports |
+### Agent Packs
+
+| Pack | Agents Included | Description |
+|------|-----------------|-------------|
+| **Core Pack** | Task Manager | Essential orchestration (1 agent) |
+| **Developer Pack** | Frontend, Backend, Figma Reader, Unit Test, Code Review, QA, PR Review | Development workflow (7 agents) |
+| **Quality & Security Pack** | Sonar Validation, Technical Debt, Snyk, Performance, Broken Experience Detector | Quality assurance (5 agents) |
+| **Product Management Pack** | PRD to Jira, Exec Summary, Roadmap Review, Analytics | PM tools (4 agents) |
+| **Pandora Platform Pack** | Commerce, Amplience CMS, Amplience Placement | Pandora-specific integrations (3 agents) |
+
+### Preset Configurations
+
+```bash
+# Minimal - Core Pack only (1 agent)
+pnd-agents setup --preset minimal
+
+# Default - Core + Developer Packs (8 agents)
+pnd-agents setup --preset default
+
+# Full - All 20 agents
+pnd-agents setup --preset full
+```
 
 ### Changing Agent Selection Later
 
@@ -326,7 +328,7 @@ pnd-agents config --show
 
 ## Environment Variables
 
-### Required for Figma Integration
+### Figma Integration
 
 ```bash
 FIGMA_ACCESS_TOKEN=your-figma-personal-access-token
@@ -337,14 +339,14 @@ To get a Figma token:
 2. Scroll to "Personal access tokens"
 3. Generate a new token with read access
 
-### Required for Amplience Integration
+### Amplience Integration
 
 ```bash
 AMPLIENCE_HUB_NAME=pandoragroup
 AMPLIENCE_BASE_URL=https://cdn.content.amplience.net
 ```
 
-### Optional for SonarCloud Integration
+### SonarCloud Integration
 
 ```bash
 SONAR_TOKEN=your-sonarcloud-token
@@ -355,7 +357,31 @@ To get a SonarCloud token:
 2. Generate a new token with "Analyze Projects" permission
 3. The Sonar Validation Agent will use this to fetch issues, coverage, and quality gate status
 
-Note: The Sonar Validation Agent can work without a token for basic validation, but API access enables fetching real-time data from https://sonarcloud.io/summary/new_code?id=pandora-jewelry_spark_pandora-group&branch=master
+### JIRA Integration
+
+```bash
+JIRA_BASE_URL=https://your-org.atlassian.net
+JIRA_EMAIL=your-email@company.com
+JIRA_API_TOKEN=your-jira-api-token
+JIRA_CLOUD_ID=your-jira-cloud-id
+```
+
+To get a JIRA API token:
+1. Go to https://id.atlassian.com/manage-profile/security/api-tokens
+2. Create a new API token
+3. Use your Atlassian email and the token for authentication
+
+### Azure DevOps Integration
+
+```bash
+AZURE_DEVOPS_PAT=your-azure-devops-pat
+AZURE_DEVOPS_ORG=your-organization
+AZURE_DEVOPS_PROJECT=your-project
+```
+
+To get an Azure DevOps PAT:
+1. Go to Azure DevOps > User Settings > Personal Access Tokens
+2. Create a new token with appropriate scopes (Code Read, Work Items Read/Write)
 
 ### Configuring Environment Variables
 

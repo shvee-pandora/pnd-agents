@@ -1,24 +1,49 @@
 # Agents Overview
 
-This document provides a comprehensive overview of all available agents in the PG AI Squad system, their capabilities, and links to detailed documentation.
+This document provides a comprehensive overview of all available agents in the Pandora AI Squad system, their capabilities, and links to detailed documentation.
 
-## Agent Summary
+## Agent Inventory
+
+| Category | Universal | Platform-Specific |
+|----------|-----------|-------------------|
+| Orchestration | 1 | 0 |
+| Development | 3 | 0 |
+| Quality/Validation | 6 | 0 |
+| Performance | 2 | 0 |
+| Product Management | 3 | 0 |
+| Analytics | 1 | 0 |
+| CMS | 0 | 2 |
+| Commerce | 0 | 1 |
+| **Total** | **16** | **3** |
+
+## Universal Agents (Work in Any Repository)
 
 | Agent | Category | Purpose | Key Capabilities |
 |-------|----------|---------|-----------------|
 | [Task Manager](#task-manager-agent) | Orchestration | Multi-agent workflow coordination | Task decomposition, agent routing, output merging |
 | [Frontend Engineer](#frontend-engineer-agent) | Development | React/Next.js component development | Component generation, Storybook stories, accessibility |
-| [Figma Reader](#figma-reader-agent) | Design | Figma design extraction | Design tokens, metadata, variants extraction |
-| [Amplience CMS](#amplience-cms-agent) | CMS | Content type management | JSON schemas, content types, payload examples |
-| [Code Review](#code-review-agent) | Quality | Code standards validation | Pandora standards, TypeScript, accessibility |
-| [Unit Test](#unit-test-agent) | Testing | Test generation | 100% coverage target, jest-axe, edge cases |
-| [Sonar Validation](#sonar-validation-agent) | Quality | Quality gate enforcement | 0 errors, 0 duplication, coverage validation |
-| [Performance](#performance-agent) | Optimization | Performance analysis | HAR analysis, Core Web Vitals, caching |
-| [QA](#qa-agent) | Testing | E2E and integration testing | Playwright, acceptance criteria validation |
 | [Backend](#backend-agent) | Development | API and server development | API routes, Server Components, mock services |
-| [Commerce](#commerce-agent) | Commerce | Product discovery | AI-powered search, cart preparation |
-| [Analytics & Reporting](#analytics--reporting-agent) | Analytics | Task tracking and reporting | JIRA integration, metrics, dashboards |
-| [Broken Experience Detector](#broken-experience-detector-agent) | Quality | UX issue detection | Broken links, UI issues, accessibility problems |
+| [Figma Reader](#figma-reader-agent) | Development | Figma design extraction | Design tokens, metadata, variants extraction |
+| [Code Review](#code-review-agent) | Quality | Universal code standards validation | Context7 integration, Pandora standards, any JS framework |
+| [Unit Test](#unit-test-agent) | Quality | Test generation | 100% coverage target, jest-axe, edge cases |
+| [Sonar Validation](#sonar-validation-agent) | Quality | Quality gate enforcement | 0 errors, 0 duplication, coverage validation |
+| [QA](#qa-agent) | Quality | E2E and integration testing | Playwright, acceptance criteria validation |
+| [PR Review](#pr-review-agent) | Quality | Pull request review automation | Azure DevOps, GitHub integration |
+| [Technical Debt](#technical-debt-agent) | Quality | Tech debt identification | Debt classification, prioritization |
+| [Performance](#performance-agent) | Performance | Performance analysis | HAR analysis, Core Web Vitals, caching |
+| [Broken Experience Detector](#broken-experience-detector-agent) | Performance | UX issue detection | Broken links, UI issues, accessibility problems |
+| [PRD to Jira](#prd-to-jira-agent) | Product Management | PRD conversion | Converts PRDs to JIRA work items |
+| [Executive Summary](#executive-summary-agent) | Product Management | Stakeholder summaries | Creates executive summaries |
+| [Roadmap Review](#roadmap-review-agent) | Product Management | Roadmap analysis | Critiques roadmaps and OKRs |
+| [Analytics](#analytics-agent) | Analytics | Task tracking and reporting | JIRA integration, metrics, dashboards |
+
+## Platform-Specific Agents (Pandora Infrastructure)
+
+| Agent | Category | Dependency |
+|-------|----------|------------|
+| [Commerce](#commerce-agent) | Commerce | Requires Pandora's SFCC instance |
+| [Amplience CMS](#amplience-cms-agent) | CMS | Requires Pandora's Amplience hub |
+| [Amplience Placement](#amplience-placement-agent) | CMS | Maps to Pandora's Amplience modules |
 
 ## Detailed Agent Documentation
 
@@ -101,14 +126,29 @@ The Amplience CMS Agent creates and manages content types, JSON schemas, and pay
 
 ### Code Review Agent
 
-The Code Review Agent validates generated code against Pandora coding standards, including TypeScript rules, accessibility, and architectural patterns.
+The Code Review Agent is a **universal** agent that validates JavaScript/TypeScript code against coding standards for any framework. It uses Context7 MCP (when available) to fetch the latest best practices for the detected framework, with Pandora standards always taking precedence.
 
-**Capabilities:**
-- Pandora coding standards validation
-- TypeScript strict mode compliance
-- Accessibility review
-- INS-2509 technical architecture validation
-- Atomic design pattern verification
+**Standards Hierarchy:**
+1. **Pandora Standards** (from `coding_standards.py`) - ALWAYS enforced, highest priority
+2. **Context7 Framework Standards** - Latest best practices for detected framework (optional)
+3. **Universal JS/TS Standards** - General best practices (fallback)
+
+**Pandora Standards Enforced:**
+- Use `type` over `interface` for object types
+- No TODO comments in production code
+- Prefer `for...of` over `forEach`
+- Use `.at(-n)` for negative indexing
+- Avoid negated conditions with else blocks
+- Use `globalThis` instead of `global`
+- Compare with `undefined` directly
+- Use nullish coalescing (`??`) over logical OR (`||`)
+- Use optional chaining (`?.`)
+
+**Supported Frameworks (via Context7):**
+- React, Vue, Angular, Svelte
+- Next.js, Nuxt, SvelteKit
+- Node.js, Express, Fastify
+- Any JavaScript/TypeScript library
 
 **Commands:**
 - `review-code` - Review code for standards compliance
@@ -279,6 +319,105 @@ The Broken Experience Detector Agent identifies UX issues, broken links, and acc
 
 ---
 
+### PR Review Agent
+
+The PR Review Agent automates pull request reviews on Azure DevOps and GitHub, providing automated code analysis and feedback.
+
+**Capabilities:**
+- Azure DevOps PR integration
+- GitHub PR integration
+- Automated code analysis
+- Review comment generation
+- Tech stack detection
+
+**Documentation:** Located in `src/agents/pr_review_agent/`
+
+**Required Environment Variables:**
+- `AZURE_DEVOPS_PAT` - Azure DevOps Personal Access Token
+- `AZURE_DEVOPS_ORG` - Azure DevOps organization name
+- `AZURE_DEVOPS_PROJECT` - Azure DevOps project name
+
+---
+
+### Technical Debt Agent
+
+The Technical Debt Agent identifies, classifies, and prioritizes technical debt in codebases.
+
+**Capabilities:**
+- Tech debt identification
+- Debt classification (code, architecture, test, documentation)
+- Prioritization based on impact
+- Remediation recommendations
+
+**Documentation:** Located in `src/agents/technical_debt_agent/`
+
+---
+
+### PRD to Jira Agent
+
+The PRD to Jira Agent converts Product Requirements Documents (PRDs) into structured JIRA work items.
+
+**Capabilities:**
+- PRD parsing and analysis
+- Epic, Story, and Task creation
+- Acceptance criteria extraction
+- JIRA integration
+
+**Documentation:** Located in `src/agents/pm_agent_pack/prd_to_jira_agent.py`
+
+**Required Environment Variables:**
+- `JIRA_BASE_URL` - JIRA instance URL
+- `JIRA_EMAIL` - JIRA user email
+- `JIRA_API_TOKEN` - JIRA API token
+
+---
+
+### Executive Summary Agent
+
+The Executive Summary Agent creates stakeholder-friendly summaries of technical work and project status.
+
+**Capabilities:**
+- Technical summary generation
+- Stakeholder-appropriate language
+- Key metrics highlighting
+- Risk and blocker identification
+
+**Documentation:** Located in `src/agents/pm_agent_pack/exec_summary_agent.py`
+
+---
+
+### Roadmap Review Agent
+
+The Roadmap Review Agent critiques product roadmaps and OKRs for completeness and alignment.
+
+**Capabilities:**
+- Roadmap analysis
+- OKR validation
+- Gap identification
+- Alignment recommendations
+
+**Documentation:** Located in `src/agents/pm_agent_pack/roadmap_review_agent.py`
+
+---
+
+### Amplience Placement Agent
+
+The Amplience Placement Agent maps content to Pandora's Amplience module placements.
+
+**Capabilities:**
+- Module placement mapping
+- Content slot configuration
+- Placement validation
+- Pandora-specific module support
+
+**Documentation:** Located in `src/agents/amplience_placement_agent/`
+
+**Required Environment Variables:**
+- `AMPLIENCE_HUB_NAME` - Amplience hub name
+- `AMPLIENCE_BASE_URL` - Amplience base URL
+
+---
+
 ## Workflow Pipelines
 
 The Task Manager automatically routes tasks through agent pipelines based on task type:
@@ -296,17 +435,18 @@ The Task Manager automatically routes tasks through agent pipelines based on tas
 
 ## Claude Integration
 
-All agents are available through Claude Desktop/Code via MCP (Model Context Protocol). See the [Claude Usage Guide](./claude-usage.md) for configuration instructions.
+All agents are available through Claude Desktop/Code via MCP (Model Context Protocol). See the [Setup Guide](./setup.md) for configuration instructions.
 
 ## Related Documentation
 
 - [Setup Guide](./setup.md) - Installation and configuration
 - [Architecture](./architecture.md) - System architecture and design
+- [How Agents Work](./how-agents-work.md) - Low-level agent internals
 - [Quick Reference](./quick-reference.md) - Quick lookup card
 - [Examples](../examples/) - Usage examples
 
 ---
 
-**Last Updated**: December 2025  
-**Version**: 1.0.0  
+**Last Updated**: January 2026  
+**Version**: 2.0.0  
 **Maintained by**: Pandora Group
