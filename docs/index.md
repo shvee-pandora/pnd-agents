@@ -7,6 +7,8 @@ Welcome to the **Pandora AI Squad** documentation. This index provides an overvi
 | Document | Description | Best For |
 |----------|-------------|----------|
 | [Setup Guide](./setup.md) | Complete installation and configuration | First-time setup |
+| [FAQ](./faq.md) | Common questions and troubleshooting | Installation issues |
+| [Using Agents Without MCP](./using-agents-without-mcp.md) | Python API, CLI, automation | CI/CD, scripting |
 | [Quick Reference](./quick-reference.md) | One-page quick reference card | Quick lookup, sharing |
 | [Architecture](./architecture.md) | System architecture and design | Understanding the system |
 | [How Agents Work](./how-agents-work.md) | Low-level agent internals | Developers, contributors |
@@ -32,7 +34,11 @@ If you want to understand how agents work internally or contribute to the projec
 
 ### Setup & Configuration
 - [Setup Guide](./setup.md) - Complete installation with prerequisites, options, and troubleshooting
+- [FAQ](./faq.md) - Common questions about config locations, cross-repo usage, tokens
 - [Quick Reference](./quick-reference.md) - Condensed setup steps and common commands
+
+### Programmatic Usage
+- [Using Agents Without MCP](./using-agents-without-mcp.md) - Python API, CLI commands, CI/CD integration
 
 ### Architecture & Design
 - [Architecture](./architecture.md) - System architecture, agent design, tools, and MCP integration
@@ -73,17 +79,17 @@ Working examples are available in the `/examples/` directory:
 
 ### Scenario 1: New Team Member Onboarding
 1. Share [Quick Reference](./quick-reference.md) for immediate setup
-2. Point to [Claude Usage](./claude-usage.md) for detailed information
-3. Use [Setup Diagram](./setup-diagram.md) for visual learners
+2. Point to [FAQ](./faq.md) for common questions
+3. Use [Setup Guide](./setup.md) for detailed installation
 
 ### Scenario 2: Quick Setup for Existing Claude Users
 1. Use [Quick Reference](./quick-reference.md) for 4-step setup
-2. Refer to [Claude Usage](./claude-usage.md) only if issues arise
+2. Refer to [FAQ](./faq.md) only if issues arise
 
 ### Scenario 3: Team Training Session
-1. Present [Setup Diagram](./setup-diagram.md) on screen
+1. Present [Architecture](./architecture.md) diagrams on screen
 2. Walk through [Quick Reference](./quick-reference.md) steps
-3. Distribute [Claude Usage](./claude-usage.md) for reference
+3. Distribute [FAQ](./faq.md) for troubleshooting reference
 
 ## Quality Standards
 
