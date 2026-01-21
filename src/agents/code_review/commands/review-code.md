@@ -1,18 +1,53 @@
 # Review Code
 
-Perform comprehensive code review against Pandora coding standards.
+Perform comprehensive code review against the latest JavaScript/TypeScript coding standards using Context7.
 
 ## Context
 
-This command performs a thorough code review of submitted code changes, validating against Pandora's coding standards, architectural patterns, and best practices.
+This command performs a thorough code review of submitted code changes, validating against the latest framework-specific coding standards (fetched from Context7), architectural patterns, and best practices. Works with any JS/TS framework: React, Vue, Angular, Svelte, Node.js, Next.js, and more.
 
 ## Requirements
 
 - Code files to review
 - Context about the feature/change
-- Pandora coding standards reference
+- Access to Context7 MCP for fetching latest coding standards
 
 ## Workflow
+
+### 0. Apply Standards Workflow
+
+**IMPORTANT**: Before reviewing, apply standards in this order:
+
+```markdown
+## Step 1: Apply Pandora Standards (ALWAYS - Primary Source)
+- Reference `src/agents/coding_standards.py` for Pandora-specific rules
+- These are REQUIRED and must always be enforced
+- Always enforce: type over interface, no TODOs, for...of, .at(-n), etc.
+
+## Step 2: Detect Framework
+Check package.json for primary framework:
+   - react, react-dom → React
+   - vue → Vue
+   - @angular/core → Angular
+   - svelte → Svelte
+   - next → Next.js
+   - nuxt → Nuxt
+   - express → Express/Node.js
+
+## Step 3: Fetch Context7 Standards (OPTIONAL - Enhancement)
+If Context7 MCP is available:
+   - resolve-library-id: Get the Context7 library ID
+   - query-docs: Fetch "coding standards and best practices"
+
+If Context7 is NOT available:
+   - Use Pandora standards (primary)
+   - Use built-in framework knowledge (fallback)
+```
+
+## Standards Hierarchy (in order of priority)
+1. **Pandora Standards** (from `coding_standards.py`) - ALWAYS ENFORCED
+2. **Context7 Framework Standards** - If Context7 is available
+3. **Universal JS/TS Standards** - Built-in knowledge fallback
 
 ### 1. Initial Scan
 
@@ -24,28 +59,28 @@ Perform quick scan for critical issues:
 
 ### 2. Architecture Review
 
-Validate architectural patterns:
+Validate architectural patterns based on detected framework:
 
 ```markdown
-## Architecture Checklist
+## Architecture Checklist (Universal)
 
-### Atomic Design
-- [ ] Components at correct level (atom/molecule/organism)
+### Component/Module Structure
+- [ ] Components/modules at correct abstraction level
 - [ ] No circular dependencies
 - [ ] Proper composition patterns
 - [ ] Reusable abstractions
 
-### Next.js App Router
-- [ ] Correct use of 'use client' directive
-- [ ] Server components for data fetching
-- [ ] Proper loading/error states
-- [ ] Metadata generation implemented
+### Framework-Specific (from Context7)
+- [ ] Following framework's recommended patterns
+- [ ] Using framework's latest features appropriately
+- [ ] Proper data fetching patterns for the framework
+- [ ] Correct lifecycle/reactivity usage
 
 ### State Management
 - [ ] Appropriate state location
-- [ ] No prop drilling
-- [ ] Context used correctly
-- [ ] No unnecessary re-renders
+- [ ] No prop drilling (or using framework's solution)
+- [ ] State management follows framework conventions
+- [ ] No unnecessary re-renders/reactivity triggers
 ```
 
 ### 3. TypeScript Review
@@ -70,27 +105,32 @@ Validate TypeScript usage:
 
 ### 4. Code Quality Review
 
-Check code quality standards:
+Check code quality standards (universal + framework-specific from Context7):
 
 ```markdown
 ## Code Quality Checklist
 
-### Naming
-- [ ] Components: PascalCase
-- [ ] Hooks: use{Name}
+### Naming (Universal)
+- [ ] Components/Classes: PascalCase
+- [ ] Functions/Hooks/Composables: camelCase (use{Name} for hooks)
 - [ ] Utils: camelCase
-- [ ] Constants: UPPER_SNAKE_CASE
+- [ ] Constants: UPPER_SNAKE_CASE or camelCase
 
-### Structure
+### Structure (Universal)
 - [ ] Imports organized (external → internal → relative)
-- [ ] Hooks at top of component
-- [ ] Event handlers before render
+- [ ] State/reactive declarations at top
+- [ ] Event handlers before render/return
 - [ ] Early returns for edge cases
 
+### Framework-Specific (from Context7)
+- [ ] Following framework's naming conventions
+- [ ] Using framework's recommended patterns
+- [ ] Proper component/module organization
+
 ### Documentation
-- [ ] JSDoc for public APIs
+- [ ] JSDoc/TSDoc for public APIs
 - [ ] Complex logic commented
-- [ ] Props documented
+- [ ] Props/parameters documented
 ```
 
 ### 5. Accessibility Review
@@ -236,14 +276,14 @@ Consider {improvement}. This would {benefit}.
 
 ### Input
 ```typescript
-// PageCover.tsx
-const PageCover = (props: any) => {
+// UserProfile.tsx (React component)
+const UserProfile = (props: any) => {
   const [isLoading, setIsLoading] = useState(false)
   
   return (
     <div onClick={() => console.log('clicked')}>
-      <img src={props.image} />
-      <h1>{props.title}</h1>
+      <img src={props.avatar} />
+      <h1>{props.name}</h1>
     </div>
   )
 }
@@ -253,8 +293,16 @@ const PageCover = (props: any) => {
 ```markdown
 # Code Review Summary
 
+## Framework Detected
+React (from package.json dependencies)
+
+## Context7 Standards Applied
+- React best practices (hooks, component patterns)
+- TypeScript strict mode
+- Accessibility (WCAG 2.1)
+
 ## Files Reviewed
-- PageCover.tsx
+- UserProfile.tsx
 
 ## Overall Assessment
 **Status**: Changes Requested
@@ -266,54 +314,54 @@ const PageCover = (props: any) => {
 
 ## Critical Issues
 
-### 1. CRITICAL | PageCover.tsx:1
+### 1. CRITICAL | UserProfile.tsx:1
 
 **Issue**: Using `any` type for props
 **Rule**: TypeScript strict mode - no implicit any
 
 **Current**:
 ```typescript
-const PageCover = (props: any) => {
+const UserProfile = (props: any) => {
 ```
 
 **Suggested**:
 ```typescript
-interface PageCoverProps {
-  image: string;
-  title: string;
-}
+type UserProfileProps = {
+  avatar: string;
+  name: string;
+};
 
-const PageCover: React.FC<PageCoverProps> = ({ image, title }) => {
+const UserProfile = ({ avatar, name }: UserProfileProps) => {
 ```
 
 **Why**: Type safety prevents runtime errors and improves IDE support.
 
-### 2. CRITICAL | PageCover.tsx:5
+### 2. CRITICAL | UserProfile.tsx:5
 
 **Issue**: Image missing alt attribute
 **Rule**: WCAG 2.1 - Images must have alt text
 
 **Current**:
 ```tsx
-<img src={props.image} />
+<img src={props.avatar} />
 ```
 
 **Suggested**:
 ```tsx
-<img src={image} alt={title} />
+<img src={avatar} alt={`${name}'s avatar`} />
 ```
 
 **Why**: Screen readers need alt text to describe images.
 
 ## Warnings
 
-### 1. WARNING | PageCover.tsx:4
+### 1. WARNING | UserProfile.tsx:4
 
 **Issue**: Console.log in production code
 
 **Suggestion**: Remove console.log or use proper logging utility.
 
-### 2. WARNING | PageCover.tsx:2
+### 2. WARNING | UserProfile.tsx:2
 
 **Issue**: Unused state variable `isLoading`
 
@@ -321,11 +369,13 @@ const PageCover: React.FC<PageCoverProps> = ({ image, title }) => {
 
 ## Suggestions
 
-### 1. SUGGESTION | PageCover.tsx:1
+### 1. SUGGESTION | UserProfile.tsx:1
 
-Consider adding displayName for better debugging:
+Consider using React.memo for performance if this component re-renders frequently:
 ```typescript
-PageCover.displayName = 'PageCover';
+export const UserProfile = React.memo(({ avatar, name }: UserProfileProps) => {
+  // ...
+});
 ```
 
 ## Recommendation
@@ -334,4 +384,4 @@ Please address the 2 critical issues before approval. The accessibility and type
 
 ## Summary
 
-The review-code command performs comprehensive code review against Pandora coding standards, providing actionable feedback organized by severity.
+The review-code command performs comprehensive code review against the latest coding standards (fetched from Context7), providing actionable feedback organized by severity. Works with any JavaScript/TypeScript framework.

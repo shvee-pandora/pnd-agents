@@ -1,35 +1,70 @@
 # Validate Standards
 
-Validate code against Pandora coding standards and architectural guidelines.
+Validate code against the latest JavaScript/TypeScript coding standards using Context7.
 
 ## Context
 
-This command performs automated validation of code against Pandora's coding standards, running linters, type checkers, and custom validation rules.
+This command performs automated validation of code against the latest framework-specific coding standards (fetched from Context7), running linters, type checkers, and custom validation rules. Works with any JS/TS framework: React, Vue, Angular, Svelte, Node.js, Next.js, and more.
 
 ## Requirements
 
 - Code files to validate
 - Access to ESLint, TypeScript, and Prettier configurations
-- Pandora coding standards reference
+- Access to Context7 MCP for fetching latest coding standards
 
 ## Workflow
 
+### 0. Apply Standards Workflow
+
+**IMPORTANT**: Before validating, apply standards in this order:
+
+```markdown
+## Step 1: Apply Pandora Standards (ALWAYS - Primary Source)
+- Reference `src/agents/coding_standards.py` for Pandora-specific rules
+- These are REQUIRED and must always be enforced
+- Always enforce: type over interface, no TODOs, for...of, .at(-n), etc.
+
+## Step 2: Detect Framework
+Check package.json for primary framework:
+   - react, react-dom → React
+   - vue → Vue
+   - @angular/core → Angular
+   - svelte → Svelte
+   - next → Next.js
+   - nuxt → Nuxt
+   - express → Express/Node.js
+
+## Step 3: Fetch Context7 Standards (OPTIONAL - Enhancement)
+If Context7 MCP is available:
+   - resolve-library-id: Get the Context7 library ID
+   - query-docs: Fetch "coding standards and best practices"
+
+If Context7 is NOT available:
+   - Use Pandora standards (primary)
+   - Use built-in framework knowledge (fallback)
+```
+
+## Standards Hierarchy (in order of priority)
+1. **Pandora Standards** (from `coding_standards.py`) - ALWAYS ENFORCED
+2. **Context7 Framework Standards** - If Context7 is available
+3. **Universal JS/TS Standards** - Built-in knowledge fallback
+
 ### 1. Run Automated Checks
 
-Execute validation tools:
+Execute validation tools (adapt based on project's package manager):
 
 ```bash
 # TypeScript type checking
-pnpm typecheck
+npm run typecheck  # or pnpm/yarn typecheck
 
 # ESLint validation
-pnpm lint
+npm run lint  # or pnpm/yarn lint
 
 # Prettier format check
-pnpm format:check
+npm run format:check  # or pnpm/yarn format:check
 
-# Run all validations
-pnpm validate
+# Run all validations (if available)
+npm run validate  # or pnpm/yarn validate
 ```
 
 ### 2. Parse Results
@@ -54,33 +89,33 @@ Collect and categorize results:
 
 ### 3. Custom Validations
 
-Run Pandora-specific checks:
+Run framework-agnostic and framework-specific checks (from Context7):
 
 ```markdown
 ## Custom Validations
 
-### File Naming
-- [ ] Components use PascalCase
-- [ ] Hooks use use{Name} pattern
+### File Naming (Universal)
+- [ ] Components/Classes use PascalCase
+- [ ] Hooks/Composables use use{Name} pattern
 - [ ] Utils use camelCase
-- [ ] Test files use .test.tsx/.spec.tsx
+- [ ] Test files use .test.ts/.spec.ts
 
-### Directory Structure
-- [ ] Components in correct atomic level
-- [ ] Index exports present
-- [ ] Types in separate files
+### Directory Structure (Universal)
+- [ ] Components/modules at correct abstraction level
+- [ ] Index exports present where appropriate
+- [ ] Types in separate files or co-located
 
-### Import Organization
+### Import Organization (Universal)
 - [ ] External imports first
 - [ ] Internal imports second
 - [ ] Relative imports last
 - [ ] No circular dependencies
 
-### Component Patterns
-- [ ] 'use client' only when needed
-- [ ] displayName set
-- [ ] Props destructured
-- [ ] Proper typing
+### Framework-Specific Patterns (from Context7)
+- [ ] Following framework's recommended patterns
+- [ ] Using framework's latest features appropriately
+- [ ] Proper component/module organization
+- [ ] Correct lifecycle/reactivity usage
 ```
 
 ### 4. Generate Report
@@ -150,9 +185,9 @@ Run Pandora-specific checks:
 4. Address custom validation failures
 ```
 
-## Pandora Standards Reference
+## Universal Standards Reference
 
-### TypeScript Configuration
+### TypeScript Configuration (Recommended)
 ```json
 {
   "compilerOptions": {
@@ -167,73 +202,91 @@ Run Pandora-specific checks:
 }
 ```
 
-### ESLint Rules
+### ESLint Rules (Universal)
 ```javascript
 {
   "rules": {
     "@typescript-eslint/no-explicit-any": "error",
     "@typescript-eslint/explicit-function-return-type": "warn",
-    "react-hooks/rules-of-hooks": "error",
-    "react-hooks/exhaustive-deps": "warn",
-    "jsx-a11y/alt-text": "error",
+    "@typescript-eslint/no-unused-vars": "error",
+    "no-console": "warn",
+    "prefer-const": "error",
+    "eqeqeq": "error",
     "import/order": "error"
   }
 }
+// Note: Add framework-specific rules based on detected framework
+// React: react-hooks/rules-of-hooks, react-hooks/exhaustive-deps
+// Vue: vue/*, @vue/eslint-config-*
+// Angular: @angular-eslint/*
 ```
 
-### File Naming Patterns
+### File Naming Patterns (Universal)
 ```
-Components: PascalCase.tsx
-  ✓ PageCover.tsx
-  ✗ page-cover.tsx
-  ✗ pageCover.tsx
+Components/Classes: PascalCase.tsx/vue/svelte
+  ✓ UserProfile.tsx
+  ✗ user-profile.tsx
+  ✗ userProfile.tsx
 
-Hooks: use{Name}.ts
-  ✓ useField.ts
-  ✗ UseField.ts
-  ✗ field-hook.ts
+Hooks/Composables: use{Name}.ts
+  ✓ useAuth.ts
+  ✗ UseAuth.ts
+  ✗ auth-hook.ts
 
 Utils: camelCase.ts
-  ✓ buildImageUrl.ts
-  ✗ BuildImageUrl.ts
-  ✗ build-image-url.ts
+  ✓ formatDate.ts
+  ✗ FormatDate.ts
+  ✗ format-date.ts
 
 Types: types.ts or {name}.types.ts
   ✓ types.ts
-  ✓ PageCover.types.ts
+  ✓ UserProfile.types.ts
   ✗ Types.ts
 
-Tests: {name}.test.tsx or {name}.spec.tsx
-  ✓ PageCover.test.tsx
-  ✓ PageCover.spec.tsx
-  ✗ PageCoverTest.tsx
+Tests: {name}.test.ts or {name}.spec.ts
+  ✓ UserProfile.test.tsx
+  ✓ UserProfile.spec.ts
+  ✗ UserProfileTest.tsx
 ```
 
-### Directory Structure
+### Directory Structure (Universal Principles)
 ```
-lib/components/
-├── atoms/           # Base components
+src/
+├── components/      # UI components (any framework)
 │   └── {Component}/
-│       ├── {Component}.tsx
+│       ├── {Component}.tsx/vue/svelte
 │       ├── types.ts
 │       ├── index.ts
-│       ├── {Component}.test.tsx
-│       └── {Component}.stories.tsx
-├── molecules/       # Composite components
-├── organisms/       # Complex components
-└── templates/       # Page layouts
+│       └── {Component}.test.ts
+├── hooks/           # React hooks / Vue composables
+├── utils/           # Utility functions
+├── services/        # API/business logic
+├── types/           # Shared type definitions
+└── constants/       # Application constants
+
+Note: Adapt structure based on framework conventions
+(e.g., Angular modules, Vue stores, etc.)
 ```
 
 ## Example
 
 ### Input
 ```
-Validate: lib/components/organisms/PageCover/
+Validate: src/components/UserProfile/
+Framework detected: React (from package.json)
 ```
 
 ### Output
 ```markdown
 # Standards Validation Report
+
+## Framework Detected
+React (from package.json dependencies)
+
+## Context7 Standards Applied
+- React best practices (hooks, component patterns)
+- TypeScript strict mode
+- Universal JS/TS standards
 
 ## Summary
 **Status**: Fail
@@ -248,7 +301,7 @@ No errors found
 
 ### ESLint (Fail)
 ```
-lib/components/organisms/PageCover/PageCover.tsx
+src/components/UserProfile/UserProfile.tsx
   12:5  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
   25:9  warning  React Hook useEffect has a missing dependency  react-hooks/exhaustive-deps
 
@@ -257,8 +310,8 @@ lib/components/organisms/PageCover/PageCover.tsx
 
 ### Prettier (Fail)
 ```
-lib/components/organisms/PageCover/PageCover.tsx
-lib/components/organisms/PageCover/types.ts
+src/components/UserProfile/UserProfile.tsx
+src/components/UserProfile/types.ts
 ```
 
 ## Custom Validations
@@ -269,19 +322,19 @@ All files follow naming conventions.
 ### Directory Structure (Fail)
 | Check | Status |
 |-------|--------|
-| Components in atomic levels | Pass |
+| Components at correct level | Pass |
 | Index exports present | Pass |
 | Types separated | Fail - types inline in component |
 
 ### Import Organization (Fail)
 | File | Issue |
 |------|-------|
-| PageCover.tsx | Relative imports before internal imports |
+| UserProfile.tsx | Relative imports before internal imports |
 
 ## Remediation Steps
 
-1. Run `pnpm lint:fix` to fix the ESLint warning
-2. Run `pnpm format` to fix formatting in 2 files
+1. Run `npm run lint:fix` to fix the ESLint warning
+2. Run `npm run format` to fix formatting in 2 files
 3. Fix the `any` type on line 12
 4. Move types to separate types.ts file
 5. Reorder imports: external → internal → relative
@@ -289,4 +342,4 @@ All files follow naming conventions.
 
 ## Summary
 
-The validate-standards command performs comprehensive automated validation against Pandora coding standards, providing detailed reports and remediation guidance.
+The validate-standards command performs comprehensive automated validation against the latest coding standards (fetched from Context7), providing detailed reports and remediation guidance. Works with any JavaScript/TypeScript framework.
