@@ -14,13 +14,18 @@ This command performs a thorough code review of submitted code changes, validati
 
 ## Workflow
 
-### 0. Detect Framework & Fetch Standards
+### 0. Apply Standards Workflow
 
-**IMPORTANT**: Before reviewing, identify the framework and apply the standards hierarchy:
+**IMPORTANT**: Before reviewing, apply standards in this order:
 
 ```markdown
-## Framework Detection
-1. Check package.json for primary framework:
+## Step 1: Apply Pandora Standards (ALWAYS - Primary Source)
+- Reference `src/agents/coding_standards.py` for Pandora-specific rules
+- These are REQUIRED and must always be enforced
+- Always enforce: type over interface, no TODOs, for...of, .at(-n), etc.
+
+## Step 2: Detect Framework
+Check package.json for primary framework:
    - react, react-dom → React
    - vue → Vue
    - @angular/core → Angular
@@ -29,20 +34,20 @@ This command performs a thorough code review of submitted code changes, validati
    - nuxt → Nuxt
    - express → Express/Node.js
 
-2. Use Context7 to fetch latest standards:
+## Step 3: Fetch Context7 Standards (OPTIONAL - Enhancement)
+If Context7 MCP is available:
    - resolve-library-id: Get the Context7 library ID
    - query-docs: Fetch "coding standards and best practices"
 
-3. Apply Pandora Standards Override:
-   - Reference `src/agents/coding_standards.py` for Pandora-specific rules
-   - Pandora standards OVERRIDE Context7 when there's a conflict
-   - Always enforce: type over interface, no TODOs, for...of, .at(-n), etc.
+If Context7 is NOT available:
+   - Use Pandora standards (primary)
+   - Use built-in framework knowledge (fallback)
 ```
 
-## Standards Hierarchy
-1. **Pandora Standards** (from coding_standards.py) - HIGHEST PRIORITY
-2. **Context7 Framework Standards** - Framework-specific best practices
-3. **Universal JS/TS Standards** - General best practices
+## Standards Hierarchy (in order of priority)
+1. **Pandora Standards** (from `coding_standards.py`) - ALWAYS ENFORCED
+2. **Context7 Framework Standards** - If Context7 is available
+3. **Universal JS/TS Standards** - Built-in knowledge fallback
 
 ### 1. Initial Scan
 
