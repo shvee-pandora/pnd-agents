@@ -47,6 +47,58 @@ Based on Context7 results, adapt your review to include:
 - Performance best practices for that framework
 - Security considerations specific to the framework
 
+### Step 4: Apply Pandora Standards Override
+**IMPORTANT**: After fetching Context7 standards, apply Pandora-specific overrides from `src/agents/coding_standards.py`. Pandora standards take precedence over Context7 when there's a conflict.
+
+**Source of Truth**: `src/agents/coding_standards.py` contains:
+- `SONAR_RULES`: Sonar rules with detection patterns and auto-fixes
+- `CODING_STANDARDS`: Pandora-specific coding standards that MUST be enforced
+- `REPO_IGNORED_RULES`: Rules to skip for specific repositories
+- `CODE_REVIEW_LIMITS`: Maximum findings (10) and words per review (200)
+
+**Pandora Standards to ALWAYS Enforce** (from coding_standards.py):
+```typescript
+// 1. Use `type` over `interface` for object types
+type UserData = { id: string; };  // GOOD
+interface UserData { id: string; }  // BAD
+
+// 2. No TODO comments in production code
+// TODO: fix later  // BAD - always flag this
+
+// 3. Prefer `for...of` over forEach
+for (const item of items) { }  // GOOD
+items.forEach(item => { });     // BAD
+
+// 4. Use `.at(-n)` for negative indexing
+const last = arr.at(-1);        // GOOD
+const last = arr[arr.length-1]; // BAD
+
+// 5. Avoid negated conditions with else blocks
+if (condition) { B } else { A }   // GOOD
+if (!condition) { A } else { B }  // BAD
+
+// 6. Use globalThis instead of global
+globalThis.window  // GOOD
+global.window      // BAD
+
+// 7. Compare with undefined directly
+if (value === undefined) { }           // GOOD
+if (typeof value === 'undefined') { }  // BAD
+
+// 8. Use nullish coalescing (??) over logical OR (||)
+const value = input ?? 'default';  // GOOD
+const value = input || 'default';  // BAD
+
+// 9. Use optional chaining (?.)
+const name = user?.profile?.name;  // GOOD
+const name = user && user.profile && user.profile.name;  // BAD
+```
+
+**Standards Hierarchy**:
+1. **Pandora Standards** (from coding_standards.py) - HIGHEST PRIORITY
+2. **Context7 Framework Standards** - Framework-specific best practices
+3. **Universal JS/TS Standards** - General best practices
+
 ## What to Review (Priority Order)
 
 ### MUST FLAG (Request Changes)

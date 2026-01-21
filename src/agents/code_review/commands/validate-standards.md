@@ -14,9 +14,9 @@ This command performs automated validation of code against the latest framework-
 
 ## Workflow
 
-### 0. Detect Framework & Fetch Standards from Context7
+### 0. Detect Framework & Fetch Standards
 
-**IMPORTANT**: Before validating, identify the framework and fetch latest standards:
+**IMPORTANT**: Before validating, identify the framework and apply the standards hierarchy:
 
 ```markdown
 ## Framework Detection
@@ -32,7 +32,17 @@ This command performs automated validation of code against the latest framework-
 2. Use Context7 to fetch latest standards:
    - resolve-library-id: Get the Context7 library ID
    - query-docs: Fetch "coding standards and best practices"
+
+3. Apply Pandora Standards Override:
+   - Reference `src/agents/coding_standards.py` for Pandora-specific rules
+   - Pandora standards OVERRIDE Context7 when there's a conflict
+   - Always enforce: type over interface, no TODOs, for...of, .at(-n), etc.
 ```
+
+## Standards Hierarchy
+1. **Pandora Standards** (from coding_standards.py) - HIGHEST PRIORITY
+2. **Context7 Framework Standards** - Framework-specific best practices
+3. **Universal JS/TS Standards** - General best practices
 
 ### 1. Run Automated Checks
 
