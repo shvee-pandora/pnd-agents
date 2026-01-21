@@ -8,6 +8,7 @@ Welcome to the **Pandora AI Squad** documentation. This index provides an overvi
 |----------|-------------|----------|
 | [Setup Guide](./setup.md) | Complete installation and configuration | First-time setup |
 | [FAQ](./faq.md) | Common questions and troubleshooting | Installation issues |
+| [Using Agents Without MCP](./using-agents-without-mcp.md) | Python API, CLI, automation | CI/CD, scripting |
 | [Quick Reference](./quick-reference.md) | One-page quick reference card | Quick lookup, sharing |
 | [Architecture](./architecture.md) | System architecture and design | Understanding the system |
 | [How Agents Work](./how-agents-work.md) | Low-level agent internals | Developers, contributors |
@@ -33,7 +34,11 @@ If you want to understand how agents work internally or contribute to the projec
 
 ### Setup & Configuration
 - [Setup Guide](./setup.md) - Complete installation with prerequisites, options, and troubleshooting
+- [FAQ](./faq.md) - Common questions about config locations, cross-repo usage, tokens
 - [Quick Reference](./quick-reference.md) - Condensed setup steps and common commands
+
+### Programmatic Usage
+- [Using Agents Without MCP](./using-agents-without-mcp.md) - Python API, CLI commands, CI/CD integration
 
 ### Architecture & Design
 - [Architecture](./architecture.md) - System architecture, agent design, tools, and MCP integration
