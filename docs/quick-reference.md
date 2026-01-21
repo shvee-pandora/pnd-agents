@@ -1,8 +1,8 @@
-# PG AI Squad - Quick Reference Card
+# Pandora AI Squad - Quick Reference Card
 
 ## Two Usage Modes
 
-PG AI Squad can be used in two ways:
+Pandora AI Squad can be used in two ways:
 - **Mode A**: With Claude Desktop/Claude Code (MCP integration)
 - **Mode B**: Without Claude - CLI only (VS Code terminal)
 
@@ -112,21 +112,36 @@ export SONAR_TOKEN="your-sonarcloud-token"
 
 ---
 
-## 🤖 Available Agents
+## Available Agents (20 Total)
+
+### Universal Agents (16)
 
 | Agent | Use When You Need To... |
 |-------|------------------------|
 | **Task Manager** | Orchestrate complex multi-step tasks |
 | **Frontend Engineer** | Create React/Next.js components |
+| **Backend** | Create API routes and Server Components |
 | **Figma Reader** | Extract design metadata from Figma |
-| **Amplience CMS** | Create content types and schemas |
-| **Code Review** | Validate against Pandora standards |
+| **Code Review** | Validate against any JS/TS framework standards (Context7 + Pandora) |
 | **Unit Test** | Generate tests with 100% coverage |
 | **Sonar Validation** | Check quality gates (0 errors, 0 duplication) |
-| **Performance** | Analyze HAR files and optimize |
 | **QA** | Generate E2E and integration tests |
-| **Backend** | Create API routes and Server Components |
-| **Commerce** | Find products and prepare cart data |
+| **PR Review** | Automate pull request reviews |
+| **Technical Debt** | Identify and classify tech debt |
+| **Performance** | Analyze HAR files and optimize |
+| **Broken Experience Detector** | Find UX issues and broken links |
+| **PRD to Jira** | Convert PRDs to JIRA work items |
+| **Exec Summary** | Create stakeholder summaries |
+| **Roadmap Review** | Critique roadmaps and OKRs |
+| **Analytics** | Track task metrics and reporting |
+
+### Platform Agents (3)
+
+| Agent | Use When You Need To... |
+|-------|------------------------|
+| **Commerce** | Find products and prepare cart data (Pandora SFCC) |
+| **Amplience CMS** | Create content types and schemas |
+| **Amplience Placement** | Map content to Amplience modules |
 
 ---
 
@@ -205,8 +220,8 @@ All agents follow Pandora coding standards:
 - Ensure token has read access to file
 
 **Need help?**
-- [Full Documentation](https://github.com/shvee-pandora/pnd-agents/blob/main/docs/claude-usage.md)
 - [Setup Guide](https://github.com/shvee-pandora/pnd-agents/blob/main/docs/setup.md)
+- [How Agents Work](https://github.com/shvee-pandora/pnd-agents/blob/main/docs/how-agents-work.md)
 - [Architecture](https://github.com/shvee-pandora/pnd-agents/blob/main/docs/architecture.md)
 
 ---
@@ -220,12 +235,13 @@ All agents follow Pandora coding standards:
 
 ---
 
-## 📚 Learn More
+## Learn More
 
 - **Repository**: [github.com/shvee-pandora/pnd-agents](https://github.com/shvee-pandora/pnd-agents)
-- **Full Guide**: [claude-usage.md](https://github.com/shvee-pandora/pnd-agents/blob/main/docs/claude-usage.md)
+- **Setup Guide**: [setup.md](./setup.md)
+- **How Agents Work**: [how-agents-work.md](./how-agents-work.md)
 - **Examples**: [examples/](https://github.com/shvee-pandora/pnd-agents/tree/main/examples)
 
 ---
 
-**Version**: 1.0.0 | **License**: MIT | **Maintained by**: Pandora Group
+**Version**: 2.0.0 | **Last Updated**: January 2026 | **Maintained by**: Pandora Group
