@@ -236,19 +236,10 @@ export class TeamsNotifier {
       vulnSummary = ` (${vulnSummary})`;
     }
 
-    // Get unique vulnerability titles (up to 3)
-    const vulnTitles = [...new Set(dep.vulnerabilities.map((v) => v.title))].slice(0, 3);
-    const vulnTitlesText = vulnTitles.length > 0 
-      ? vulnTitles.join(', ') + (dep.vulnerabilities.length > 3 ? '...' : '')
-      : '';
-
-    // Get the most severe vulnerability description (truncated)
+    // Get the most severe vulnerability for detailed info
     const mostSevereVuln = dep.vulnerabilities.find((v) => v.severity === 'critical') 
       || dep.vulnerabilities.find((v) => v.severity === 'high')
       || dep.vulnerabilities[0];
-    const description = mostSevereVuln?.description 
-      ? this.truncateText(mostSevereVuln.description, 150)
-      : '';
 
     const items: AdaptiveCardElement[] = [
       {
@@ -258,37 +249,98 @@ export class TeamsNotifier {
       },
     ];
 
-    // Add vulnerability titles
-    if (vulnTitlesText) {
+    // Add vulnerability title
+    if (mostSevereVuln?.title) {
       items.push({
         type: 'TextBlock',
-        text: `🔍 ${vulnTitlesText}`,
+        text: `🔍 **${mostSevereVuln.title}**`,
         wrap: true,
         size: 'small',
         color: 'attention',
       });
     }
 
-    // Add brief description
-    if (description) {
+    // Add severity and CVSS score
+    if (mostSevereVuln) {
+      const severityEmoji = mostSevereVuln.severity === 'critical' ? '🔴' : 
+                           mostSevereVuln.severity === 'high' ? '🟠' : 
+                           mostSevereVuln.severity === 'medium' ? '🟡' : '🟢';
+      const cvssText = mostSevereVuln.cvssScore ? ` | CVSS: ${mostSevereVuln.cvssScore}` : '';
       items.push({
         type: 'TextBlock',
-        text: description,
+        text: `${severityEmoji} Severity: **${mostSevereVuln.severity.toUpperCase()}**${cvssText}`,
         wrap: true,
         size: 'small',
       });
     }
 
-    // Add fix suggestion
-    items.push({
-      type: 'TextBlock',
-      text: risk.suggestedFix
-        ? `✅ Fix: ${risk.suggestedFix}`
-        : `⚠️ ${vulnCount} vulnerabilities${vulnSummary}`,
-      wrap: true,
-      size: 'small',
-      color: 'accent',
-    });
+    // Add CVE/CWE identifiers
+    if (mostSevereVuln?.cwe && mostSevereVuln.cwe.length > 0) {
+      const cweText = mostSevereVuln.cwe.slice(0, 3).join(', ');
+      items.push({
+        type: 'TextBlock',
+        text: `📋 CWE: ${cweText}${mostSevereVuln.cwe.length > 3 ? '...' : ''}`,
+        wrap: true,
+        size: 'small',
+      });
+    }
+
+    // Add brief description
+    if (mostSevereVuln?.description) {
+      items.push({
+        type: 'TextBlock',
+        text: this.truncateText(mostSevereVuln.description, 200),
+        wrap: true,
+        size: 'small',
+      });
+    }
+
+    // Add dependency path (introduced through)
+    if (mostSevereVuln?.introducedThrough && mostSevereVuln.introducedThrough.length > 0) {
+      const pathText = mostSevereVuln.introducedThrough.slice(0, 3).join(' > ');
+      items.push({
+        type: 'TextBlock',
+        text: `📦 Path: ${pathText}${mostSevereVuln.introducedThrough.length > 3 ? '...' : ''}`,
+        wrap: true,
+        size: 'small',
+        color: 'accent',
+      });
+    }
+
+    // Add upgrade/patch status
+    if (mostSevereVuln) {
+      const upgradeStatus = mostSevereVuln.isUpgradable ? '✅ Upgradable' : 
+                           mostSevereVuln.isPatchable ? '🔧 Patchable' : '❌ No fix available';
+      const fixedInText = mostSevereVuln.fixedIn ? ` (fixed in ${mostSevereVuln.fixedIn})` : '';
+      items.push({
+        type: 'TextBlock',
+        text: `${upgradeStatus}${fixedInText}`,
+        wrap: true,
+        size: 'small',
+        color: mostSevereVuln.isUpgradable || mostSevereVuln.isPatchable ? 'good' : 'attention',
+      });
+    }
+
+    // Add fix suggestion if available
+    if (risk.suggestedFix) {
+      items.push({
+        type: 'TextBlock',
+        text: `💡 **Fix:** ${risk.suggestedFix}`,
+        wrap: true,
+        size: 'small',
+        color: 'accent',
+      });
+    }
+
+    // Add total vulnerability count if more than one
+    if (vulnCount > 1) {
+      items.push({
+        type: 'TextBlock',
+        text: `⚠️ Total: ${vulnCount} vulnerabilities${vulnSummary}`,
+        wrap: true,
+        size: 'small',
+      });
+    }
 
     return {
       type: 'ColumnSet',
