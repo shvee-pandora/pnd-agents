@@ -2992,14 +2992,16 @@ Generate cross-browser/device test cases."""
             logger.info("qAIn Workflow: No JIRA client provided")
 
         # JIRA not connected - ask user how to proceed
+        setup_instructions = get_jira_setup_instructions()
         return {
             "status": "qain_workflow_question",
             "data": {
                 "workflow_step": 0,
                 "workflow_step_name": "jira_connection_check",
-                "message": f"{QAIN_SIGNATURE}\n\n⚠️ JIRA connection is not available.\n\nI can either help you connect to JIRA, or you can provide the ticket details manually.",
+                "message": f"{QAIN_SIGNATURE}\n\n⚠️ JIRA connection is not available.\n\nI can show you how to set up JIRA credentials, or you can provide the ticket details manually.",
                 "question_type": "jira_connection",
                 "jira_connected": False,
+                "setup_instructions": setup_instructions,
             },
             "next": "ask_user_question",
             "questions": get_qain_jira_connection_questions(),
@@ -3008,6 +3010,7 @@ Generate cross-browser/device test cases."""
             "answer_key": WORKFLOW_JIRA_CONNECTION_CHECKED,
             "choice_key": WORKFLOW_JIRA_CONNECTED,
             "source_context": context,
+            "jira_setup_instructions": setup_instructions,
             "error": None,
         }
 
@@ -3310,6 +3313,24 @@ class QAInWorkflowMode(Enum):
     FULL_TEST_DESIGN = "full_test_design"
 
 
+def get_jira_setup_instructions() -> str:
+    """Get instructions for setting up JIRA connection."""
+    return """To connect to JIRA, set these environment variables:
+
+```bash
+export JIRA_BASE_URL="https://your-domain.atlassian.net"
+export JIRA_EMAIL="your-email@company.com"
+export JIRA_API_TOKEN="your-api-token"
+```
+
+To get an API token:
+1. Go to https://id.atlassian.com/manage-profile/security/api-tokens
+2. Click "Create API token"
+3. Copy the token and set it as JIRA_API_TOKEN
+
+After setting these, restart Claude Code and try again."""
+
+
 def get_qain_jira_connection_questions() -> List[Dict[str, Any]]:
     """Get JIRA connection questions (Step 0: connection check - MUST be asked first)."""
     return [
@@ -3318,12 +3339,12 @@ def get_qain_jira_connection_questions() -> List[Dict[str, Any]]:
             "header": "JIRA Connection",
             "options": [
                 {
-                    "label": "Connect to JIRA (Recommended)",
-                    "description": "I'll configure JIRA credentials to fetch ticket details and create test cases automatically"
+                    "label": "Show setup instructions",
+                    "description": "Show me how to configure JIRA credentials (JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN)"
                 },
                 {
                     "label": "Provide ticket details manually",
-                    "description": "I'll share the ticket summary, description, and acceptance criteria manually"
+                    "description": "I'll paste the ticket summary, description, and acceptance criteria myself"
                 },
             ],
             "multiSelect": False,
