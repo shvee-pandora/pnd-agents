@@ -18,9 +18,16 @@ QAIN_WORKFLOW_MANDATORY = True
 
 # Workflow state keys for tracking question answers in context
 WORKFLOW_STATE_KEY = "qain_workflow_state"
+# Step 0: JIRA connection check (MUST happen before any other questions)
+WORKFLOW_JIRA_CONNECTION_CHECKED = "jira_connection_checked"
+WORKFLOW_JIRA_CONNECTED = "jira_connected"  # True if connected, False if user declined
+WORKFLOW_MANUAL_TICKET_MODE = "manual_ticket_mode"  # True if user provides ticket manually
+WORKFLOW_MANUAL_TICKET_DATA = "manual_ticket_data"  # Dict with manual ticket info
+# Step 1: Hierarchy question
 WORKFLOW_HIERARCHY_ANSWERED = "hierarchy_question_answered"
-WORKFLOW_ACTION_ANSWERED = "action_question_answered"
 WORKFLOW_HIERARCHY_CHOICE = "hierarchy_choice"  # "yes" or "no"
+# Step 2: Action question
+WORKFLOW_ACTION_ANSWERED = "action_question_answered"
 WORKFLOW_ACTION_CHOICE = "action_choice"  # "recommend" or "create"
 
 # --- External Documentation Link Processing ---
@@ -2741,29 +2748,55 @@ Generate cross-browser/device test cases."""
         try:
             task_description = context.get("task_description", "")
             input_data = context.get("input_data", {})
+            jira_client = context.get("jira_client")
 
             # --- MANDATORY qAIn Interactive Workflow ---
             # When QAIN_WORKFLOW_MANDATORY is True, ALWAYS check if workflow questions
             # have been answered before proceeding with test case generation
             if QAIN_WORKFLOW_MANDATORY:
                 workflow_state = input_data.get(WORKFLOW_STATE_KEY, {})
+
+                # Step 0 (FIRST): Check JIRA connection BEFORE any other questions
+                jira_connection_checked = workflow_state.get(WORKFLOW_JIRA_CONNECTION_CHECKED, False)
+
+                if not jira_connection_checked:
+                    logger.info("qAIn Workflow: Checking JIRA connection (Step 0)")
+                    return self._check_jira_connection_and_ask(context, jira_client)
+
+                # Check if we're in manual ticket mode (user declined JIRA connection)
+                manual_ticket_mode = workflow_state.get(WORKFLOW_MANUAL_TICKET_MODE, False)
+                jira_connected = workflow_state.get(WORKFLOW_JIRA_CONNECTED, False)
+
+                # If manual mode and no ticket data yet, ask for it
+                if manual_ticket_mode and not workflow_state.get(WORKFLOW_MANUAL_TICKET_DATA):
+                    logger.info("qAIn Workflow: Manual ticket mode - asking for ticket details")
+                    return self._ask_manual_ticket_details(context, workflow_state)
+
+                # Step 1: Check if hierarchy question has been answered
                 hierarchy_answered = workflow_state.get(WORKFLOW_HIERARCHY_ANSWERED, False)
                 action_answered = workflow_state.get(WORKFLOW_ACTION_ANSWERED, False)
 
-                # Step 1: Check if hierarchy question has been answered
                 if not hierarchy_answered:
-                    logger.info("qAIn Workflow: Hierarchy question not answered - asking now")
-                    return self._ask_hierarchy_question(context)
+                    # In manual mode, skip hierarchy question (can't fetch parent/epic)
+                    if manual_ticket_mode:
+                        logger.info("qAIn Workflow: Manual mode - skipping hierarchy question")
+                        workflow_state[WORKFLOW_HIERARCHY_ANSWERED] = True
+                        workflow_state[WORKFLOW_HIERARCHY_CHOICE] = "no"
+                        # Update context with new state and continue
+                        input_data[WORKFLOW_STATE_KEY] = workflow_state
+                    else:
+                        logger.info("qAIn Workflow: Hierarchy question not answered - asking now")
+                        return self._ask_hierarchy_question(context)
 
                 # Step 2: Check if action question has been answered
                 if not action_answered:
                     logger.info("qAIn Workflow: Action question not answered - asking now")
                     return self._ask_action_question(context, workflow_state)
 
-                # Both questions answered - log the choices and proceed
+                # All questions answered - log the choices and proceed
                 hierarchy_choice = workflow_state.get(WORKFLOW_HIERARCHY_CHOICE, "yes")
                 action_choice = workflow_state.get(WORKFLOW_ACTION_CHOICE, "create")
-                logger.info(f"qAIn Workflow: Questions answered - hierarchy={hierarchy_choice}, action={action_choice}")
+                logger.info(f"qAIn Workflow: Questions answered - jira_connected={jira_connected}, manual_mode={manual_ticket_mode}, hierarchy={hierarchy_choice}, action={action_choice}")
 
                 # If user chose "recommend testing types only", handle that mode
                 if action_choice == "recommend":
@@ -2917,6 +2950,101 @@ Generate cross-browser/device test cases."""
                 return True
 
         return False
+
+    def _check_jira_connection_and_ask(self, context: Dict[str, Any], jira_client: Any) -> Dict[str, Any]:
+        """
+        Check JIRA connection and ask user how to proceed if not connected.
+
+        This is Step 0 of the qAIn Interactive Workflow - MUST happen before any other questions.
+
+        Args:
+            context: Workflow context
+            jira_client: JIRA client instance (may be None)
+
+        Returns:
+            Workflow response with connection status or question for user
+        """
+        # Try to verify JIRA connection
+        if jira_client:
+            connection_ok, connection_msg = verify_jira_connection(jira_client)
+            if connection_ok:
+                logger.info(f"qAIn Workflow: JIRA connection verified - {connection_msg}")
+                # JIRA is connected - mark as checked and proceed
+                return {
+                    "status": "qain_workflow_jira_connected",
+                    "data": {
+                        "workflow_step": 0,
+                        "workflow_step_name": "jira_connection_check",
+                        "message": f"{QAIN_SIGNATURE}\n\n✅ JIRA connection verified!\n{connection_msg}",
+                        "jira_connected": True,
+                    },
+                    "workflow_state_update": {
+                        WORKFLOW_JIRA_CONNECTION_CHECKED: True,
+                        WORKFLOW_JIRA_CONNECTED: True,
+                        WORKFLOW_MANUAL_TICKET_MODE: False,
+                    },
+                    "next": "continue",  # Continue to next question
+                    "error": None,
+                }
+            else:
+                logger.warning(f"qAIn Workflow: JIRA connection failed - {connection_msg}")
+        else:
+            logger.info("qAIn Workflow: No JIRA client provided")
+
+        # JIRA not connected - ask user how to proceed
+        return {
+            "status": "qain_workflow_question",
+            "data": {
+                "workflow_step": 0,
+                "workflow_step_name": "jira_connection_check",
+                "message": f"{QAIN_SIGNATURE}\n\n⚠️ JIRA connection is not available.\n\nI can either help you connect to JIRA, or you can provide the ticket details manually.",
+                "question_type": "jira_connection",
+                "jira_connected": False,
+            },
+            "next": "ask_user_question",
+            "questions": get_qain_jira_connection_questions(),
+            "mandatory": True,
+            "workflow_state_key": WORKFLOW_STATE_KEY,
+            "answer_key": WORKFLOW_JIRA_CONNECTION_CHECKED,
+            "choice_key": WORKFLOW_JIRA_CONNECTED,
+            "source_context": context,
+            "error": None,
+        }
+
+    def _ask_manual_ticket_details(self, context: Dict[str, Any], workflow_state: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Ask user to provide ticket details manually when JIRA is not connected.
+
+        Args:
+            context: Workflow context
+            workflow_state: Current workflow state
+
+        Returns:
+            Workflow response asking for manual ticket details
+        """
+        return {
+            "status": "qain_workflow_question",
+            "data": {
+                "workflow_step": 0.5,
+                "workflow_step_name": "manual_ticket_input",
+                "message": f"{QAIN_SIGNATURE}\n\n📝 Please provide the ticket details manually.\n\nI'll use this information to generate test cases. Please share:\n1. Ticket ID/key (e.g., EPA-123)\n2. Ticket summary/title\n3. Full description and acceptance criteria",
+                "question_type": "manual_ticket",
+                "instructions": [
+                    "Paste the ticket ID or reference",
+                    "Paste the summary/title of the ticket",
+                    "Paste the full description including acceptance criteria",
+                    "Include any relevant links (Figma, Confluence) in the description",
+                ],
+            },
+            "next": "ask_user_question",
+            "questions": get_qain_manual_ticket_questions(),
+            "mandatory": True,
+            "workflow_state_key": WORKFLOW_STATE_KEY,
+            "answer_key": WORKFLOW_MANUAL_TICKET_DATA,
+            "source_context": context,
+            "previous_state": workflow_state,
+            "error": None,
+        }
 
     def _activate_qain_workflow(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Activate qAIn Interactive Workflow with initial questions."""
@@ -3180,6 +3308,57 @@ class QAInWorkflowMode(Enum):
     """Workflow modes for qAIn JIRA integration."""
     TESTING_TYPE_ONLY = "testing_type_only"
     FULL_TEST_DESIGN = "full_test_design"
+
+
+def get_qain_jira_connection_questions() -> List[Dict[str, Any]]:
+    """Get JIRA connection questions (Step 0: connection check - MUST be asked first)."""
+    return [
+        {
+            "question": "JIRA connection is not available. How would you like to proceed?",
+            "header": "JIRA Connection",
+            "options": [
+                {
+                    "label": "Connect to JIRA (Recommended)",
+                    "description": "I'll configure JIRA credentials to fetch ticket details and create test cases automatically"
+                },
+                {
+                    "label": "Provide ticket details manually",
+                    "description": "I'll share the ticket summary, description, and acceptance criteria manually"
+                },
+            ],
+            "multiSelect": False,
+        },
+    ]
+
+
+def get_qain_manual_ticket_questions() -> List[Dict[str, Any]]:
+    """Get questions for manual ticket input when JIRA is not connected."""
+    return [
+        {
+            "question": "Please provide the ticket details. What is the ticket ID/key? (e.g., EPA-123)",
+            "header": "Ticket ID",
+            "options": [
+                {"label": "Enter ticket ID", "description": "I'll type the ticket ID or reference"},
+            ],
+            "multiSelect": False,
+        },
+        {
+            "question": "What is the ticket summary/title?",
+            "header": "Summary",
+            "options": [
+                {"label": "Enter summary", "description": "I'll type the ticket summary"},
+            ],
+            "multiSelect": False,
+        },
+        {
+            "question": "Please provide the ticket description and acceptance criteria:",
+            "header": "Description",
+            "options": [
+                {"label": "Enter description", "description": "I'll paste the full description and acceptance criteria"},
+            ],
+            "multiSelect": False,
+        },
+    ]
 
 
 def get_qain_initial_questions() -> List[Dict[str, Any]]:
