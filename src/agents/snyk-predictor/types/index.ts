@@ -95,6 +95,7 @@ export interface TeamsNotification {
   title: string;
   repoName: string;
   highRiskDependencies: DependencyRisk[];
+  mediumRiskDependencies: DependencyRisk[];
   suggestedFixes: SuggestedFix[];
   scanDate: string;
 }

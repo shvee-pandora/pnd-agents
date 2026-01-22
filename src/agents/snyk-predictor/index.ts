@@ -110,22 +110,42 @@ export class SnykPredictorAgent {
 
   private filterBySeverity(prediction: PredictionResult): PredictionResult {
     const severitySet = new Set(this.config.severity);
+    const includeMedium = severitySet.has('medium');
+    const includeLow = severitySet.has('low');
     
     const filterDependencies = (deps: typeof prediction.highRiskDependencies) => {
       return deps.filter((dep) => {
         const hasMatchingSeverity = dep.dependency.vulnerabilities.some(
           (v) => severitySet.has(v.severity)
         );
-        return hasMatchingSeverity || dep.riskScore.level === 'high';
+        // Include if has matching severity vulnerability
+        if (hasMatchingSeverity) return true;
+        // Include high risk dependencies regardless of severity filter
+        if (dep.riskScore.level === 'high') return true;
+        // Include medium risk dependencies if medium severity is in filter
+        if (includeMedium && dep.riskScore.level === 'medium') return true;
+        // Include low risk dependencies if low severity is in filter
+        if (includeLow && dep.riskScore.level === 'low') return true;
+        return false;
+      });
+    };
+
+    // Filter suggested fixes based on severity filter
+    const filterFixes = (fixes: typeof prediction.suggestedFixes) => {
+      return fixes.filter((fix) => {
+        if (fix.priority === 'critical' || fix.priority === 'high') return true;
+        if (includeMedium && fix.priority === 'medium') return true;
+        if (includeLow && fix.priority === 'low') return true;
+        return false;
       });
     };
 
     return {
       ...prediction,
       highRiskDependencies: filterDependencies(prediction.highRiskDependencies),
-      suggestedFixes: prediction.suggestedFixes.filter(
-        (fix) => fix.priority === 'critical' || fix.priority === 'high'
-      ),
+      mediumRiskDependencies: filterDependencies(prediction.mediumRiskDependencies),
+      lowRiskDependencies: includeLow ? filterDependencies(prediction.lowRiskDependencies) : [],
+      suggestedFixes: filterFixes(prediction.suggestedFixes),
     };
   }
 
@@ -228,7 +248,7 @@ Options:
   -p, --repoPath <path>       Path to the repository to scan (default: current directory)
   -m, --packageManager <pm>   Package manager: npm, pnpm, yarn (default: npm)
   -n, --notify <channel>      Notification channel: teams, none (default: none)
-  -s, --severity <levels>     Severity levels to report: low,medium,high,critical (default: high,critical)
+  -s, --severity <levels>     Severity levels to report: low,medium,high,critical (default: medium,high,critical)
   -o, --output <path>         Output JSON report to file
   -h, --help                  Show this help message
 
@@ -253,7 +273,7 @@ Examples:
     notify: (values.notify as 'teams' | 'none') || 'none',
     severity: values.severity
       ? (values.severity.split(',') as SeverityLevel[])
-      : ['high', 'critical'],
+      : ['medium', 'high', 'critical'],
     teamsWebhookUrl: process.env.TEAMS_WEBHOOK_URL,
     snykToken: process.env.SNYK_TOKEN,
     outputPath: values.output,
