@@ -71,6 +71,7 @@ export class TeamsNotifier {
       title: 'Snyk Early Warning (Daily Scan)',
       repoName: prediction.repoName,
       highRiskDependencies: prediction.highRiskDependencies,
+      mediumRiskDependencies: prediction.mediumRiskDependencies,
       suggestedFixes: prediction.suggestedFixes,
       scanDate: prediction.scanDate,
     };
@@ -100,7 +101,9 @@ export class TeamsNotifier {
 
   private buildAdaptiveCard(notification: TeamsNotification): TeamsAdaptiveCard {
     const hasHighRisk = notification.highRiskDependencies.length > 0;
-    const headerColor = hasHighRisk ? 'attention' : 'good';
+    const hasMediumRisk = notification.mediumRiskDependencies.length > 0;
+    const hasAnyRisk = hasHighRisk || hasMediumRisk;
+    const headerColor = hasHighRisk ? 'attention' : hasMediumRisk ? 'warning' : 'good';
 
     const body: AdaptiveCardElement[] = [
       {
@@ -147,7 +150,7 @@ export class TeamsNotifier {
           color: 'attention',
         });
       }
-    } else {
+    } else if (!hasMediumRisk) {
       body.push({
         type: 'TextBlock',
         text: '✅ No High Risk Dependencies Found',
@@ -163,6 +166,31 @@ export class TeamsNotifier {
         wrap: true,
         size: 'small',
       });
+    }
+
+    // Add medium risk dependencies section
+    if (hasMediumRisk) {
+      body.push({
+        type: 'TextBlock',
+        text: '🟡 Medium Risk Dependencies',
+        weight: 'bolder',
+        size: 'medium',
+        spacing: 'large',
+        separator: true,
+      });
+
+      for (const risk of notification.mediumRiskDependencies.slice(0, 5)) {
+        body.push(this.buildDependencyBlock(risk));
+      }
+
+      if (notification.mediumRiskDependencies.length > 5) {
+        body.push({
+          type: 'TextBlock',
+          text: `... and ${notification.mediumRiskDependencies.length - 5} more medium-risk dependencies`,
+          wrap: true,
+          color: 'warning',
+        });
+      }
     }
 
     if (notification.suggestedFixes.length > 0) {
@@ -187,6 +215,14 @@ export class TeamsNotifier {
         wrap: true,
         spacing: 'large',
         color: 'attention',
+      });
+    } else if (hasMediumRisk) {
+      body.push({
+        type: 'TextBlock',
+        text: '**Action:** Review and plan fixes for medium-risk dependencies',
+        wrap: true,
+        spacing: 'large',
+        color: 'warning',
       });
     } else {
       body.push({
