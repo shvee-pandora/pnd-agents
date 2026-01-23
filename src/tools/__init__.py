@@ -12,6 +12,7 @@ from .command_runner import CommandRunner
 from .figma_parser import FigmaParser
 from .amplience_api import AmplienceAPI
 from .har_analyzer import HARAnalyzer
+from .msteams_api import MSTeamsAPI
 from .registry import register_tools
 from .sprint_ai_report import SprintAIReportGenerator, generate_sprint_report, identify_ai_commits_in_range
 
@@ -21,6 +22,7 @@ __all__ = [
     'FigmaParser',
     'AmplienceAPI',
     'HARAnalyzer',
+    'MSTeamsAPI',
     'register_tools',
     'SprintAIReportGenerator',
     'generate_sprint_report',

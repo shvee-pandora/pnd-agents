@@ -1407,6 +1407,121 @@ def register_tools(server: Server) -> None:
                     "required": []
                 }
             ),
+
+            # MS Teams Tools
+            types.Tool(
+                name="msteams_verify_connection",
+                description="Verify connection to Microsoft Teams. Checks if MS Teams is configured and accessible. Returns connection status, message, and number of accessible teams. Required environment variables: MS_TEAMS_CLIENT_ID, MS_TEAMS_CLIENT_SECRET, MS_TEAMS_TENANT_ID.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            ),
+            types.Tool(
+                name="msteams_list_teams",
+                description="List all Microsoft Teams that the application has access to. Returns team ID, display name, description, and visibility for each team.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            ),
+            types.Tool(
+                name="msteams_list_channels",
+                description="List all channels in a Microsoft Teams team. Returns channel ID, display name, description, membership type, and web URL for each channel.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "team_id": {
+                            "type": "string",
+                            "description": "The ID of the team to list channels for"
+                        }
+                    },
+                    "required": ["team_id"]
+                }
+            ),
+            types.Tool(
+                name="msteams_read_messages",
+                description="Read messages from a Microsoft Teams channel. Returns message content, sender, timestamp, subject, importance, attachments count, mentions count, and reactions count. Messages are returned newest first.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "team_id": {
+                            "type": "string",
+                            "description": "The ID of the team"
+                        },
+                        "channel_id": {
+                            "type": "string",
+                            "description": "The ID of the channel to read messages from"
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Maximum number of messages to return (default: 20)",
+                            "default": 20
+                        }
+                    },
+                    "required": ["team_id", "channel_id"]
+                }
+            ),
+            types.Tool(
+                name="msteams_send_message",
+                description="Send a message to a Microsoft Teams channel. Supports HTML content for rich formatting. Returns the created message ID and web URL.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "team_id": {
+                            "type": "string",
+                            "description": "The ID of the team"
+                        },
+                        "channel_id": {
+                            "type": "string",
+                            "description": "The ID of the channel to send the message to"
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "Message content (HTML supported for rich formatting)"
+                        },
+                        "subject": {
+                            "type": "string",
+                            "description": "Optional message subject/title"
+                        },
+                        "importance": {
+                            "type": "string",
+                            "description": "Message importance: 'normal', 'high', or 'urgent' (default: 'normal')",
+                            "enum": ["normal", "high", "urgent"],
+                            "default": "normal"
+                        }
+                    },
+                    "required": ["team_id", "channel_id", "content"]
+                }
+            ),
+            types.Tool(
+                name="msteams_reply_to_message",
+                description="Reply to a message in a Microsoft Teams channel. Creates a threaded reply to the specified message.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "team_id": {
+                            "type": "string",
+                            "description": "The ID of the team"
+                        },
+                        "channel_id": {
+                            "type": "string",
+                            "description": "The ID of the channel"
+                        },
+                        "message_id": {
+                            "type": "string",
+                            "description": "The ID of the message to reply to"
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "Reply content (HTML supported)"
+                        }
+                    },
+                    "required": ["team_id", "channel_id", "message_id", "content"]
+                }
+            ),
         ]
 
     # Register call_tool handler
@@ -2309,16 +2424,93 @@ AI Productivity Tracker Agent v1.0"""
             elif name == "tech_debt_register":
                 try:
                     from agents.technical_debt_agent import TechnicalDebtAgent
-                    
+
                     repo_path = arguments.get("repo_path") or os.getcwd()
                     include_sonarcloud = arguments.get("include_sonarcloud", True)
-                    
+
                     agent = TechnicalDebtAgent()
                     register = agent.generate_register(repo_path, include_sonarcloud=include_sonarcloud)
-                    
+
                     return [types.TextContent(type="text", text=register)]
                 except Exception as td_error:
                     return [types.TextContent(type="text", text=f"Technical Debt Register Error: {str(td_error)}")]
+
+            # MS Teams Tools
+            elif name == "msteams_verify_connection":
+                try:
+                    from tools.msteams_api import verify_msteams_connection
+                    import json
+
+                    result = verify_msteams_connection()
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as teams_error:
+                    return [types.TextContent(type="text", text=f"MS Teams Connection Error: {str(teams_error)}")]
+
+            elif name == "msteams_list_teams":
+                try:
+                    from tools.msteams_api import list_msteams_teams
+                    import json
+
+                    result = list_msteams_teams()
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as teams_error:
+                    return [types.TextContent(type="text", text=f"MS Teams List Teams Error: {str(teams_error)}")]
+
+            elif name == "msteams_list_channels":
+                try:
+                    from tools.msteams_api import list_msteams_channels
+                    import json
+
+                    team_id = arguments["team_id"]
+                    result = list_msteams_channels(team_id)
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as teams_error:
+                    return [types.TextContent(type="text", text=f"MS Teams List Channels Error: {str(teams_error)}")]
+
+            elif name == "msteams_read_messages":
+                try:
+                    from tools.msteams_api import read_msteams_messages
+                    import json
+
+                    team_id = arguments["team_id"]
+                    channel_id = arguments["channel_id"]
+                    limit = arguments.get("limit", 20)
+
+                    result = read_msteams_messages(team_id, channel_id, limit)
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as teams_error:
+                    return [types.TextContent(type="text", text=f"MS Teams Read Messages Error: {str(teams_error)}")]
+
+            elif name == "msteams_send_message":
+                try:
+                    from tools.msteams_api import send_msteams_message
+                    import json
+
+                    team_id = arguments["team_id"]
+                    channel_id = arguments["channel_id"]
+                    content = arguments["content"]
+                    subject = arguments.get("subject")
+                    importance = arguments.get("importance", "normal")
+
+                    result = send_msteams_message(team_id, channel_id, content, subject, importance)
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as teams_error:
+                    return [types.TextContent(type="text", text=f"MS Teams Send Message Error: {str(teams_error)}")]
+
+            elif name == "msteams_reply_to_message":
+                try:
+                    from tools.msteams_api import reply_to_msteams_message
+                    import json
+
+                    team_id = arguments["team_id"]
+                    channel_id = arguments["channel_id"]
+                    message_id = arguments["message_id"]
+                    content = arguments["content"]
+
+                    result = reply_to_msteams_message(team_id, channel_id, message_id, content)
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as teams_error:
+                    return [types.TextContent(type="text", text=f"MS Teams Reply Error: {str(teams_error)}")]
 
             else:
                 raise ValueError(f"Unknown tool: {name}")
