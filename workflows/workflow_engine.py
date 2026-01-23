@@ -48,6 +48,7 @@ class TaskType(Enum):
     QA = "qa"
     CODE_REVIEW = "code_review"
     PERFORMANCE = "performance"
+    TEST_ANALYSIS_DESIGN = "test_analysis_design"
     DEFAULT = "default"
 
 
@@ -88,6 +89,11 @@ TASK_KEYWORDS: Dict[TaskType, List[str]] = {
     TaskType.PERFORMANCE: [
         "har", "performance", "optimize", "slow",
         "lighthouse", "web vitals", "speed"
+    ],
+    TaskType.TEST_ANALYSIS_DESIGN: [
+        "test case", "test cases", "test design", "test analysis",
+        "qain", "bdd", "gherkin", "acceptance criteria", "test scenario",
+        "test scenarios", "generate test cases", "write test cases"
     ],
 }
 
@@ -322,6 +328,7 @@ class WorkflowEngine:
             "qa": ["qa", "review"],
             "code_review": ["review"],
             "performance": ["performance", "frontend", "review"],
+            "test_analysis_design": ["test_analysis_design", "review"],
             "default": ["frontend", "review", "qa"]
         }
         
@@ -950,7 +957,8 @@ class WorkflowEngine:
             "unit_test": "Generate unit tests with 100% coverage target",
             "sonar": "Validate against SonarCloud quality gates (0 errors, 0 duplication)",
             "qa": "Generate E2E and integration tests",
-            "performance": "Run performance analysis and optimization checks"
+            "performance": "Run performance analysis and optimization checks",
+            "test_analysis_design": "Generate comprehensive test cases from JIRA/requirements using qAIn"
         }
         return descriptions.get(agent_name, f"Execute {agent_name} agent")
     

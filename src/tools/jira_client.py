@@ -264,38 +264,333 @@ class JiraClient:
             logger.error(f"Failed to search issues: {e}")
             raise
     
+    def create_issue(
+        self,
+        project_key: str,
+        summary: str,
+        issue_type: str = "Task",
+        description: Optional[str] = None,
+        labels: Optional[List[str]] = None,
+        priority: Optional[str] = None,
+        components: Optional[List[str]] = None,
+        custom_fields: Optional[Dict[str, Any]] = None,
+    ) -> Optional[JiraIssue]:
+        """
+        Create a new JIRA issue.
+
+        Args:
+            project_key: Project key (e.g., "PANDORA")
+            summary: Issue summary/title
+            issue_type: Issue type name (e.g., "Task", "Bug", "TestCase")
+            description: Issue description (supports markdown)
+            labels: List of labels to add
+            priority: Priority name (e.g., "High", "Medium")
+            components: List of component names
+            custom_fields: Dictionary of custom field IDs to values
+
+        Returns:
+            JiraIssue object or None if creation failed
+        """
+        try:
+            fields: Dict[str, Any] = {
+                "project": {"key": project_key},
+                "summary": summary,
+                "issuetype": {"name": issue_type},
+            }
+
+            if description:
+                fields["description"] = self._markdown_to_adf(description)
+
+            if labels:
+                fields["labels"] = labels
+
+            if priority:
+                fields["priority"] = {"name": priority}
+
+            if components:
+                fields["components"] = [{"name": c} for c in components]
+
+            if custom_fields:
+                fields.update(custom_fields)
+
+            payload = {"fields": fields}
+
+            response = self.client.post("issue", json=payload)
+            response.raise_for_status()
+
+            data = response.json()
+            logger.info(f"Created issue {data.get('key')}")
+
+            # Fetch the full issue to return
+            return self.get_issue(data.get("key"))
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Failed to create issue: {e.response.text}")
+            return None
+        except Exception as e:
+            logger.error(f"Failed to create issue: {e}")
+            return None
+
+    def create_test_case(
+        self,
+        project_key: str,
+        summary: str,
+        description: str,
+        labels: Optional[List[str]] = None,
+        priority: str = "Medium",
+        components: Optional[List[str]] = None,
+        test_type: Optional[str] = None,
+        test_level: Optional[str] = None,
+        testing_cycle: Optional[str] = None,
+    ) -> Optional[JiraIssue]:
+        """
+        Create a TestCase issue in JIRA.
+
+        Args:
+            project_key: Project key (e.g., "PANDORA")
+            summary: Test case summary (should start with "POC - Validate that")
+            description: Full test case description in Gherkin format
+            labels: List of labels (e.g., ["qAIn", "Login"])
+            priority: Priority (Highest, High, Medium, Low, Lowest)
+            components: Component names (UI, API, E2E)
+            test_type: Functional or Non-Functional
+            test_level: FT-UI, FT-API, SIT, E2E, UAT, A11Y, Performance, Security
+            testing_cycle: Smoke, Sanity, Regression, Exploratory
+
+        Returns:
+            JiraIssue object or None if creation failed
+        """
+        # Ensure qAIn label is present
+        if labels is None:
+            labels = []
+        if "qAIn" not in labels:
+            labels.append("qAIn")
+
+        # Build custom fields based on your JIRA configuration
+        custom_fields = {}
+        # Note: You may need to adjust these field IDs based on your JIRA setup
+        # custom_fields["customfield_test_type"] = test_type
+        # custom_fields["customfield_test_level"] = test_level
+        # custom_fields["customfield_testing_cycle"] = testing_cycle
+
+        return self.create_issue(
+            project_key=project_key,
+            summary=summary,
+            issue_type="TestCase",  # Adjust if your issue type has a different name
+            description=description,
+            labels=labels,
+            priority=priority,
+            components=components,
+            custom_fields=custom_fields if custom_fields else None,
+        )
+
+    def link_issues(
+        self,
+        inward_issue: str,
+        outward_issue: str,
+        link_type: str = "Tests",
+        add_qain_label: bool = True,
+    ) -> bool:
+        """
+        Create a link between two JIRA issues.
+
+        Args:
+            inward_issue: The issue key that receives the inward link (e.g., test case)
+            outward_issue: The issue key that receives the outward link (e.g., story)
+            link_type: Type of link (e.g., "Tests", "Blocks", "Relates", "is tested by")
+            add_qain_label: If True (default), adds qAIn label to the outward issue (story)
+
+        Returns:
+            True if successful
+        """
+        try:
+            payload = {
+                "type": {"name": link_type},
+                "inwardIssue": {"key": inward_issue},
+                "outwardIssue": {"key": outward_issue},
+            }
+
+            response = self.client.post("issueLink", json=payload)
+            response.raise_for_status()
+
+            logger.info(f"Linked {inward_issue} to {outward_issue} with '{link_type}'")
+
+            # MANDATORY: Add qAIn label to the story when linking test cases
+            if add_qain_label:
+                self.ensure_qain_label(outward_issue)
+
+            return True
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Failed to link issues: {e.response.text}")
+            return False
+        except Exception as e:
+            logger.error(f"Failed to link issues: {e}")
+            return False
+
+    def get_issue_links(self, issue_key: str) -> List[Dict[str, Any]]:
+        """
+        Get all links for an issue.
+
+        Args:
+            issue_key: Issue key (e.g., "PANDORA-123")
+
+        Returns:
+            List of issue links
+        """
+        try:
+            response = self.client.get(
+                f"issue/{issue_key}",
+                params={"fields": "issuelinks"}
+            )
+            response.raise_for_status()
+
+            data = response.json()
+            return data.get("fields", {}).get("issuelinks", [])
+        except Exception as e:
+            logger.error(f"Failed to get issue links for {issue_key}: {e}")
+            return []
+
+    def search_test_cases(
+        self,
+        project_key: str,
+        summary_contains: Optional[str] = None,
+        labels: Optional[List[str]] = None,
+        max_results: int = 50,
+    ) -> List[JiraIssue]:
+        """
+        Search for existing test cases in a project.
+
+        Args:
+            project_key: Project key (e.g., "PANDORA")
+            summary_contains: Text to search in summary
+            labels: Labels to filter by
+            max_results: Maximum results to return
+
+        Returns:
+            List of matching test cases
+        """
+        jql_parts = [
+            f'project = "{project_key}"',
+            'issuetype = "TestCase"',
+        ]
+
+        if summary_contains:
+            jql_parts.append(f'summary ~ "{summary_contains}"')
+
+        if labels:
+            label_conditions = [f'labels = "{label}"' for label in labels]
+            jql_parts.append(f"({' OR '.join(label_conditions)})")
+
+        jql = " AND ".join(jql_parts)
+
+        return self.search_issues(jql, max_results=max_results)
+
+    # ==================== Label Operations ====================
+
+    # Mandatory label for all qAIn agent interactions
+    QAIN_LABEL = "qAIn"
+
+    def add_label(
+        self,
+        issue_key: str,
+        label: str,
+    ) -> bool:
+        """
+        Add a label to a JIRA issue if not already present.
+
+        Args:
+            issue_key: Issue key (e.g., "EPA-123")
+            label: Label to add
+
+        Returns:
+            True if successful
+        """
+        try:
+            # Use the update endpoint with add operation for labels
+            payload = {
+                "update": {
+                    "labels": [{"add": label}]
+                }
+            }
+
+            response = self.client.put(f"issue/{issue_key}", json=payload)
+            response.raise_for_status()
+
+            logger.info(f"Added label '{label}' to {issue_key}")
+            return True
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 400:
+                # Label might already exist or field not editable
+                logger.warning(f"Could not add label to {issue_key}: {e.response.text}")
+                return False
+            logger.error(f"Failed to add label to {issue_key}: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Failed to add label to {issue_key}: {e}")
+            return False
+
+    def ensure_qain_label(self, issue_key: str) -> bool:
+        """
+        Ensure the qAIn label is present on a JIRA issue.
+
+        This is MANDATORY for all qAIn agent interactions (comments, test cases).
+
+        Args:
+            issue_key: Issue key (e.g., "EPA-123")
+
+        Returns:
+            True if label is present (added or already existed)
+        """
+        try:
+            # First check if label already exists
+            issue = self.get_issue(issue_key, fields=["labels"])
+            if issue and self.QAIN_LABEL in issue.labels:
+                logger.debug(f"qAIn label already exists on {issue_key}")
+                return True
+
+            # Add the label
+            return self.add_label(issue_key, self.QAIN_LABEL)
+        except Exception as e:
+            logger.warning(f"Could not ensure qAIn label on {issue_key}: {e}")
+            return False
+
     # ==================== Comment Operations ====================
-    
+
     def add_comment(
         self,
         issue_key: str,
         body: str,
-        visibility: Optional[Dict[str, str]] = None
+        visibility: Optional[Dict[str, str]] = None,
+        add_qain_label: bool = True,
     ) -> Dict[str, Any]:
         """
         Add a comment to a JIRA issue.
-        
+
         Args:
             issue_key: Issue key (e.g., "EPA-123")
             body: Comment body (supports markdown)
             visibility: Optional visibility restriction
-            
+            add_qain_label: If True (default), adds the qAIn label to the ticket
+
         Returns:
             API response data
         """
         try:
+            # MANDATORY: Add qAIn label to the ticket when commenting
+            if add_qain_label:
+                self.ensure_qain_label(issue_key)
+
             # Convert markdown to Atlassian Document Format (ADF)
             payload = {
                 "body": self._markdown_to_adf(body)
             }
-            
+
             if visibility:
                 payload["visibility"] = visibility
-            
+
             response = self.client.post(f"issue/{issue_key}/comment", json=payload)
             response.raise_for_status()
-            
-            logger.info(f"Added comment to {issue_key}")
+
+            logger.info(f"Added comment to {issue_key} (qAIn label: {add_qain_label})")
             return response.json()
         except Exception as e:
             logger.error(f"Failed to add comment to {issue_key}: {e}")

@@ -13,6 +13,7 @@ from .qa_agent import QAAgent
 from .sonar_validation_agent import SonarValidationAgent
 from .task_manager_agent import TaskManagerAgent
 from .technical_debt_agent import TechnicalDebtAgent
+from .test_analysis_design import TestAnalysisDesignAgent
 from .unit_test_agent import UnitTestAgent
 
 # PM Agent Pack
@@ -32,6 +33,7 @@ __all__ = [
     "SonarValidationAgent",
     "TaskManagerAgent",
     "TechnicalDebtAgent",
+    "TestAnalysisDesignAgent",
     "UnitTestAgent",
     # PM Agent Pack
     "PRDToJiraAgent",
