@@ -4,4 +4,6 @@ __pycache__
 lib
 venv
 *.egg-info/
+.env
+.env.*
 
