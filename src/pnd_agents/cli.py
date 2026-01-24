@@ -35,78 +35,271 @@ def color(text: str, color_code: str) -> str:
 
 # Agent definitions
 AGENTS = {
+    # Orchestration
     "task-manager": {
         "name": "Task Manager Agent",
         "description": "Orchestrates tasks, decomposes work, routes to other agents",
         "role": "orchestrator",
+        "category": "Orchestration",
         "default": True,
     },
+    # Development
     "frontend-engineer": {
         "name": "Frontend Engineer Agent",
         "description": "React/Next.js components, Storybook, accessibility",
         "role": "specialist",
-        "default": True,
-    },
-    "amplience-cms": {
-        "name": "Amplience CMS Agent",
-        "description": "Content types, JSON schemas, CMS integration",
-        "role": "specialist",
-        "default": False,
-    },
-    "code-review": {
-        "name": "Code Review Agent",
-        "description": "Code standards validation, PR reviews",
-        "role": "validator",
-        "default": True,
-    },
-    "performance": {
-        "name": "Performance Agent",
-        "description": "HAR analysis, Core Web Vitals, optimization",
-        "role": "specialist",
-        "default": False,
-    },
-    "qa": {
-        "name": "QA Agent",
-        "description": "Unit tests, integration tests, Playwright E2E",
-        "role": "validator",
+        "category": "Development",
         "default": True,
     },
     "backend": {
         "name": "Backend Agent",
         "description": "API routes, Server Components, mock APIs",
         "role": "specialist",
+        "category": "Development",
         "default": False,
     },
     "figma-reader": {
         "name": "Figma Reader Agent",
         "description": "Extract component metadata from Figma designs",
         "role": "specialist",
+        "category": "Development",
         "default": True,
+    },
+    # Quality & Validation
+    "code-review": {
+        "name": "Code Review Agent",
+        "description": "Code standards validation, PR reviews",
+        "role": "validator",
+        "category": "Quality",
+        "default": True,
+    },
+    "unit-test": {
+        "name": "Unit Test Agent",
+        "description": "Generates comprehensive unit tests with 100% coverage target",
+        "role": "validator",
+        "category": "Quality",
+        "default": True,
+    },
+    "sonar-validation": {
+        "name": "Sonar Validation Agent",
+        "description": "Validates code against SonarCloud quality gates",
+        "role": "validator",
+        "category": "Quality",
+        "default": False,
+    },
+    "qa": {
+        "name": "QA Agent",
+        "description": "Validates implementation against acceptance criteria",
+        "role": "validator",
+        "category": "Quality",
+        "default": True,
+    },
+    "pr-review": {
+        "name": "PR Review Agent",
+        "description": "Reviews Azure DevOps pull requests with multi-role analysis",
+        "role": "validator",
+        "category": "Quality",
+        "default": False,
+    },
+    "technical-debt": {
+        "name": "Technical Debt Agent",
+        "description": "Identifies, classifies, and prioritizes technical debt",
+        "role": "validator",
+        "category": "Quality",
+        "default": False,
+    },
+    # Performance
+    "performance": {
+        "name": "Performance Agent",
+        "description": "HAR analysis, Core Web Vitals, optimization",
+        "role": "specialist",
+        "category": "Performance",
+        "default": False,
     },
     "broken-experience-detector": {
         "name": "Broken Experience Detector Agent",
         "description": "Scan URLs for performance, accessibility, SEO, and UX issues",
         "role": "specialist",
+        "category": "Performance",
         "default": True,
+    },
+    # Product Management
+    "prd-to-jira": {
+        "name": "PRD to Jira Agent",
+        "description": "Converts PRDs to Jira epics, stories with Gherkin acceptance criteria",
+        "role": "specialist",
+        "category": "Product Management",
+        "default": False,
+    },
+    "exec-summary": {
+        "name": "Executive Summary Agent",
+        "description": "Creates stakeholder updates and executive summaries",
+        "role": "specialist",
+        "category": "Product Management",
+        "default": False,
+    },
+    "roadmap-review": {
+        "name": "Roadmap Review Agent",
+        "description": "Critiques roadmaps and OKRs, identifies risks and dependencies",
+        "role": "specialist",
+        "category": "Product Management",
+        "default": False,
+    },
+    # Analytics
+    "analytics": {
+        "name": "Analytics Agent",
+        "description": "Tracks agent performance metrics and generates reports",
+        "role": "specialist",
+        "category": "Analytics",
+        "default": False,
+    },
+    # Security
+    "snyk-predictor": {
+        "name": "Snyk Predictor Agent",
+        "description": "Predict Snyk vulnerabilities before CI/CD pipelines are blocked",
+        "role": "security",
+        "category": "Security",
+        "default": False,
+    },
+    # Platform-Specific (Pandora)
+    "commerce": {
+        "name": "Commerce Agent",
+        "description": "Pandora e-commerce integration, product search, cart operations",
+        "role": "specialist",
+        "category": "Platform (Pandora)",
+        "default": False,
+    },
+    "amplience-cms": {
+        "name": "Amplience CMS Agent",
+        "description": "Content types, JSON schemas, CMS integration",
+        "role": "specialist",
+        "category": "Platform (Pandora)",
+        "default": False,
+    },
+    "amplience-placement": {
+        "name": "Amplience Placement Agent",
+        "description": "Maps Figma designs to Amplience modules with human approval",
+        "role": "specialist",
+        "category": "Platform (Pandora)",
+        "default": False,
+    },
+    # Test Analysis
+    "test-analysis": {
+        "name": "Test Analysis Agent (qAIn)",
+        "description": "Review the acceptance criteria from JIRA and provide test analysis",
+        "role": "specialist",
+        "category": "Quality",
+        "default": True,
+    },
+}
+
+# Agent Packs - Groups of agents that can be installed together
+AGENT_PACKS = {
+    "core": {
+        "name": "Core Pack",
+        "description": "Essential orchestration agent (always recommended)",
+        "agents": ["task-manager"],
+        "default": True,
+    },
+    "developer": {
+        "name": "Developer Pack",
+        "description": "Frontend/backend development, Figma, testing, code review, QA",
+        "agents": ["frontend-engineer", "backend", "figma-reader", "unit-test", "code-review", "qa", "pr-review", "test-analysis"],
+        "default": True,
+    },
+    "quality": {
+        "name": "Quality & Security Pack",
+        "description": "SonarCloud validation, tech debt analysis, security scanning, performance",
+        "agents": ["sonar-validation", "technical-debt", "snyk-predictor", "performance", "broken-experience-detector"],
+        "default": False,
+    },
+    "product": {
+        "name": "Product Management Pack",
+        "description": "PRD to Jira, executive summaries, roadmap review, analytics",
+        "agents": ["prd-to-jira", "exec-summary", "roadmap-review", "analytics"],
+        "default": False,
+    },
+    "platform": {
+        "name": "Pandora Platform Pack",
+        "description": "Pandora-specific: e-commerce, Amplience CMS integrations",
+        "agents": ["commerce", "amplience-cms", "amplience-placement"],
+        "default": False,
     },
 }
 
 # Environment variables
 ENV_VARS = {
+    # Figma Integration
     "FIGMA_ACCESS_TOKEN": {
         "description": "Figma API token for reading designs",
-        "required_for": ["figma-reader", "frontend-engineer"],
+        "required_for": ["figma-reader", "frontend-engineer", "amplience-placement"],
         "sensitive": True,
     },
+    # Amplience CMS Integration
     "AMPLIENCE_HUB_NAME": {
         "description": "Amplience hub name",
-        "required_for": ["amplience-cms"],
+        "required_for": ["amplience-cms", "amplience-placement"],
         "sensitive": False,
     },
     "AMPLIENCE_BASE_URL": {
         "description": "Amplience base URL",
-        "required_for": ["amplience-cms"],
+        "required_for": ["amplience-cms", "amplience-placement"],
         "sensitive": False,
+    },
+    # Jira Integration
+    "JIRA_BASE_URL": {
+        "description": "Jira instance base URL (e.g., https://your-domain.atlassian.net)",
+        "required_for": ["prd-to-jira", "exec-summary", "analytics"],
+        "sensitive": False,
+    },
+    "JIRA_EMAIL": {
+        "description": "Email address for Jira authentication",
+        "required_for": ["prd-to-jira", "exec-summary", "analytics"],
+        "sensitive": False,
+    },
+    "JIRA_API_TOKEN": {
+        "description": "Jira API token (create at id.atlassian.com/manage-profile/security/api-tokens)",
+        "required_for": ["prd-to-jira", "exec-summary", "analytics"],
+        "sensitive": True,
+    },
+    "JIRA_CLOUD_ID": {
+        "description": "Jira Cloud ID (optional, for cloud instances)",
+        "required_for": [],
+        "sensitive": False,
+    },
+    # SonarCloud Integration
+    "SONAR_TOKEN": {
+        "description": "SonarCloud API token for code quality analysis",
+        "required_for": ["sonar-validation", "technical-debt"],
+        "sensitive": True,
+    },
+    # Azure DevOps Integration
+    "AZURE_DEVOPS_PAT": {
+        "description": "Azure DevOps Personal Access Token for PR reviews",
+        "required_for": ["pr-review"],
+        "sensitive": True,
+    },
+    "AZURE_DEVOPS_ORG": {
+        "description": "Azure DevOps organization name (default: pandora-jewelry)",
+        "required_for": ["pr-review"],
+        "sensitive": False,
+    },
+    "AZURE_DEVOPS_PROJECT": {
+        "description": "Azure DevOps project name (default: Spark)",
+        "required_for": ["pr-review"],
+        "sensitive": False,
+    },
+    # Snyk Security Integration
+    "SNYK_TOKEN": {
+        "description": "Snyk API token for vulnerability scanning",
+        "required_for": ["snyk-predictor"],
+        "sensitive": True,
+    },
+    # Microsoft Teams Notifications
+    "TEAMS_WEBHOOK_URL": {
+        "description": "Microsoft Teams webhook URL for notifications",
+        "required_for": ["snyk-predictor"],
+        "sensitive": True,
     },
 }
 
@@ -148,7 +341,7 @@ def get_pnd_agents_path() -> Path:
 
 
 def print_banner():
-    """Print the PND Agents banner."""
+    """Print the Pandora AI Squad banner."""
     banner = """
     ╔═══════════════════════════════════════════════════════════╗
     ║                                                           ║
@@ -159,7 +352,7 @@ def print_banner():
     ║   ██║     ██║ ╚████║██████╔╝    ██║  ██║╚██████╔╝███████╗ ║
     ║   ╚═╝     ╚═╝  ╚═══╝╚═════╝     ╚═╝  ╚═╝ ╚═════╝ ╚══════╝ ║
     ║                                                           ║
-    ║              PG AI Squad - Setup Wizard                   ║
+    ║           Pandora AI Squad - Setup Wizard                 ║
     ╚═══════════════════════════════════════════════════════════╝
     """
     print(color(banner, Colors.CYAN))
@@ -200,41 +393,56 @@ def prompt_input(prompt: str, default: str = "", sensitive: bool = False) -> str
 
 
 def select_agents(preset: Optional[str] = None) -> dict[str, bool]:
-    """Interactive agent selection."""
+    """Interactive agent selection using agent packs."""
     selected = {}
     
+    # Initialize all agents as disabled
+    for agent_id in AGENTS:
+        selected[agent_id] = False
+    
     if preset == "minimal":
-        # Only essential agents
-        for agent_id in AGENTS:
-            selected[agent_id] = agent_id in ["task-manager", "frontend-engineer", "code-review"]
+        # Only core pack
+        for agent_id in AGENT_PACKS["core"]["agents"]:
+            selected[agent_id] = True
     elif preset == "full":
-        # All agents
+        # All agents from all packs
         for agent_id in AGENTS:
             selected[agent_id] = True
     elif preset == "default":
-        # Default selection
-        for agent_id, info in AGENTS.items():
-            selected[agent_id] = info["default"]
+        # Default packs (core + developer)
+        for pack_id, pack_info in AGENT_PACKS.items():
+            if pack_info["default"]:
+                for agent_id in pack_info["agents"]:
+                    selected[agent_id] = True
     else:
-        # Interactive selection
-        print(color("\nSelect agents to enable:", Colors.BOLD))
-        print(color("(Press Enter to accept default, 'y' to enable, 'n' to disable)\n", Colors.CYAN))
+        # Interactive selection by pack
+        print(color("\nSelect agent packs to install:", Colors.BOLD))
+        print(color("(Each pack contains multiple agents - select 'y' to install all agents in that pack)\n", Colors.CYAN))
         
-        for agent_id, info in AGENTS.items():
-            role_color = {
-                "orchestrator": Colors.YELLOW,
-                "specialist": Colors.BLUE,
-                "validator": Colors.GREEN,
-            }.get(info["role"], Colors.ENDC)
+        for pack_id, pack_info in AGENT_PACKS.items():
+            pack_name = color(pack_info["name"], Colors.BOLD)
+            pack_desc = pack_info["description"]
+            default = pack_info["default"]
+            agent_count = len(pack_info["agents"])
             
-            role_badge = color(f"[{info['role']}]", role_color)
-            name = color(info["name"], Colors.BOLD)
-            desc = info["description"]
-            default = info["default"]
+            # Show pack header
+            print(color(f"\n  {'=' * 50}", Colors.CYAN))
+            print(f"  {pack_name} ({agent_count} agents)")
+            print(f"  {pack_desc}")
             
-            print(f"  {role_badge} {name}")
-            print(f"      {desc}")
-            selected[agent_id] = prompt_yes_no(f"      Enable {agent_id}?", default)
+            # List agents in this pack
+            print(color("  Includes:", Colors.YELLOW))
+            for agent_id in pack_info["agents"]:
+                agent_name = AGENTS[agent_id]["name"]
+                print(f"    - {agent_name}")
+            
+            # Ask to enable the pack
+            enable_pack = prompt_yes_no(f"\n  Install {pack_info['name']}?", default)
+            
+            # Enable all agents in the pack if selected
+            if enable_pack:
+                for agent_id in pack_info["agents"]:
+                    selected[agent_id] = True
             print()
     
     return selected
@@ -815,6 +1023,54 @@ def cmd_sprint_report(args):
         return 1
 
 
+def cmd_run(args):
+    """Run a specific agent."""
+    import subprocess
+    
+    agent_name = args.agent
+    pnd_agents_path = get_pnd_agents_path()
+    
+    if agent_name == "snyk-predictor":
+        agent_path = pnd_agents_path / "src" / "agents" / "snyk-predictor" / "index.ts"
+        
+        if not agent_path.exists():
+            print(color(f"Error: Snyk Predictor agent not found at {agent_path}", Colors.RED))
+            return 1
+        
+        cmd = ["npx", "ts-node", str(agent_path)]
+        
+        if args.repo:
+            cmd.extend(["--repo", args.repo])
+        if args.repo_path:
+            cmd.extend(["--repoPath", args.repo_path])
+        if args.package_manager:
+            cmd.extend(["--packageManager", args.package_manager])
+        if args.notify:
+            cmd.extend(["--notify", args.notify])
+        if args.severity:
+            cmd.extend(["--severity", args.severity])
+        if args.output:
+            cmd.extend(["--output", args.output])
+        
+        print(color("\n" + "=" * 60, Colors.CYAN))
+        print(color("PND AGENTS - Running Snyk Predictor", Colors.BOLD))
+        print(color("=" * 60, Colors.CYAN))
+        
+        try:
+            result = subprocess.run(cmd, cwd=str(pnd_agents_path))
+            return result.returncode
+        except FileNotFoundError:
+            print(color("Error: npx or ts-node not found. Please install Node.js and run: npm install -g ts-node", Colors.RED))
+            return 1
+        except Exception as e:
+            print(color(f"Error running agent: {e}", Colors.RED))
+            return 1
+    else:
+        print(color(f"Error: Unknown agent '{agent_name}'", Colors.RED))
+        print(f"Available agents: snyk-predictor")
+        return 1
+
+
 def cmd_uninstall(args):
     """Remove pnd-agents configuration."""
     print(color("\nUninstall PND Agents Configuration", Colors.BOLD))
@@ -870,6 +1126,7 @@ Examples:
   pnd-agents sprint-report --sprint-id 16597    Generate AI report for sprint
   pnd-agents sprint-report --board-id 795       Generate AI report for active sprint
   pnd-agents sprint-report --sprint-id 16597 --format json -o report.json
+  pnd-agents run snyk-predictor --repo my-app --repoPath ./my-app --packageManager pnpm --notify teams
         """
     )
     
@@ -1001,6 +1258,42 @@ Examples:
         help="Save report to file"
     )
     sprint_parser.set_defaults(func=cmd_sprint_report)
+
+    # Run command (for specific agents like snyk-predictor)
+    run_parser = subparsers.add_parser("run", help="Run a specific agent")
+    run_parser.add_argument(
+        "agent",
+        help="Agent to run (e.g., 'snyk-predictor')"
+    )
+    run_parser.add_argument(
+        "--repo",
+        help="Repository name for reporting"
+    )
+    run_parser.add_argument(
+        "--repoPath",
+        dest="repo_path",
+        help="Path to the repository to scan"
+    )
+    run_parser.add_argument(
+        "--packageManager",
+        dest="package_manager",
+        choices=["npm", "pnpm", "yarn"],
+        help="Package manager (npm, pnpm, yarn)"
+    )
+    run_parser.add_argument(
+        "--notify",
+        choices=["teams", "none"],
+        help="Notification channel (teams, none)"
+    )
+    run_parser.add_argument(
+        "--severity",
+        help="Severity levels to report (comma-separated: low,medium,high,critical)"
+    )
+    run_parser.add_argument(
+        "--output",
+        help="Output file path for report (JSON)"
+    )
+    run_parser.set_defaults(func=cmd_run)
 
     args = parser.parse_args()
     

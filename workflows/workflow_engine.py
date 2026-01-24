@@ -9,18 +9,21 @@ Supports:
 - Parallel execution for independent agents
 - Cross-agent communication via call_agent hook
 - Comprehensive logging and tracing
+- Multi-repo support via RepoAdapter (Code Singularity pattern)
 """
 
 import json
 import logging
 import os
-import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Any, Optional, Callable, Union
-from dataclasses import dataclass, field, asdict
+from typing import Dict, List, Any, Optional, Callable, TYPE_CHECKING
+from dataclasses import dataclass, field
+
+if TYPE_CHECKING:
+    from src.agents.repo_adapter import RepoAdapter
 
 # Configure logging
 logger = logging.getLogger("pnd_agents.workflow")
@@ -45,6 +48,7 @@ class TaskType(Enum):
     QA = "qa"
     CODE_REVIEW = "code_review"
     PERFORMANCE = "performance"
+    TEST_ANALYSIS_DESIGN = "test_analysis_design"
     DEFAULT = "default"
 
 
@@ -85,6 +89,11 @@ TASK_KEYWORDS: Dict[TaskType, List[str]] = {
     TaskType.PERFORMANCE: [
         "har", "performance", "optimize", "slow",
         "lighthouse", "web vitals", "speed"
+    ],
+    TaskType.TEST_ANALYSIS_DESIGN: [
+        "test case", "test cases", "test design", "test analysis",
+        "qain", "bdd", "gherkin", "acceptance criteria", "test scenario",
+        "test scenarios", "generate test cases", "write test cases"
     ],
 }
 
@@ -290,16 +299,24 @@ class WorkflowEngine:
     
     CONTEXT_FILE = "/tmp/pnd_agent_context.json"
     
-    def __init__(self, rules_file: Optional[str] = None):
+    def __init__(
+        self,
+        rules_file: Optional[str] = None,
+        repo_adapter: Optional["RepoAdapter"] = None
+    ):
         """
         Initialize the workflow engine.
         
         Args:
             rules_file: Path to workflow_rules.json. If not provided,
                        uses default rules.
+            repo_adapter: Optional RepoAdapter for multi-repo support.
+                         When provided, repo context is injected into
+                         workflow metadata and agent inputs.
         """
         self.rules = self._load_rules(rules_file)
         self._agent_handlers: Dict[str, Callable] = {}
+        self._repo_adapter = repo_adapter
     
     def _load_rules(self, rules_file: Optional[str]) -> Dict[str, List[str]]:
         """Load workflow rules from file or use defaults."""
@@ -311,6 +328,7 @@ class WorkflowEngine:
             "qa": ["qa", "review"],
             "code_review": ["review"],
             "performance": ["performance", "frontend", "review"],
+            "test_analysis_design": ["test_analysis_design", "review"],
             "default": ["frontend", "review", "qa"]
         }
         
@@ -400,15 +418,58 @@ class WorkflowEngine:
         task_type = self.detect_task_type(task_description)
         pipeline = self.build_pipeline(task_type)
         
+        # Build metadata with repo context if adapter is available
+        workflow_metadata = metadata.copy() if metadata else {}
+        
+        if self._repo_adapter:
+            # Inject repo context for agents to use
+            workflow_metadata["repo_context"] = self._repo_adapter.get_context_for_agent()
+            workflow_metadata["repo_name"] = self._repo_adapter.name
+            workflow_metadata["repo_root"] = self._repo_adapter.repo_root
+            logger.info(f"Workflow created with repo context for: {self._repo_adapter.name}")
+        
         context = WorkflowContext(
             workflow_id=str(uuid.uuid4())[:8],
             task_description=task_description,
             task_type=task_type,
             pipeline=pipeline,
-            metadata=metadata or {}
+            metadata=workflow_metadata
         )
         
         return context
+    
+    def set_repo_adapter(self, repo_adapter: "RepoAdapter"):
+        """
+        Set or update the repo adapter.
+        
+        Args:
+            repo_adapter: RepoAdapter instance for the target repository.
+        """
+        self._repo_adapter = repo_adapter
+        logger.info(f"Repo adapter set for: {repo_adapter.name}")
+    
+    def get_repo_adapter(self) -> Optional["RepoAdapter"]:
+        """Get the current repo adapter."""
+        return self._repo_adapter
+    
+    def run_repo_command(self, command_name: str, extra_args: Optional[List[str]] = None):
+        """
+        Run a command from the repo profile.
+        
+        Args:
+            command_name: Name of the command (install, validate, test, etc.)
+            extra_args: Additional arguments to pass to the command.
+            
+        Returns:
+            CommandResult from the adapter.
+            
+        Raises:
+            ValueError: If no repo adapter is configured.
+        """
+        if not self._repo_adapter:
+            raise ValueError("No repo adapter configured. Call set_repo_adapter() first.")
+        
+        return self._repo_adapter.run_command(command_name, extra_args)
     
     def save_context(self, context: WorkflowContext):
         """Save workflow context to file."""
@@ -759,7 +820,6 @@ class WorkflowEngine:
         
         Avoids concurrent writes to context file by not saving during execution.
         """
-        import threading
         
         stage = context.stages.get(agent_name)
         if stage:
@@ -897,7 +957,8 @@ class WorkflowEngine:
             "unit_test": "Generate unit tests with 100% coverage target",
             "sonar": "Validate against SonarCloud quality gates (0 errors, 0 duplication)",
             "qa": "Generate E2E and integration tests",
-            "performance": "Run performance analysis and optimization checks"
+            "performance": "Run performance analysis and optimization checks",
+            "test_analysis_design": "Generate comprehensive test cases from JIRA/requirements using qAIn"
         }
         return descriptions.get(agent_name, f"Execute {agent_name} agent")
     

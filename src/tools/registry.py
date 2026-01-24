@@ -1268,6 +1268,145 @@ def register_tools(server: Server) -> None:
                     "required": ["board_configs"]
                 }
             ),
+
+            # PR Review Agent Tools
+            types.Tool(
+                name="pr_review",
+                description="Review an Azure DevOps Pull Request with structured, role-aware feedback. Automatically detects tech stack (Frontend, Backend, QA, Infra) and provides comprehensive review including summary, code quality, risk analysis, test coverage, architecture assessment, and actionable recommendations. Supports different review roles: fe (Frontend), qa (QA/Cypress), platform (Infrastructure), backend, or general.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "pr_url": {
+                            "type": "string",
+                            "description": "Azure DevOps PR URL (e.g., https://dev.azure.com/org/project/_git/repo/pullrequest/123)"
+                        },
+                        "role": {
+                            "type": "string",
+                            "description": "Review role/persona: 'fe' (Frontend), 'qa' (QA/Cypress), 'platform' (Infrastructure), 'backend', or 'general' (default). If not specified, role is auto-detected from tech stack.",
+                            "enum": ["fe", "qa", "platform", "backend", "general"]
+                        },
+                        "output_format": {
+                            "type": "string",
+                            "description": "Output format: 'json' for machine-readable, 'markdown' for human-readable (default: 'markdown')",
+                            "enum": ["json", "markdown"],
+                            "default": "markdown"
+                        }
+                    },
+                    "required": ["pr_url"]
+                }
+            ),
+            types.Tool(
+                name="pr_review_get_pr_data",
+                description="Fetch raw PR data from Azure DevOps without performing a review. Returns PR metadata, changed files, and diffs. Useful for custom analysis or when you need PR data for other purposes.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "pr_url": {
+                            "type": "string",
+                            "description": "Azure DevOps PR URL (e.g., https://dev.azure.com/org/project/_git/repo/pullrequest/123)"
+                        },
+                        "include_diffs": {
+                            "type": "boolean",
+                            "description": "Whether to include file diffs (default: true)",
+                            "default": True
+                        },
+                        "include_content": {
+                            "type": "boolean",
+                            "description": "Whether to include file contents (default: true)",
+                            "default": True
+                        }
+                    },
+                    "required": ["pr_url"]
+                }
+            ),
+            types.Tool(
+                name="pr_review_detect_tech_stack",
+                description="Detect the technology stack from an Azure DevOps PR. Returns detected stacks (Frontend, Backend, QA, Infra), primary stack, confidence score, and evidence. Useful for understanding what technologies a PR touches.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "pr_url": {
+                            "type": "string",
+                            "description": "Azure DevOps PR URL (e.g., https://dev.azure.com/org/project/_git/repo/pullrequest/123)"
+                        }
+                    },
+                    "required": ["pr_url"]
+                }
+            ),
+
+            # Technical Debt Agent Tools
+            types.Tool(
+                name="tech_debt_analyze",
+                description="Analyze a repository for technical debt. Identifies TODO/FIXME comments, deprecated code, high complexity, large files/functions, test coverage gaps, dependency issues, and architecture problems. Returns a comprehensive report with severity ratings, impact assessment, and prioritized recommendations. Optionally integrates with SonarCloud for enhanced analysis.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "repo_path": {
+                            "type": "string",
+                            "description": "Path to the repository to analyze (default: current working directory)"
+                        },
+                        "include_sonarcloud": {
+                            "type": "boolean",
+                            "description": "Whether to include SonarCloud data if SONAR_TOKEN is available (default: true)",
+                            "default": True
+                        },
+                        "sonar_project_key": {
+                            "type": "string",
+                            "description": "SonarCloud project key (optional, uses default if not provided)"
+                        },
+                        "sonar_branch": {
+                            "type": "string",
+                            "description": "Branch to analyze in SonarCloud (default: main)",
+                            "default": "main"
+                        },
+                        "output_format": {
+                            "type": "string",
+                            "description": "Output format: 'json' for machine-readable, 'markdown' for human-readable, 'both' for both formats (default: 'both')",
+                            "enum": ["json", "markdown", "both"],
+                            "default": "both"
+                        }
+                    },
+                    "required": []
+                }
+            ),
+            types.Tool(
+                name="tech_debt_summary",
+                description="Generate an executive summary of technical debt for leadership. Provides high-level risk assessment, key findings, and recommended actions in a concise format suitable for stakeholder communication.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "repo_path": {
+                            "type": "string",
+                            "description": "Path to the repository to analyze (default: current working directory)"
+                        },
+                        "include_sonarcloud": {
+                            "type": "boolean",
+                            "description": "Whether to include SonarCloud data if SONAR_TOKEN is available (default: true)",
+                            "default": True
+                        }
+                    },
+                    "required": []
+                }
+            ),
+            types.Tool(
+                name="tech_debt_register",
+                description="Generate a detailed technical debt register (inventory). Lists all identified debt items in a tabular format with ID, title, category, severity, effort, and location. Useful for tracking and sprint planning.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "repo_path": {
+                            "type": "string",
+                            "description": "Path to the repository to analyze (default: current working directory)"
+                        },
+                        "include_sonarcloud": {
+                            "type": "boolean",
+                            "description": "Whether to include SonarCloud data if SONAR_TOKEN is available (default: true)",
+                            "default": True
+                        }
+                    },
+                    "required": []
+                }
+            ),
         ]
 
     # Register call_tool handler
@@ -2046,6 +2185,140 @@ AI Productivity Tracker Agent v1.0"""
                     return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
                 except Exception as e:
                     return [types.TextContent(type="text", text=f"UnitTestAdvisor Agent Error: {str(e)}")]
+
+            # PR Review Agent Tools
+            elif name == "pr_review":
+                import json
+                try:
+                    from agents.pr_review_agent import PRReviewAgent, ReviewRole
+                    
+                    pr_url = arguments.get("pr_url")
+                    if not pr_url:
+                        return [types.TextContent(type="text", text="Error: pr_url is required")]
+                    
+                    role_str = arguments.get("role", "general")
+                    role_map = {
+                        "fe": ReviewRole.FRONTEND,
+                        "frontend": ReviewRole.FRONTEND,
+                        "qa": ReviewRole.QA,
+                        "platform": ReviewRole.PLATFORM,
+                        "backend": ReviewRole.BACKEND,
+                        "general": ReviewRole.GENERAL,
+                    }
+                    role = role_map.get(role_str.lower(), ReviewRole.GENERAL)
+                    
+                    output_format = arguments.get("output_format", "markdown")
+                    
+                    agent = PRReviewAgent()
+                    result = agent.review_pr(pr_url, role)
+                    agent.close()
+                    
+                    if output_format == "json":
+                        return [types.TextContent(type="text", text=json.dumps(result.to_dict(), indent=2))]
+                    else:
+                        return [types.TextContent(type="text", text=result.to_markdown())]
+                except Exception as pr_error:
+                    return [types.TextContent(type="text", text=f"PR Review Agent Error: {str(pr_error)}")]
+
+            elif name == "pr_review_get_pr_data":
+                import json
+                try:
+                    from tools.azure_devops_pr_client import AzureDevOpsPRClient
+                    
+                    pr_url = arguments.get("pr_url")
+                    if not pr_url:
+                        return [types.TextContent(type="text", text="Error: pr_url is required")]
+                    
+                    include_diffs = arguments.get("include_diffs", True)
+                    include_content = arguments.get("include_content", True)
+                    
+                    client = AzureDevOpsPRClient()
+                    pr_data = client.get_pr_for_review(pr_url, include_diffs, include_content)
+                    client.close()
+                    
+                    return [types.TextContent(type="text", text=json.dumps(pr_data.to_dict(), indent=2))]
+                except Exception as pr_error:
+                    return [types.TextContent(type="text", text=f"PR Data Fetch Error: {str(pr_error)}")]
+
+            elif name == "pr_review_detect_tech_stack":
+                import json
+                try:
+                    from agents.pr_review_agent import PRReviewAgent
+                    
+                    pr_url = arguments.get("pr_url")
+                    if not pr_url:
+                        return [types.TextContent(type="text", text="Error: pr_url is required")]
+                    
+                    agent = PRReviewAgent()
+                    pr_data = agent.pr_client.get_pr_for_review(pr_url)
+                    tech_stack = agent.stack_detector.detect(pr_data.files, pr_data.diffs)
+                    agent.close()
+                    
+                    return [types.TextContent(type="text", text=json.dumps(tech_stack.to_dict(), indent=2))]
+                except Exception as pr_error:
+                    return [types.TextContent(type="text", text=f"Tech Stack Detection Error: {str(pr_error)}")]
+
+            # Technical Debt Agent Tools
+            elif name == "tech_debt_analyze":
+                import json
+                try:
+                    from agents.technical_debt_agent import TechnicalDebtAgent
+                    
+                    repo_path = arguments.get("repo_path") or os.getcwd()
+                    include_sonarcloud = arguments.get("include_sonarcloud", True)
+                    sonar_project_key = arguments.get("sonar_project_key")
+                    sonar_branch = arguments.get("sonar_branch", "main")
+                    output_format = arguments.get("output_format", "both")
+                    
+                    agent = TechnicalDebtAgent()
+                    report = agent.analyze(
+                        repo_path=repo_path,
+                        include_sonarcloud=include_sonarcloud,
+                        sonar_project_key=sonar_project_key,
+                        sonar_branch=sonar_branch,
+                        output_format=output_format
+                    )
+                    
+                    if output_format == "json":
+                        return [types.TextContent(type="text", text=json.dumps(report.to_dict(), indent=2))]
+                    elif output_format == "markdown":
+                        return [types.TextContent(type="text", text=report.to_markdown())]
+                    else:  # both
+                        result = {
+                            "json": report.to_dict(),
+                            "markdown": report.to_markdown()
+                        }
+                        return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as td_error:
+                    return [types.TextContent(type="text", text=f"Technical Debt Analysis Error: {str(td_error)}")]
+
+            elif name == "tech_debt_summary":
+                try:
+                    from agents.technical_debt_agent import TechnicalDebtAgent
+                    
+                    repo_path = arguments.get("repo_path") or os.getcwd()
+                    include_sonarcloud = arguments.get("include_sonarcloud", True)
+                    
+                    agent = TechnicalDebtAgent()
+                    summary = agent.generate_summary(repo_path, include_sonarcloud=include_sonarcloud)
+                    
+                    return [types.TextContent(type="text", text=summary)]
+                except Exception as td_error:
+                    return [types.TextContent(type="text", text=f"Technical Debt Summary Error: {str(td_error)}")]
+
+            elif name == "tech_debt_register":
+                try:
+                    from agents.technical_debt_agent import TechnicalDebtAgent
+                    
+                    repo_path = arguments.get("repo_path") or os.getcwd()
+                    include_sonarcloud = arguments.get("include_sonarcloud", True)
+                    
+                    agent = TechnicalDebtAgent()
+                    register = agent.generate_register(repo_path, include_sonarcloud=include_sonarcloud)
+                    
+                    return [types.TextContent(type="text", text=register)]
+                except Exception as td_error:
+                    return [types.TextContent(type="text", text=f"Technical Debt Register Error: {str(td_error)}")]
 
             else:
                 raise ValueError(f"Unknown tool: {name}")

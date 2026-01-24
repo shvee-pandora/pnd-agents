@@ -7,12 +7,15 @@
     "frontend": ["frontend", "unit_test", "review", "sonar", "performance"],
     "backend": ["backend", "unit_test", "review", "sonar"],
     "amplience": ["amplience", "frontend", "unit_test", "review", "sonar"],
+    "amplience_placement": ["amplience_placement"],
     "qa": ["unit_test", "review", "sonar"],
     "unit_test": ["unit_test", "sonar"],
     "test_case_writing": ["test_case_writing", "qa"],
+    "test_analysis_design": ["test_analysis_design", "qa"],
     "sonar": ["sonar", "review"],
     "code_review": ["review", "sonar"],
     "performance": ["performance", "frontend", "unit_test", "review"],
+    "technical_debt": ["technical_debt"],
     "default": ["frontend", "unit_test", "review", "sonar"]
   },
   "parallel_groups": {
@@ -20,12 +23,15 @@
     "frontend": [["frontend"], ["unit_test", "performance"], ["review"], ["sonar"]],
     "backend": [["backend"], ["unit_test"], ["review"], ["sonar"]],
     "amplience": [["amplience"], ["frontend"], ["unit_test"], ["review"], ["sonar"]],
+    "amplience_placement": [["amplience_placement"]],
     "qa": [["unit_test"], ["review"], ["sonar"]],
     "unit_test": [["unit_test"], ["sonar"]],
     "test_case_writing": [["test_case_writing"], ["qa"]],
+    "test_analysis_design": [["test_analysis_design"], ["qa"]],
     "sonar": [["sonar"], ["review"]],
     "code_review": [["review"], ["sonar"]],
     "performance": [["performance"], ["frontend"], ["unit_test"], ["review"]],
+    "technical_debt": [["technical_debt"]],
     "default": [["frontend"], ["unit_test"], ["review"], ["sonar"]]
   },
   "keywords": {
@@ -70,6 +76,18 @@
       "content model",
       "dynamic content"
     ],
+    "amplience_placement": [
+      "placement",
+      "place modules",
+      "figma to amplience",
+      "design to cms",
+      "slot placement",
+      "module placement",
+      "cms placement",
+      "amplience placement",
+      "map figma",
+      "map design"
+    ],
     "qa": [
       "tests",
       "automation",
@@ -90,6 +108,18 @@
       "write tests"
     ],
     "test_case_writing": [
+      "test cases",
+      "test case",
+      "test plan",
+      "test scenarios",
+      "test documentation",
+      "qa documentation",
+      "acceptance criteria",
+      "gherkin",
+      "bdd",
+      "test specification"
+    ],
+    "test_analysis_design": [
       "test cases",
       "test case",
       "test plan",
@@ -129,6 +159,20 @@
       "lighthouse",
       "web vitals",
       "speed"
+    ],
+    "technical_debt": [
+      "technical debt",
+      "tech debt",
+      "debt analysis",
+      "debt register",
+      "todo comments",
+      "fixme",
+      "deprecated",
+      "complexity",
+      "code quality",
+      "maintainability",
+      "refactoring needed",
+      "legacy code"
     ]
   },
   "agents": {
@@ -195,10 +239,31 @@
       "input": ["branch", "repo_path"],
       "output": ["issues", "fix_plans", "coverage", "pr_checklist", "quality_gate_status"]
     },
+    "amplience_placement": {
+      "name": "Amplience Placement Agent",
+      "description": "Human-in-the-Loop agent that maps Figma designs to Amplience CMS modules with mandatory human approval before any write operations",
+      "handler": "amplience_placement_agent.run",
+      "input": ["figma_url", "figma_file_id", "figma_node_id", "approval_status", "approved_by"],
+      "output": ["placement_plan", "mappings", "confidence_scores", "review_summary", "draft_ids"]
+    },
+    "technical_debt": {
+      "name": "Technical Debt Agent",
+      "description": "READ-ONLY agent that identifies, classifies, and prioritizes technical debt across a repository using static analysis and optional SonarCloud integration",
+      "handler": "technical_debt_agent.run",
+      "input": ["repo_path", "include_sonarcloud", "sonar_project_key", "sonar_branch"],
+      "output": ["report", "summary", "register", "hotspots", "recommendations", "next_actions"]
+    },
     "test_case_writing": {
       "name": "Test Case Writing Agent",
       "description": "Generate comprehensive test cases from requirements, user stories, or acceptance criteria",
       "handler": "test_case_writing_agent.run",
+      "input": ["requirements", "feature_name", "acceptance_criteria", "include_security", "include_accessibility"],
+      "output": ["test_suites", "test_cases", "coverage_summary", "recommendations"]
+    },
+    "test_analysis_design": {
+      "name": "Test Analysis Design Agent (qAIn)",
+      "description": "Generate comprehensive test cases from requirements, user stories, or acceptance criteria using qAIn workflow",
+      "handler": "test_analysis_design.run",
       "input": ["requirements", "feature_name", "acceptance_criteria", "include_security", "include_accessibility"],
       "output": ["test_suites", "test_cases", "coverage_summary", "recommendations"]
     }

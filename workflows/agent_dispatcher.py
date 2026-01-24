@@ -36,12 +36,15 @@ class AgentDispatcher:
         self.register("frontend", self._frontend_handler)
         self.register("backend", self._backend_handler)
         self.register("amplience", self._amplience_handler)
+        self.register("amplience_placement", self._amplience_placement_handler)
         self.register("review", self._review_handler)
         self.register("qa", self._qa_handler)
         self.register("performance", self._performance_handler)
         self.register("unit_test", self._unit_test_handler)
         self.register("sonar", self._sonar_handler)
         self.register("test_case_writing", self._test_case_writing_handler)
+        self.register("technical_debt", self._technical_debt_handler)
+        self.register("test_analysis_design", self._test_analysis_design_handler)
     
     def register(self, name: str, handler: Callable[[Dict[str, Any]], AgentResult]):
         """
@@ -198,38 +201,168 @@ class AgentDispatcher:
         Frontend Engineer Agent handler.
         
         Generates React components from Figma data or task description.
+        Uses repo_context from Code Singularity pattern when available
+        to determine correct paths, naming conventions, and file structure.
         """
         task = context.get("task", "")
         input_data = context.get("input", {})
+        metadata = context.get("metadata", {})
         previous_output = input_data.get("previous_output", {})
+        
+        # Get repo context from Code Singularity pattern (if available)
+        repo_context = metadata.get("repo_context", {})
+        repo_name = metadata.get("repo_name")
         
         # Get component data from Figma agent output
         component_data = previous_output.get("component", {})
+        component_name = component_data.get("componentName", self._extract_component_name(task))
         
-        # Build component specification
-        component_spec = {
-            "name": component_data.get("componentName", self._extract_component_name(task)),
+        # Determine atomic design level from task description
+        atomic_level = self._detect_atomic_level(task, repo_context)
+        
+        # Build component specification with repo-aware constraints
+        component_spec = self._build_component_spec_from_context(
+            component_name=component_name,
+            component_data=component_data,
+            repo_context=repo_context
+        )
+        
+        # Generate file paths using repo context (Code Singularity pattern)
+        files_to_generate = self._generate_component_files_from_context(
+            component_name=component_name,
+            atomic_level=atomic_level,
+            repo_context=repo_context
+        )
+        
+        # Build response with repo-aware metadata
+        response_data = {
+            "component_spec": component_spec,
+            "files_to_generate": files_to_generate,
+            "suggested_imports": self._suggest_imports(component_spec),
+            "atomic_level": atomic_level,
+        }
+        
+        # Add Code Singularity metadata if repo context was used
+        if repo_context:
+            response_data["repo_context_used"] = True
+            response_data["repo_name"] = repo_name
+            response_data["constraints_applied"] = {
+                "use_type_over_interface": repo_context.get("constraints", {}).get("use_type_over_interface", False),
+                "server_components_default": repo_context.get("constraints", {}).get("server_components_default", False),
+                "props_naming": repo_context.get("constraints", {}).get("props_naming", "Props"),
+            }
+            response_data["commands"] = {
+                "validate": repo_context.get("commands", {}).get("validate"),
+                "test": repo_context.get("commands", {}).get("test"),
+                "lint": repo_context.get("commands", {}).get("lint"),
+            }
+        
+        return AgentResult(
+            status="success",
+            data=response_data,
+            next="review"
+        )
+    
+    def _detect_atomic_level(self, task: str, repo_context: Dict[str, Any]) -> str:
+        """
+        Detect the atomic design level from task description.
+        
+        Uses repo_context to get valid atomic levels if available.
+        """
+        task_lower = task.lower()
+        
+        # Get valid levels from repo context or use defaults
+        valid_levels = repo_context.get("constraints", {}).get("atomic_levels", ["atoms", "molecules", "organisms"])
+        
+        # Check for explicit mentions in task
+        for level in valid_levels:
+            if level in task_lower or level.rstrip("s") in task_lower:
+                return level
+        
+        # Default to atoms for simple components
+        if any(word in task_lower for word in ["button", "icon", "badge", "label", "input", "link"]):
+            return "atoms"
+        elif any(word in task_lower for word in ["card", "form", "list", "menu", "nav"]):
+            return "molecules"
+        elif any(word in task_lower for word in ["header", "footer", "sidebar", "section", "page"]):
+            return "organisms"
+        
+        return "atoms"  # Default
+    
+    def _build_component_spec_from_context(
+        self,
+        component_name: str,
+        component_data: Dict[str, Any],
+        repo_context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Build component specification using repo context constraints.
+        """
+        constraints = repo_context.get("constraints", {})
+        
+        # Get naming convention from repo context
+        props_naming = constraints.get("props_naming", "Props")
+        use_type = constraints.get("use_type_over_interface", True)
+        server_default = constraints.get("server_components_default", False)
+        
+        return {
+            "name": component_name,
             "props": component_data.get("props", {}),
+            "props_type_name": f"{component_name}{props_naming}",
+            "use_type_keyword": use_type,
+            "is_server_component": server_default,
             "styles": component_data.get("designTokens", {}),
             "variants": component_data.get("variants", []),
             "assets": component_data.get("assets", []),
             "autoLayout": component_data.get("autoLayout"),
         }
+    
+    def _generate_component_files_from_context(
+        self,
+        component_name: str,
+        atomic_level: str,
+        repo_context: Dict[str, Any]
+    ) -> list:
+        """
+        Generate file paths using repo context paths.
         
-        return AgentResult(
-            status="success",
-            data={
-                "component_spec": component_spec,
-                "files_to_generate": [
-                    f"src/components/{component_spec['name']}/{component_spec['name']}.tsx",
-                    f"src/components/{component_spec['name']}/{component_spec['name']}.stories.tsx",
-                    f"src/components/{component_spec['name']}/{component_spec['name']}.module.css",
-                    f"src/components/{component_spec['name']}/index.ts",
-                ],
-                "suggested_imports": self._suggest_imports(component_spec),
-            },
-            next="review"
-        )
+        Falls back to default paths if repo context not available.
+        """
+        # Get base path from repo context or use default
+        paths = repo_context.get("paths", {})
+        
+        # Try to get the specific atomic level path, or fall back to components path
+        base_path = paths.get(atomic_level) or paths.get("components") or "lib/components"
+        
+        # If base_path doesn't include the atomic level, add it
+        if atomic_level not in base_path:
+            base_path = f"{base_path}/{atomic_level}"
+        
+        # Get component structure from repo context
+        constraints = repo_context.get("constraints", {})
+        component_structure = constraints.get("component_structure", [
+            "ComponentName.tsx",
+            "types.ts",
+            "__tests__/ComponentName.spec.tsx",
+            "__stories__/ComponentName.stories.tsx",
+            "__mocks__/index.ts"
+        ])
+        
+        # Generate file paths based on structure
+        component_folder = component_name.lower()
+        files = []
+        
+        for template in component_structure:
+            # Replace ComponentName placeholder with actual name
+            file_path = template.replace("ComponentName", component_name)
+            files.append(f"{base_path}/{component_folder}/{file_path}")
+        
+        # Always add index.ts for exports
+        index_path = f"{base_path}/{component_folder}/index.ts"
+        if index_path not in files:
+            files.append(index_path)
+        
+        return files
     
     def _backend_handler(self, context: Dict[str, Any]) -> AgentResult:
         """
@@ -290,27 +423,93 @@ class AgentDispatcher:
         Code Review Agent handler.
         
         Validates code against Pandora standards.
+        Uses repo_context from Code Singularity pattern when available
+        to provide repo-specific validation commands and constraints.
         """
-        task = context.get("task", "")
         input_data = context.get("input", {})
+        metadata = context.get("metadata", {})
         previous_output = input_data.get("previous_output", {})
+        
+        # Get repo context from Code Singularity pattern (if available)
+        repo_context = metadata.get("repo_context", {})
+        repo_name = metadata.get("repo_name")
         
         files_to_review = previous_output.get("files_to_generate", [])
         
+        # Build repo-aware suggestions based on constraints
+        suggestions = self._build_review_suggestions_from_context(repo_context)
+        
+        # Get validation commands from repo context
+        commands = repo_context.get("commands", {})
+        validation_commands = []
+        if commands.get("lint"):
+            validation_commands.append(f"Run lint: {commands['lint']}")
+        if commands.get("typecheck"):
+            validation_commands.append(f"Run typecheck: {commands['typecheck']}")
+        if commands.get("validate"):
+            validation_commands.append(f"Run full validation: {commands['validate']}")
+        
+        response_data = {
+            "files_reviewed": files_to_review,
+            "issues_found": [],
+            "suggestions": suggestions,
+            "validation_commands": validation_commands,
+            "passed": True,
+        }
+        
+        # Add Code Singularity metadata if repo context was used
+        if repo_context:
+            response_data["repo_context_used"] = True
+            response_data["repo_name"] = repo_name
+            response_data["quality_gates"] = repo_context.get("quality", {})
+        
         return AgentResult(
             status="success",
-            data={
-                "files_reviewed": files_to_review,
-                "issues_found": [],
-                "suggestions": [
-                    "Ensure TypeScript strict mode is enabled",
-                    "Add proper accessibility attributes",
-                    "Follow atomic design pattern",
-                ],
-                "passed": True,
-            },
+            data=response_data,
             next="qa"
         )
+    
+    def _build_review_suggestions_from_context(self, repo_context: Dict[str, Any]) -> list:
+        """
+        Build code review suggestions based on repo context constraints.
+        """
+        suggestions = []
+        constraints = repo_context.get("constraints", {})
+        
+        # TypeScript constraints
+        ts_constraints = constraints.get("typescript", {})
+        if ts_constraints.get("strict_mode"):
+            suggestions.append("Ensure TypeScript strict mode is enabled")
+        if ts_constraints.get("no_any"):
+            suggestions.append("Avoid using 'any' type - use proper typing")
+        if ts_constraints.get("use_type_over_interface"):
+            suggestions.append("Use 'type' keyword instead of 'interface' for type definitions")
+        
+        # React constraints
+        react_constraints = constraints.get("react", {})
+        if react_constraints.get("server_components_default"):
+            suggestions.append("Components should be server components by default (no 'use client' unless needed)")
+        if react_constraints.get("props_destructure_in_body"):
+            suggestions.append("Destructure props in function body, not in parameters")
+        if react_constraints.get("early_returns"):
+            suggestions.append("Use early returns for cleaner conditional logic")
+        
+        # Code style constraints
+        code_style = constraints.get("code_style", {})
+        if code_style.get("no_todo_comments"):
+            suggestions.append("Remove TODO comments before merging")
+        if code_style.get("no_unused_variables"):
+            suggestions.append("Remove unused variables and imports")
+        
+        # Add default suggestions if no constraints found
+        if not suggestions:
+            suggestions = [
+                "Ensure TypeScript strict mode is enabled",
+                "Add proper accessibility attributes",
+                "Follow atomic design pattern",
+            ]
+        
+        return suggestions
     
     def _qa_handler(self, context: Dict[str, Any]) -> AgentResult:
         """
@@ -627,6 +826,134 @@ class AgentDispatcher:
                 error=f"Sonar validation failed: {str(e)}"
             )
 
+    def _amplience_placement_handler(self, context: Dict[str, Any]) -> AgentResult:
+        """
+        Amplience Placement Agent handler.
+
+        Human-in-the-Loop agent that assists engineers and content editors
+        in placing existing Amplience modules into the correct page sections
+        based on Figma designs.
+
+        CRITICAL CONSTRAINTS:
+        - NO autonomous publishing
+        - NO visual/design decisions
+        - NO content creation from scratch
+        - Draft/suggestion mode only
+        - Human approval required before write operations
+        """
+        task = context.get("task", "")
+        input_data = context.get("input", {})
+        metadata = context.get("metadata", {})
+
+        try:
+            from agents.amplience_placement_agent import AmplicencePlacementAgent
+
+            # Determine operation mode from metadata
+            mode_str = metadata.get("mode", "read_only")
+            from agents.amplience_placement_agent import OperationMode
+            mode_map = {
+                "read_only": OperationMode.READ_ONLY,
+                "draft_only": OperationMode.DRAFT_ONLY,
+                "full": OperationMode.FULL,
+            }
+            mode = mode_map.get(mode_str, OperationMode.READ_ONLY)
+
+            agent = AmplicencePlacementAgent(mode=mode)
+
+            # Build agent context
+            agent_context = {
+                "task_description": task,
+                "input_data": {
+                    "figma_url": input_data.get("figma_url"),
+                    "figma_file_id": input_data.get("figma_file_id"),
+                    "figma_node_id": input_data.get("figma_node_id"),
+                    "approval_status": input_data.get("approval_status"),
+                    "approved_by": input_data.get("approved_by"),
+                }
+            }
+
+            result = agent.run(agent_context)
+
+            return AgentResult(
+                status=result.get("status", "success"),
+                data=result.get("data", {}),
+                next=result.get("next"),
+                error=result.get("error")
+            )
+        except ImportError:
+            return AgentResult(
+                status="error",
+                error="AmplicencePlacementAgent not available. Please ensure the agent is properly installed."
+            )
+        except Exception as e:
+            return AgentResult(
+                status="error",
+                error=f"Amplience placement failed: {str(e)}"
+            )
+
+    def _technical_debt_handler(self, context: Dict[str, Any]) -> AgentResult:
+        """
+        Technical Debt Agent handler.
+
+        Analyzes repositories for technical debt including TODO/FIXME comments,
+        deprecated code, high complexity, large files/functions, test coverage gaps,
+        dependency issues, and architecture problems.
+
+        This is a READ-ONLY agent that produces actionable reports for engineers,
+        tech leads, and leadership without modifying any code.
+        """
+        task = context.get("task", "")
+        input_data = context.get("input", {})
+        metadata = context.get("metadata", {})
+
+        try:
+            from agents.technical_debt_agent import TechnicalDebtAgent
+
+            repo_path = input_data.get("repo_path") or metadata.get("repo_path") or os.getcwd()
+            include_sonarcloud = input_data.get("include_sonarcloud", True)
+
+            agent = TechnicalDebtAgent()
+
+            task_lower = task.lower()
+            if "register" in task_lower:
+                result = agent.generate_register(repo_path, include_sonarcloud=include_sonarcloud)
+                return AgentResult(
+                    status="success",
+                    data={
+                        "register": result,
+                        "format": "markdown",
+                    }
+                )
+            elif "summary" in task_lower or "leadership" in task_lower or "executive" in task_lower:
+                result = agent.generate_summary(repo_path, include_sonarcloud=include_sonarcloud)
+                return AgentResult(
+                    status="success",
+                    data={
+                        "summary": result,
+                        "format": "markdown",
+                    }
+                )
+            else:
+                report = agent.analyze(repo_path, include_sonarcloud=include_sonarcloud)
+                return AgentResult(
+                    status=report.status,
+                    data={
+                        "report": report.to_dict(),
+                        "markdown": report.to_markdown(),
+                    },
+                    error=report.error
+                )
+        except ImportError:
+            return AgentResult(
+                status="error",
+                error="TechnicalDebtAgent not available. Please ensure the agent is properly installed."
+            )
+        except Exception as e:
+            return AgentResult(
+                status="error",
+                error=f"Technical debt analysis failed: {str(e)}"
+            )
+
     def _test_case_writing_handler(self, context: Dict[str, Any]) -> AgentResult:
         """
         Test Case Writing Agent handler.
@@ -641,6 +968,68 @@ class AgentDispatcher:
             from agents.test_case_writing_agent import TestCaseWritingAgent
 
             agent = TestCaseWritingAgent()
+
+            # Build context for the agent
+            agent_context = {
+                "task_description": task,
+                "input_data": {
+                    "requirements": input_data.get("requirements", task),
+                    "feature_name": input_data.get("feature_name", "Feature"),
+                    "acceptance_criteria": input_data.get("acceptance_criteria", []),
+                    "include_security": input_data.get("include_security", False),
+                    "include_accessibility": input_data.get("include_accessibility", False),
+                }
+            }
+
+            result = agent.run(agent_context)
+
+            return AgentResult(
+                status=result.get("status", "success"),
+                data=result.get("data", {}),
+                next=result.get("next", "qa"),
+                error=result.get("error")
+            )
+        except ImportError:
+            # Fallback if agent not available
+            return AgentResult(
+                status="success",
+                data={
+                    "test_suites": [{
+                        "name": "Generated Test Suite",
+                        "testCases": [
+                            {"id": "TC-0001", "title": "Basic functionality test", "type": "functional"},
+                            {"id": "TC-0002", "title": "Error handling test", "type": "negative"},
+                            {"id": "TC-0003", "title": "Edge case test", "type": "edge_case"},
+                        ],
+                    }],
+                    "recommendations": [
+                        "Review generated test cases for completeness",
+                        "Add specific test data for each scenario",
+                        "Prioritize critical path test cases",
+                    ],
+                },
+                next="qa"
+            )
+        except Exception as e:
+            return AgentResult(
+                status="error",
+                error=f"Test case writing failed: {str(e)}"
+            )
+
+    def _test_analysis_design_handler(self, context: Dict[str, Any]) -> AgentResult:
+        """
+        Test Analysis Design Agent (qAIn) handler.
+
+        Generates comprehensive test cases from requirements, user stories,
+        or acceptance criteria using the qAIn workflow.
+        """
+        task = context.get("task", "")
+        input_data = context.get("input", {})
+
+        try:
+            from agents.test_analysis_design import TestAnalysisDesignAgent
+
+            agent = TestAnalysisDesignAgent()
 
             # Build context for the agent
             agent_context = {

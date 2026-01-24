@@ -1,0 +1,88 @@
+name: snyk-predictor
+displayName: Snyk Predictor Agent
+version: 1.0.0
+description: >
+  Proactively detect and predict Snyk vulnerabilities before CI/CD pipelines are blocked.
+  Analyzes dependencies, calculates risk scores using heuristics, and sends Microsoft Teams notifications.
+
+category: Security / DevSecOps
+
+author: PND Agents Team
+license: MIT
+
+permissions:
+  level: read_only
+  tools:
+    - filesystem_read
+    - http_client
+    - command_runner
+
+execution:
+  environment: both
+  runtime: node
+  entrypoint: index.ts
+
+inputs:
+  repo:
+    type: string
+    required: true
+    description: Repository name for reporting
+  repoPath:
+    type: string
+    required: true
+    description: Path to the repository to scan
+  packageManager:
+    type: enum
+    values: [npm, pnpm, yarn]
+    default: npm
+    description: Package manager used by the repository
+  notify:
+    type: enum
+    values: [teams, none]
+    default: none
+    description: Notification channel
+  severity:
+    type: array
+    items: enum
+    values: [low, medium, high, critical]
+    default: [high, critical]
+    description: Minimum severity levels to report
+
+outputs:
+  format: structured_data
+  schema:
+    scanDate: string
+    repoName: string
+    riskSummary:
+      totalDependencies: number
+      highRiskCount: number
+      mediumRiskCount: number
+      lowRiskCount: number
+      overallRiskLevel: string
+      pipelineBlockProbability: number
+    highRiskDependencies: array
+    suggestedFixes: array
+
+environment:
+  required:
+    - SNYK_TOKEN
+  optional:
+    - TEAMS_WEBHOOK_URL
+
+scheduling:
+  cron: "0 6 * * *"
+  description: Runs daily at 6 AM UTC
+
+integrations:
+  - name: Snyk
+    type: security_scanner
+    required: true
+  - name: Microsoft Teams
+    type: notification
+    required: false
+
+constraints:
+  - Does NOT block pipelines
+  - Does NOT auto-merge dependency updates
+  - Uses heuristics only (no ML models)
+  - Read-only analysis
