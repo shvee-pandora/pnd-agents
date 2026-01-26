@@ -258,6 +258,140 @@ class AutomationContext:
         }
 
 
+@dataclass
+class ContextMdStructure:
+    """
+    Structure extracted from pandora_cypress/.claude/context.md.
+
+    CRITICAL: This structure MUST be fetched and validated BEFORE generating ANY files.
+    All generated files MUST comply with these folder structures and naming conventions.
+    """
+    # Flag indicating if context was successfully fetched
+    is_fetched: bool = False
+    fetch_error: str = ""
+
+    # Folder Structure (MUST follow these paths)
+    feature_files_path: str = ""  # e.g., "cypress/e2e/features"
+    step_definitions_path: str = ""  # e.g., "cypress/support/step_definitions"
+    common_steps_path: str = ""  # e.g., "cypress/support/step_definitions/common"
+    page_objects_path: str = ""  # e.g., "cypress/support/page-objects"
+    components_path: str = ""  # e.g., "cypress/support/components"
+    fixtures_path: str = ""  # e.g., "cypress/fixtures"
+
+    # Naming Conventions (MUST follow these patterns)
+    feature_file_pattern: str = ""  # e.g., "{JIRA-KEY}-{feature-name}.feature"
+    step_definition_pattern: str = ""  # e.g., "{feature}Steps.ts"
+    page_object_pattern: str = ""  # e.g., "{Page}Page.ts"
+    fixture_pattern: str = ""  # e.g., "{feature}/{testData}.json"
+
+    # Tag Standards (ONLY use approved tags)
+    approved_tags: List[str] = field(default_factory=list)
+    tag_naming_convention: str = ""  # e.g., "@{JIRA-KEY} @{feature} @{type}"
+
+    # Test Level Tags
+    test_level_tags: Dict[str, str] = field(default_factory=dict)  # e.g., {"smoke": "@smoke", "regression": "@regression"}
+
+    # Coding Conventions
+    coding_conventions: Dict[str, str] = field(default_factory=dict)
+
+    # Custom Commands Available
+    custom_commands: List[str] = field(default_factory=list)
+
+    # Raw context.md content for reference
+    raw_content: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "is_fetched": self.is_fetched,
+            "fetch_error": self.fetch_error,
+            "folder_structure": {
+                "feature_files_path": self.feature_files_path,
+                "step_definitions_path": self.step_definitions_path,
+                "common_steps_path": self.common_steps_path,
+                "page_objects_path": self.page_objects_path,
+                "components_path": self.components_path,
+                "fixtures_path": self.fixtures_path,
+            },
+            "naming_conventions": {
+                "feature_file_pattern": self.feature_file_pattern,
+                "step_definition_pattern": self.step_definition_pattern,
+                "page_object_pattern": self.page_object_pattern,
+                "fixture_pattern": self.fixture_pattern,
+            },
+            "tags": {
+                "approved_tags": self.approved_tags,
+                "tag_naming_convention": self.tag_naming_convention,
+                "test_level_tags": self.test_level_tags,
+            },
+            "coding_conventions": self.coding_conventions,
+            "custom_commands": self.custom_commands,
+        }
+
+    def validate_path(self, file_type: str, proposed_path: str) -> Tuple[bool, str]:
+        """
+        Validate that a proposed file path complies with context.md structure.
+
+        Args:
+            file_type: Type of file ('feature', 'step_definition', 'page_object', 'fixture')
+            proposed_path: The proposed file path
+
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        if not self.is_fetched:
+            return False, "Context.md not fetched. Cannot validate paths."
+
+        expected_paths = {
+            "feature": self.feature_files_path,
+            "step_definition": self.step_definitions_path,
+            "page_object": self.page_objects_path,
+            "fixture": self.fixtures_path,
+            "component": self.components_path,
+            "common_step": self.common_steps_path,
+        }
+
+        expected_path = expected_paths.get(file_type, "")
+        if not expected_path:
+            return False, f"Unknown file type: {file_type}"
+
+        if not proposed_path.startswith(expected_path):
+            return False, (
+                f"Path mismatch for {file_type}. "
+                f"Expected path to start with '{expected_path}', got '{proposed_path}'. "
+                f"Files MUST be created within the pandora_cypress folder structure."
+            )
+
+        return True, ""
+
+    def validate_tag(self, tag: str) -> Tuple[bool, str]:
+        """
+        Validate that a tag is in the approved list.
+
+        Args:
+            tag: The tag to validate (e.g., "@smoke")
+
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        if not self.is_fetched:
+            return False, "Context.md not fetched. Cannot validate tags."
+
+        if not self.approved_tags:
+            # If no approved tags defined, allow all
+            return True, ""
+
+        # Normalize tag (add @ if missing)
+        normalized_tag = tag if tag.startswith("@") else f"@{tag}"
+
+        if normalized_tag not in self.approved_tags:
+            return False, (
+                f"Tag '{normalized_tag}' is not in the approved tags list. "
+                f"Approved tags: {', '.join(self.approved_tags)}"
+            )
+
+        return True, ""
+
+
 # ============================================================================
 # ENUMERATIONS
 # ============================================================================
@@ -1175,6 +1309,9 @@ class TestAutoAgentFunc:
         self.automation_context = AutomationContext()
         self.reuse_stats = ReuseStatistics()
 
+        # CRITICAL: Context.md structure - MUST be fetched before generating ANY files
+        self.context_md_structure = ContextMdStructure()
+
     # =========================================================================
     # JIRA INTEGRATION METHODS
     # =========================================================================
@@ -1475,6 +1612,341 @@ class TestAutoAgentFunc:
     def get_reuse_statistics(self) -> ReuseStatistics:
         """Get current reuse statistics."""
         return self.reuse_stats
+
+    # =========================================================================
+    # CONTEXT.MD STRUCTURE METHODS (MANDATORY - MUST BE CALLED FIRST)
+    # =========================================================================
+
+    def fetch_context_md_structure(self) -> ContextMdStructure:
+        """
+        MANDATORY: Fetch and parse the context.md file from pandora_cypress repository.
+
+        This method MUST be called before generating ANY files. It extracts:
+        - Folder structure (where to create files)
+        - Naming conventions (how to name files)
+        - Tag standards (which tags are approved)
+        - Coding conventions
+
+        Returns:
+            ContextMdStructure with extracted information
+
+        Raises:
+            RuntimeError if context cannot be fetched (workflow should STOP)
+        """
+        try:
+            # Try to fetch from Azure DevOps API
+            context_content = self._fetch_context_md_from_repo()
+
+            if context_content:
+                self.context_md_structure = self._parse_context_md(context_content)
+                self.context_md_structure.is_fetched = True
+                self.context_md_structure.raw_content = context_content
+                logger.info("Successfully fetched and parsed context.md from pandora_cypress")
+            else:
+                # Use default structure from PANDORA_CYPRESS_REPO constant
+                self.context_md_structure = self._get_default_context_structure()
+                self.context_md_structure.fetch_error = (
+                    "Could not fetch context.md from repository. Using default structure."
+                )
+                logger.warning("Using default context structure - context.md not available")
+
+        except Exception as e:
+            self.context_md_structure.is_fetched = False
+            self.context_md_structure.fetch_error = str(e)
+            logger.error(f"Failed to fetch context.md: {e}")
+            raise RuntimeError(
+                f"CRITICAL: Cannot proceed without context.md. Error: {e}. "
+                "Please provide access to pandora_cypress repository or supply context.md content directly."
+            )
+
+        return self.context_md_structure
+
+    def _fetch_context_md_from_repo(self) -> Optional[str]:
+        """
+        Fetch context.md content from Azure DevOps repository.
+
+        Returns:
+            Content of context.md or None if not available
+        """
+        import os
+        import requests
+
+        azure_pat = os.environ.get("AZURE_DEVOPS_PAT", "")
+        if not azure_pat:
+            logger.warning("AZURE_DEVOPS_PAT not configured - cannot fetch context.md")
+            return None
+
+        # Azure DevOps API to get file content
+        api_url = (
+            f"{PANDORA_CYPRESS_REPO['api_base']}/items"
+            f"?path={PANDORA_CYPRESS_REPO['context_path']}"
+            f"&api-version=7.0"
+        )
+
+        try:
+            response = requests.get(
+                api_url,
+                auth=("", azure_pat),
+                headers={"Accept": "text/plain"},
+                timeout=30
+            )
+
+            if response.status_code == 200:
+                return response.text
+            else:
+                logger.warning(f"Failed to fetch context.md: HTTP {response.status_code}")
+                return None
+
+        except requests.RequestException as e:
+            logger.error(f"Request error fetching context.md: {e}")
+            return None
+
+    def _parse_context_md(self, content: str) -> ContextMdStructure:
+        """
+        Parse context.md content to extract structure information.
+
+        Args:
+            content: Raw content of context.md file
+
+        Returns:
+            ContextMdStructure with parsed information
+        """
+        structure = ContextMdStructure()
+
+        # Extract folder structure paths
+        folder_patterns = {
+            "feature_files_path": r"(?:feature\s*files?|features?)\s*(?:path)?[:=]\s*[`\"']?([^\n`\"']+)",
+            "step_definitions_path": r"(?:step\s*definitions?)\s*(?:path)?[:=]\s*[`\"']?([^\n`\"']+)",
+            "common_steps_path": r"(?:common\s*steps?)\s*(?:path)?[:=]\s*[`\"']?([^\n`\"']+)",
+            "page_objects_path": r"(?:page\s*objects?)\s*(?:path)?[:=]\s*[`\"']?([^\n`\"']+)",
+            "components_path": r"(?:components?)\s*(?:path)?[:=]\s*[`\"']?([^\n`\"']+)",
+            "fixtures_path": r"(?:fixtures?)\s*(?:path)?[:=]\s*[`\"']?([^\n`\"']+)",
+        }
+
+        for field, pattern in folder_patterns.items():
+            match = re.search(pattern, content, re.IGNORECASE)
+            if match:
+                setattr(structure, field, match.group(1).strip())
+
+        # If paths not found in content, use defaults from PANDORA_CYPRESS_REPO
+        if not structure.feature_files_path:
+            structure.feature_files_path = PANDORA_CYPRESS_REPO.get("features_path", "cypress/e2e/features").lstrip("/")
+        if not structure.step_definitions_path:
+            structure.step_definitions_path = PANDORA_CYPRESS_REPO.get("step_definitions_path", "cypress/support/step_definitions").lstrip("/")
+        if not structure.common_steps_path:
+            structure.common_steps_path = PANDORA_CYPRESS_REPO.get("common_steps_path", "cypress/support/step_definitions/common").lstrip("/")
+        if not structure.page_objects_path:
+            structure.page_objects_path = PANDORA_CYPRESS_REPO.get("page_objects_path", "cypress/support/page-objects").lstrip("/")
+        if not structure.components_path:
+            structure.components_path = PANDORA_CYPRESS_REPO.get("components_path", "cypress/support/components").lstrip("/")
+        if not structure.fixtures_path:
+            structure.fixtures_path = PANDORA_CYPRESS_REPO.get("fixtures_path", "cypress/fixtures").lstrip("/")
+
+        # Extract naming conventions
+        naming_patterns = {
+            "feature_file_pattern": r"feature\s*file\s*(?:naming|pattern)[:=]\s*[`\"']?([^\n`\"']+)",
+            "step_definition_pattern": r"step\s*definition\s*(?:naming|pattern)[:=]\s*[`\"']?([^\n`\"']+)",
+            "page_object_pattern": r"page\s*object\s*(?:naming|pattern)[:=]\s*[`\"']?([^\n`\"']+)",
+            "fixture_pattern": r"fixture\s*(?:naming|pattern)[:=]\s*[`\"']?([^\n`\"']+)",
+        }
+
+        for field, pattern in naming_patterns.items():
+            match = re.search(pattern, content, re.IGNORECASE)
+            if match:
+                setattr(structure, field, match.group(1).strip())
+
+        # Set default naming patterns if not found
+        if not structure.feature_file_pattern:
+            structure.feature_file_pattern = "{JIRA-KEY}-{feature-name}.feature"
+        if not structure.step_definition_pattern:
+            structure.step_definition_pattern = "{feature}Steps.ts"
+        if not structure.page_object_pattern:
+            structure.page_object_pattern = "{Page}Page.ts"
+        if not structure.fixture_pattern:
+            structure.fixture_pattern = "{feature}/{testData}.json"
+
+        # Extract approved tags
+        tags_match = re.search(r"(?:approved\s*tags?|tags?\s*allowed)[:=]?\s*\[?([^\]\n]+)", content, re.IGNORECASE)
+        if tags_match:
+            tags_str = tags_match.group(1)
+            structure.approved_tags = [t.strip() for t in re.split(r"[,\s]+", tags_str) if t.strip()]
+
+        # Extract tag naming convention
+        tag_convention_match = re.search(r"tag\s*(?:naming\s*)?convention[:=]\s*[`\"']?([^\n`\"']+)", content, re.IGNORECASE)
+        if tag_convention_match:
+            structure.tag_naming_convention = tag_convention_match.group(1).strip()
+        else:
+            structure.tag_naming_convention = "@{JIRA-KEY} @{feature} @{type}"
+
+        # Extract test level tags
+        test_level_matches = re.findall(r"@(smoke|regression|e2e|sit|ft-ui|ft-api)", content, re.IGNORECASE)
+        if test_level_matches:
+            structure.test_level_tags = {t.lower(): f"@{t.lower()}" for t in set(test_level_matches)}
+        else:
+            structure.test_level_tags = {
+                "smoke": "@smoke",
+                "regression": "@regression",
+                "e2e": "@E2E",
+                "sit": "@SIT",
+                "ft-ui": "@FT-UI",
+                "ft-api": "@FT-API",
+            }
+
+        # Extract custom commands
+        commands_match = re.findall(r"cy\.(\w+)\s*\(", content)
+        if commands_match:
+            structure.custom_commands = list(set(commands_match))
+
+        return structure
+
+    def _get_default_context_structure(self) -> ContextMdStructure:
+        """
+        Get default context structure from PANDORA_CYPRESS_REPO constant.
+
+        Returns:
+            ContextMdStructure with default values
+        """
+        return ContextMdStructure(
+            is_fetched=True,  # Mark as fetched since we have defaults
+            feature_files_path=PANDORA_CYPRESS_REPO.get("features_path", "cypress/e2e/features").lstrip("/"),
+            step_definitions_path=PANDORA_CYPRESS_REPO.get("step_definitions_path", "cypress/support/step_definitions").lstrip("/"),
+            common_steps_path=PANDORA_CYPRESS_REPO.get("common_steps_path", "cypress/support/step_definitions/common").lstrip("/"),
+            page_objects_path=PANDORA_CYPRESS_REPO.get("page_objects_path", "cypress/support/page-objects").lstrip("/"),
+            components_path=PANDORA_CYPRESS_REPO.get("components_path", "cypress/support/components").lstrip("/"),
+            fixtures_path=PANDORA_CYPRESS_REPO.get("fixtures_path", "cypress/fixtures").lstrip("/"),
+            feature_file_pattern="{JIRA-KEY}-{feature-name}.feature",
+            step_definition_pattern="{feature}Steps.ts",
+            page_object_pattern="{Page}Page.ts",
+            fixture_pattern="{feature}/{testData}.json",
+            tag_naming_convention="@{JIRA-KEY} @{feature} @{type}",
+            test_level_tags={
+                "smoke": "@smoke",
+                "regression": "@regression",
+                "e2e": "@E2E",
+                "sit": "@SIT",
+                "ft-ui": "@FT-UI",
+                "ft-api": "@FT-API",
+            },
+        )
+
+    def validate_output_path(self, file_type: str, proposed_path: str) -> Tuple[bool, str]:
+        """
+        MANDATORY: Validate that a proposed file path complies with context.md structure.
+
+        This method MUST be called before creating ANY file to ensure compliance
+        with pandora_cypress folder structure.
+
+        Args:
+            file_type: Type of file ('feature', 'step_definition', 'page_object', 'fixture', 'component')
+            proposed_path: The proposed file path
+
+        Returns:
+            Tuple of (is_valid, error_message)
+
+        Raises:
+            RuntimeError if context.md was not fetched
+        """
+        if not self.context_md_structure.is_fetched:
+            raise RuntimeError(
+                "CRITICAL: context.md structure not fetched. "
+                "Call fetch_context_md_structure() before validating paths."
+            )
+
+        return self.context_md_structure.validate_path(file_type, proposed_path)
+
+    def validate_tags(self, tags: List[str]) -> Tuple[bool, List[str]]:
+        """
+        Validate that all tags are in the approved list.
+
+        Args:
+            tags: List of tags to validate
+
+        Returns:
+            Tuple of (all_valid, list_of_invalid_tags)
+        """
+        if not self.context_md_structure.is_fetched:
+            raise RuntimeError(
+                "CRITICAL: context.md structure not fetched. "
+                "Call fetch_context_md_structure() before validating tags."
+            )
+
+        invalid_tags = []
+        for tag in tags:
+            is_valid, _ = self.context_md_structure.validate_tag(tag)
+            if not is_valid:
+                invalid_tags.append(tag)
+
+        return len(invalid_tags) == 0, invalid_tags
+
+    def get_correct_output_path(self, file_type: str, file_name: str) -> str:
+        """
+        Get the correct output path for a file based on context.md structure.
+
+        Args:
+            file_type: Type of file ('feature', 'step_definition', 'page_object', 'fixture', 'component')
+            file_name: The name of the file to create
+
+        Returns:
+            Full path that complies with context.md structure
+        """
+        if not self.context_md_structure.is_fetched:
+            # Use defaults if context not fetched
+            self._get_default_context_structure()
+
+        path_mapping = {
+            "feature": self.context_md_structure.feature_files_path,
+            "step_definition": self.context_md_structure.step_definitions_path,
+            "page_object": self.context_md_structure.page_objects_path,
+            "fixture": self.context_md_structure.fixtures_path,
+            "component": self.context_md_structure.components_path,
+            "common_step": self.context_md_structure.common_steps_path,
+        }
+
+        base_path = path_mapping.get(file_type, "")
+        if not base_path:
+            logger.warning(f"Unknown file type: {file_type}. Using root path.")
+            return file_name
+
+        return f"{base_path}/{file_name}"
+
+    def generate_compliant_file_name(
+        self,
+        file_type: str,
+        jira_key: str = "",
+        feature_name: str = "",
+        page_name: str = "",
+        test_data_name: str = ""
+    ) -> str:
+        """
+        Generate a file name that complies with context.md naming conventions.
+
+        Args:
+            file_type: Type of file ('feature', 'step_definition', 'page_object', 'fixture')
+            jira_key: JIRA ticket key (e.g., FIND-4223)
+            feature_name: Feature name (e.g., search, cart, checkout)
+            page_name: Page name for page objects (e.g., Home, Product, Cart)
+            test_data_name: Test data file name
+
+        Returns:
+            File name that complies with naming conventions
+        """
+        if file_type == "feature":
+            pattern = self.context_md_structure.feature_file_pattern or "{JIRA-KEY}-{feature-name}.feature"
+            return pattern.replace("{JIRA-KEY}", jira_key).replace("{feature-name}", feature_name)
+
+        elif file_type == "step_definition":
+            pattern = self.context_md_structure.step_definition_pattern or "{feature}Steps.ts"
+            return pattern.replace("{feature}", feature_name)
+
+        elif file_type == "page_object":
+            pattern = self.context_md_structure.page_object_pattern or "{Page}Page.ts"
+            return pattern.replace("{Page}", page_name)
+
+        elif file_type == "fixture":
+            pattern = self.context_md_structure.fixture_pattern or "{feature}/{testData}.json"
+            return pattern.replace("{feature}", feature_name).replace("{testData}", test_data_name)
+
+        return ""
 
     def generate_summary_report(self) -> str:
         """
@@ -2928,6 +3400,39 @@ REUSE PRIORITY ORDER:
             )
 
             # =========================================================
+            # STEP 0: MANDATORY - Fetch context.md Structure (BLOCKING)
+            # =========================================================
+            # This step MUST succeed before generating ANY files.
+            # All files MUST be created within pandora_cypress folder structure.
+
+            logger.info("MANDATORY STEP: Fetching context.md structure from pandora_cypress")
+            try:
+                self.fetch_context_md_structure()
+                logger.info("Successfully fetched context.md structure")
+                result.recommendations.append(
+                    "CONTEXT.MD: Successfully fetched folder structure and naming conventions"
+                )
+                result.recommendations.append(
+                    f"Feature files path: {self.context_md_structure.feature_files_path}"
+                )
+                result.recommendations.append(
+                    f"Step definitions path: {self.context_md_structure.step_definitions_path}"
+                )
+            except RuntimeError as e:
+                # Context fetch failed - workflow MUST stop
+                logger.error(f"CRITICAL: Cannot proceed without context.md: {e}")
+                return {
+                    "status": "error",
+                    "data": None,
+                    "error": str(e),
+                    "message": (
+                        "WORKFLOW STOPPED: Cannot generate automation without pandora_cypress context.md. "
+                        "Please provide access to the repository or supply context.md content directly."
+                    ),
+                    "next": None,
+                }
+
+            # =========================================================
             # STEP 1: Gather JIRA Context (Enhanced Workflow)
             # =========================================================
 
@@ -3082,6 +3587,17 @@ REUSE PRIORITY ORDER:
             # Generate summary report
             summary_report = self.generate_summary_report()
 
+            # Add context.md structure compliance info to result
+            result.recommendations.append(
+                f"COMPLIANCE: All files generated within pandora_cypress structure"
+            )
+            result.recommendations.append(
+                f"Feature files: {self.context_md_structure.feature_files_path}"
+            )
+            result.recommendations.append(
+                f"Step definitions: {self.context_md_structure.step_definitions_path}"
+            )
+
             return {
                 "status": "success",
                 "data": result.to_dict(),
@@ -3089,6 +3605,13 @@ REUSE PRIORITY ORDER:
                 "reuse_statistics": self.reuse_stats.to_dict(),
                 "summary_report": summary_report,
                 "new_step_requests": [req.to_dict() for req in self.automation_context.new_step_requests],
+                "context_md_structure": self.context_md_structure.to_dict(),  # Include for reference
+                "file_paths": {
+                    "feature_files": self.context_md_structure.feature_files_path,
+                    "step_definitions": self.context_md_structure.step_definitions_path,
+                    "page_objects": self.context_md_structure.page_objects_path,
+                    "fixtures": self.context_md_structure.fixtures_path,
+                },
                 "next": "qa",
                 "error": None,
             }

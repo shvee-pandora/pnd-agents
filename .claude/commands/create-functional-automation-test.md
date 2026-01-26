@@ -91,7 +91,9 @@ Feature Area: Search & Discovery
 
 ---
 
-### STEP 2: Fetch pandora_cypress Repository Context (CRITICAL)
+### STEP 2: Fetch pandora_cypress Repository Context (MANDATORY - BLOCKING)
+
+**CRITICAL: This step is MANDATORY. Do NOT proceed without successfully fetching context.md**
 
 **Before generating ANY code, fetch context from:**
 
@@ -100,14 +102,41 @@ Repository: https://pandora-jewelry.visualstudio.com/Pandora%20DDRT%20QA/_git/pa
 Context Path: /.claude/context.md
 ```
 
-This context contains:
-- Project structure and file organization
-- Coding conventions and naming standards
-- Page Object Model (POM) patterns
-- Custom Cypress commands available
-- Fixture patterns and test data organization
+This context contains (MUST extract and enforce):
+- **Folder Structure**: Exact paths for feature files, step definitions, fixtures
+- **File Naming Conventions**: Required naming patterns for all generated files
+- **Tag Standards**: Allowed tags and tag naming conventions
+- **Coding Conventions**: Code style and naming standards
+- **Page Object Model (POM) patterns**: Required POM structure
+- **Custom Cypress commands**: Available commands to reuse
+- **Fixture patterns**: Test data organization rules
 
-**If context cannot be fetched:** WARN the user that generated tests may need adjustment.
+#### 2.1 Extract and Store Structure Rules
+
+From context.md, extract and store:
+
+```
+FOLDER_STRUCTURE:
+- Feature files: {exact_path_from_context}
+- Step definitions: {exact_path_from_context}
+- Page objects: {exact_path_from_context}
+- Fixtures: {exact_path_from_context}
+- Components: {exact_path_from_context}
+
+NAMING_CONVENTIONS:
+- Feature files: {pattern_from_context}
+- Step definitions: {pattern_from_context}
+- Tags: {allowed_tags_from_context}
+
+VALIDATION_RULES:
+- All generated files MUST be within pandora_cypress repository
+- File paths MUST match context.md specifications
+- Tags MUST use approved naming conventions
+```
+
+**If context cannot be fetched:**
+> **STOP WORKFLOW** - Do NOT generate any files.
+> Ask user: "I cannot fetch the pandora_cypress context.md file. Please provide access to the repository or the context.md content directly."
 
 ---
 
@@ -142,7 +171,27 @@ Using information gathered from Step 1:
 
 ---
 
-### STEP 5: Generate Cypress Automation Feature File
+### STEP 5: Generate Cypress Automation Feature File (STRICT STRUCTURE COMPLIANCE)
+
+**CRITICAL: All files MUST follow the folder structure and naming conventions from context.md**
+
+#### 5.0 Validate Output Paths Before Generation
+
+Before generating ANY file:
+1. Verify target path matches context.md folder structure
+2. Verify file name matches context.md naming conventions
+3. Verify tags match context.md approved tag list
+
+```
+VALIDATION CHECK:
+- Feature file path: {path_from_context}/[JIRA-KEY]-[feature-name].feature
+- Step definition path: {path_from_context}/[feature]Steps.ts
+- Fixture path: {path_from_context}/[feature]/[testData].json
+
+If path does NOT match context.md structure:
+  → STOP and WARN user about path mismatch
+  → DO NOT create files outside approved structure
+```
 
 Generate feature file using EXISTING steps wherever possible:
 
@@ -244,15 +293,20 @@ Next Steps:
 
 ## IMPORTANT RULES
 
-1. **ALWAYS fetch JIRA context first** - Get full picture before generating
-2. **Check repository access** - Verify access to development branches/PRs
-3. **Review code changes** - Understand what's being tested
-4. **REUSE before CREATE** - Search existing steps, page objects, fixtures FIRST
-5. **Ask before creating new steps** - Get user confirmation for new step definitions
-6. **Follow existing patterns** - Match coding conventions from context.md
-7. **Never ask user to run bash commands** - Handle all operations internally
-8. **Use data-testid selectors** - Never use CSS classes or tag names
-9. **Link to JIRA** - Include ticket ID in feature tags
+1. **MANDATORY: Fetch context.md FIRST** - This is BLOCKING. Do NOT proceed without it
+2. **STRICT FOLDER STRUCTURE** - ALL files MUST be created in paths defined by context.md
+3. **NO FILES OUTSIDE pandora_cypress** - Never create feature files elsewhere
+4. **ALWAYS fetch JIRA context first** - Get full picture before generating
+5. **Check repository access** - Verify access to development branches/PRs
+6. **Review code changes** - Understand what's being tested
+7. **REUSE before CREATE** - Search existing steps, page objects, fixtures FIRST
+8. **Ask before creating new steps** - Get user confirmation for new step definitions
+9. **Follow existing patterns** - Match coding conventions from context.md
+10. **Never ask user to run bash commands** - Handle all operations internally
+11. **Use data-testid selectors** - Never use CSS classes or tag names
+12. **Link to JIRA** - Include ticket ID in feature tags
+13. **Validate paths before write** - Check all paths against context.md before creating files
+14. **Use approved tags only** - Only use tags defined in context.md
 
 ---
 
