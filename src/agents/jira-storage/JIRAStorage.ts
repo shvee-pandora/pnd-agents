@@ -62,8 +62,17 @@ export class JIRAStorage implements IssueTracker {
     retryCount = 0
   ): Promise<T> {
     const url = `${this.baseApiUrl}${endpoint}`;
+    const method = options.method || 'GET';
+    const startTime = Date.now();
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.config.timeoutMs);
+
+    if (this.config.debug) {
+      console.log(`[JIRA] ${method} ${endpoint}`);
+    }
+    if (this.config.onRequest) {
+      this.config.onRequest(method, url, options.body ? JSON.parse(options.body as string) : undefined);
+    }
 
     try {
       const response = await fetch(url, {
@@ -78,6 +87,14 @@ export class JIRAStorage implements IssueTracker {
       });
 
       clearTimeout(timeoutId);
+      const duration = Date.now() - startTime;
+
+      if (this.config.debug) {
+        console.log(`[JIRA] ${method} ${endpoint} -> ${response.status} (${duration}ms)`);
+      }
+      if (this.config.onResponse) {
+        this.config.onResponse(method, url, response.status, duration);
+      }
 
       if (response.status === 429) {
         const rateLimitInfo = this.parseRateLimitHeaders(response);
@@ -181,6 +198,9 @@ export class JIRAStorage implements IssueTracker {
   }
 
   private encodeBase64(str: string): string {
+    if (typeof Buffer !== 'undefined') {
+      return Buffer.from(str, 'utf-8').toString('base64');
+    }
     return btoa(unescape(encodeURIComponent(str)));
   }
 
@@ -470,6 +490,48 @@ export class JIRAStorage implements IssueTracker {
     }));
   }
 
+  async getIssues(
+    keys: string[],
+    mode: FetchMode = 'summary'
+  ): Promise<Map<string, JiraIssueSummary | JiraIssueDetails | JiraIssueFull | null>> {
+    const results = new Map<string, JiraIssueSummary | JiraIssueDetails | JiraIssueFull | null>();
+    
+    if (keys.length === 0) {
+      return results;
+    }
+
+    const batchSize = 50;
+    for (let i = 0; i < keys.length; i += batchSize) {
+      const batch = keys.slice(i, i + batchSize);
+      const jql = `key in (${batch.map(k => `"${k}"`).join(',')})`;
+      
+      const fields = getFieldsForMode(mode);
+      const expand = mode === 'full' ? ['transitions'] : [];
+      
+      const response = await this.request<JiraSearchResponse>('/search', {
+        method: 'POST',
+        body: JSON.stringify({
+          jql,
+          maxResults: batch.length,
+          fields: [...fields],
+          expand,
+        }),
+      });
+
+      for (const issue of response.issues) {
+        results.set(issue.key, this.mapIssueResponse(issue, mode));
+      }
+
+      for (const key of batch) {
+        if (!results.has(key)) {
+          results.set(key, null);
+        }
+      }
+    }
+
+    return results;
+  }
+
   textToADF(text: string): ADFDocument {
     const paragraphs = text.split(/\n\n+/);
     const content: ADFNode[] = [];
@@ -477,14 +539,41 @@ export class JIRAStorage implements IssueTracker {
     for (const para of paragraphs) {
       const lines = para.split('\n');
 
-      if (lines.every(line => line.trim().startsWith('- ') || line.trim().startsWith('* '))) {
+      const headingMatch = lines[0]?.match(/^(#{1,6})\s+(.+)$/);
+      if (headingMatch && lines.length === 1) {
+        const level = headingMatch[1].length;
+        content.push({
+          type: 'heading',
+          attrs: { level },
+          content: this.parseInlineFormatting(headingMatch[2]),
+        });
+        continue;
+      }
+
+      if (lines[0]?.startsWith('```')) {
+        const language = lines[0].slice(3).trim() || undefined;
+        const codeLines = [];
+        let i = 1;
+        while (i < lines.length && !lines[i].startsWith('```')) {
+          codeLines.push(lines[i]);
+          i++;
+        }
+        content.push({
+          type: 'codeBlock',
+          attrs: language ? { language } : {},
+          content: [{ type: 'text', text: codeLines.join('\n') }],
+        });
+        continue;
+      }
+
+      if (lines.every(line => line.trim().startsWith('- ') || line.trim().startsWith('* ') || !line.trim())) {
         const listItems: ADFNode[] = lines
           .filter(line => line.trim())
           .map(line => ({
             type: 'listItem',
             content: [{
               type: 'paragraph',
-              content: [{ type: 'text', text: line.trim().slice(2) }],
+              content: this.parseInlineFormatting(line.trim().slice(2)),
             }],
           }));
 
@@ -501,7 +590,7 @@ export class JIRAStorage implements IssueTracker {
             type: 'listItem',
             content: [{
               type: 'paragraph',
-              content: [{ type: 'text', text: line.trim().replace(/^\d+\.\s/, '') }],
+              content: this.parseInlineFormatting(line.trim().replace(/^\d+\.\s/, '')),
             }],
           }));
 
@@ -509,6 +598,20 @@ export class JIRAStorage implements IssueTracker {
           content.push({
             type: 'orderedList',
             content: listItems,
+          });
+        }
+      } else if (lines.every(line => line.startsWith('>') || !line.trim())) {
+        const quoteContent: ADFNode[] = [];
+        for (const line of lines.filter(l => l.trim())) {
+          quoteContent.push({
+            type: 'paragraph',
+            content: this.parseInlineFormatting(line.replace(/^>\s?/, '')),
+          });
+        }
+        if (quoteContent.length > 0) {
+          content.push({
+            type: 'blockquote',
+            content: quoteContent,
           });
         }
       } else {
@@ -542,6 +645,17 @@ export class JIRAStorage implements IssueTracker {
     let remaining = text;
 
     while (remaining.length > 0) {
+      const linkMatch = remaining.match(/^\[([^\]]+)\]\(([^)]+)\)/);
+      if (linkMatch) {
+        nodes.push({
+          type: 'text',
+          text: linkMatch[1],
+          marks: [{ type: 'link', attrs: { href: linkMatch[2] } }],
+        });
+        remaining = remaining.slice(linkMatch[0].length);
+        continue;
+      }
+
       const boldMatch = remaining.match(/^\*\*(.+?)\*\*/);
       if (boldMatch) {
         nodes.push({
@@ -564,6 +678,17 @@ export class JIRAStorage implements IssueTracker {
         continue;
       }
 
+      const strikeMatch = remaining.match(/^~~(.+?)~~/);
+      if (strikeMatch) {
+        nodes.push({
+          type: 'text',
+          text: strikeMatch[1],
+          marks: [{ type: 'strike' }],
+        });
+        remaining = remaining.slice(strikeMatch[0].length);
+        continue;
+      }
+
       const codeMatch = remaining.match(/^`(.+?)`/);
       if (codeMatch) {
         nodes.push({
@@ -575,7 +700,7 @@ export class JIRAStorage implements IssueTracker {
         continue;
       }
 
-      const nextSpecial = remaining.search(/\*\*|_|`/);
+      const nextSpecial = remaining.search(/\[|\*\*|_|~~|`/);
       if (nextSpecial === -1) {
         nodes.push({ type: 'text', text: remaining });
         break;

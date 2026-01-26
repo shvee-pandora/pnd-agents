@@ -18,6 +18,9 @@ export interface JiraConfig {
   maxRetries?: number;
   retryDelayMs?: number;
   timeoutMs?: number;
+  debug?: boolean;
+  onRequest?: (method: string, url: string, body?: unknown) => void;
+  onResponse?: (method: string, url: string, status: number, duration: number) => void;
 }
 
 export interface JiraUser {
