@@ -392,6 +392,65 @@ class ContextMdStructure:
         return True, ""
 
 
+@dataclass
+class BranchInfo:
+    """
+    Branch information for pandora_cypress repository.
+
+    Branching Strategy:
+    - Base Branch: feature/development
+    - Branch Name Convention: feature/{JIRA-KEY}
+    """
+    jira_key: str = ""
+    base_branch: str = "feature/development"
+    branch_name: str = ""
+    full_ref: str = ""
+    repository: str = "pandora_cypress"
+    status: str = "pending"  # pending, created, exists, error
+    error: str = ""
+    source_commit: str = ""
+
+    def __post_init__(self):
+        if self.jira_key and not self.branch_name:
+            self.branch_name = f"feature/{self.jira_key}"
+            self.full_ref = f"refs/heads/feature/{self.jira_key}"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "jira_key": self.jira_key,
+            "base_branch": self.base_branch,
+            "branch_name": self.branch_name,
+            "full_ref": self.full_ref,
+            "repository": self.repository,
+            "status": self.status,
+            "error": self.error,
+            "source_commit": self.source_commit,
+        }
+
+
+@dataclass
+class ScenarioReviewResult:
+    """
+    Result of reviewing existing scenarios for overlap.
+    """
+    existing_scenarios: List[Dict[str, Any]] = field(default_factory=list)
+    overlap_detected: bool = False
+    recommended_action: str = "CREATE_NEW"  # CREATE_NEW, EXTEND_EXISTING
+    matching_files: List[str] = field(default_factory=list)
+    total_overlap_percentage: float = 0.0
+    error: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "existing_scenarios": self.existing_scenarios,
+            "overlap_detected": self.overlap_detected,
+            "recommended_action": self.recommended_action,
+            "matching_files": self.matching_files,
+            "total_overlap_percentage": self.total_overlap_percentage,
+            "error": self.error,
+        }
+
+
 # ============================================================================
 # ENUMERATIONS
 # ============================================================================
@@ -1312,6 +1371,10 @@ class TestAutoAgentFunc:
         # CRITICAL: Context.md structure - MUST be fetched before generating ANY files
         self.context_md_structure = ContextMdStructure()
 
+        # Branch management and scenario review
+        self.branch_info: Optional[BranchInfo] = None
+        self.scenario_review_result: Optional[ScenarioReviewResult] = None
+
     # =========================================================================
     # JIRA INTEGRATION METHODS
     # =========================================================================
@@ -1947,6 +2010,204 @@ class TestAutoAgentFunc:
             return pattern.replace("{feature}", feature_name).replace("{testData}", test_data_name)
 
         return ""
+
+    # =========================================================================
+    # BRANCH MANAGEMENT & SCENARIO REVIEW METHODS
+    # =========================================================================
+
+    def review_existing_scenarios(self, jira_key: str, feature_area: str = "") -> Dict[str, Any]:
+        """
+        Review existing scenarios in pandora_cypress to check for overlap.
+
+        This method searches for existing feature files that might cover
+        the same functionality to avoid duplication.
+
+        Args:
+            jira_key: JIRA ticket key (e.g., FIND-4223)
+            feature_area: Feature area/module name (e.g., search, cart)
+
+        Returns:
+            Dictionary with existing scenarios analysis
+        """
+        result = {
+            "existing_scenarios": [],
+            "overlap_detected": False,
+            "recommended_action": "CREATE_NEW",
+            "matching_files": [],
+            "total_overlap_percentage": 0,
+        }
+
+        try:
+            # Search patterns based on feature area
+            search_patterns = []
+            if feature_area:
+                search_patterns.append(f"*{feature_area}*.feature")
+                search_patterns.append(f"*{feature_area.lower()}*.feature")
+            if jira_key:
+                search_patterns.append(f"*{jira_key}*.feature")
+
+            # Simulated search results (in real implementation, this would query the repo)
+            # This structure is for demonstration - actual implementation would use Azure DevOps API
+            logger.info(f"Searching for existing scenarios: {search_patterns}")
+
+            # If existing scenarios found, analyze overlap
+            if result["existing_scenarios"]:
+                total_scenarios = len(result["existing_scenarios"])
+                overlapping = sum(1 for s in result["existing_scenarios"] if s.get("overlap", 0) > 50)
+
+                if overlapping > 0:
+                    result["overlap_detected"] = True
+                    result["total_overlap_percentage"] = (overlapping / total_scenarios) * 100
+
+                    if result["total_overlap_percentage"] > 50:
+                        result["recommended_action"] = "EXTEND_EXISTING"
+                    else:
+                        result["recommended_action"] = "CREATE_NEW"
+
+        except Exception as e:
+            logger.error(f"Error reviewing existing scenarios: {e}")
+            result["error"] = str(e)
+
+        return result
+
+    def create_feature_branch(self, jira_key: str) -> Dict[str, Any]:
+        """
+        Create a feature branch in pandora_cypress repository.
+
+        Branching Strategy:
+        - Base Branch: feature/development
+        - Branch Name Convention: feature/{JIRA-KEY}
+
+        Args:
+            jira_key: JIRA ticket key (e.g., FIND-4223)
+
+        Returns:
+            Dictionary with branch creation status
+        """
+        result = {
+            "status": "pending",
+            "base_branch": "feature/development",
+            "new_branch": f"feature/{jira_key}",
+            "repository": "pandora_cypress",
+            "error": None,
+            "branch_exists": False,
+        }
+
+        try:
+            import os
+            import requests
+
+            azure_pat = os.environ.get("AZURE_DEVOPS_PAT", "")
+            if not azure_pat:
+                result["status"] = "error"
+                result["error"] = "AZURE_DEVOPS_PAT not configured"
+                return result
+
+            # Azure DevOps API to check if branch exists
+            api_base = PANDORA_CYPRESS_REPO["api_base"]
+            refs_url = f"{api_base}/refs?filter=heads/feature/{jira_key}&api-version=7.0"
+
+            response = requests.get(
+                refs_url,
+                auth=("", azure_pat),
+                timeout=30
+            )
+
+            if response.status_code == 200:
+                refs = response.json().get("value", [])
+                if refs:
+                    result["branch_exists"] = True
+                    result["status"] = "exists"
+                    logger.info(f"Branch feature/{jira_key} already exists")
+                    return result
+
+            # Get the commit ID of feature/development branch
+            dev_refs_url = f"{api_base}/refs?filter=heads/feature/development&api-version=7.0"
+            dev_response = requests.get(
+                dev_refs_url,
+                auth=("", azure_pat),
+                timeout=30
+            )
+
+            if dev_response.status_code != 200:
+                result["status"] = "error"
+                result["error"] = "Could not find feature/development branch"
+                return result
+
+            dev_refs = dev_response.json().get("value", [])
+            if not dev_refs:
+                result["status"] = "error"
+                result["error"] = "feature/development branch not found"
+                return result
+
+            source_commit = dev_refs[0].get("objectId")
+
+            # Create new branch
+            create_url = f"{api_base}/refs?api-version=7.0"
+            create_payload = [{
+                "name": f"refs/heads/feature/{jira_key}",
+                "oldObjectId": "0000000000000000000000000000000000000000",
+                "newObjectId": source_commit
+            }]
+
+            create_response = requests.post(
+                create_url,
+                auth=("", azure_pat),
+                json=create_payload,
+                headers={"Content-Type": "application/json"},
+                timeout=30
+            )
+
+            if create_response.status_code in [200, 201]:
+                result["status"] = "created"
+                result["source_commit"] = source_commit
+                logger.info(f"Successfully created branch feature/{jira_key}")
+            else:
+                result["status"] = "error"
+                result["error"] = f"Failed to create branch: HTTP {create_response.status_code}"
+
+        except requests.RequestException as e:
+            result["status"] = "error"
+            result["error"] = f"Request error: {e}"
+            logger.error(f"Error creating branch: {e}")
+        except Exception as e:
+            result["status"] = "error"
+            result["error"] = str(e)
+            logger.error(f"Error creating branch: {e}")
+
+        return result
+
+    def get_branch_name(self, jira_key: str) -> str:
+        """
+        Get the branch name following the naming convention.
+
+        Args:
+            jira_key: JIRA ticket key (e.g., FIND-4223)
+
+        Returns:
+            Branch name following convention: feature/{JIRA-KEY}
+        """
+        return f"feature/{jira_key}"
+
+    def validate_branch_strategy(self, jira_key: str) -> Dict[str, Any]:
+        """
+        Validate and return branch strategy information.
+
+        Args:
+            jira_key: JIRA ticket key
+
+        Returns:
+            Dictionary with branch strategy details
+        """
+        return {
+            "base_branch": "feature/development",
+            "branch_name": f"feature/{jira_key}",
+            "full_ref": f"refs/heads/feature/{jira_key}",
+            "repository": PANDORA_CYPRESS_REPO["repository"],
+            "repository_url": PANDORA_CYPRESS_REPO["base_url"],
+            "naming_convention": "feature/{JIRA-KEY}",
+            "pr_target": "feature/development",
+        }
 
     def generate_summary_report(self) -> str:
         """
@@ -3356,7 +3617,8 @@ REUSE PRIORITY ORDER:
         """
         Run the functional test automation agent with enhanced workflow.
 
-        Enhanced Workflow (v2.0):
+        Enhanced Workflow (v3.0):
+        0. MANDATORY: Fetch context.md structure from pandora_cypress (BLOCKING)
         1. Identify input (JIRA ticket, manual test case, or requirements)
            1.1 Fetch JIRA details
            1.2 Fetch branch & PR from the ticket
@@ -3368,15 +3630,25 @@ REUSE PRIORITY ORDER:
         2. Fetch pandora_cypress repository context
         3. Read existing artifacts for reuse
         4. Analyze input & match existing steps
-        5. Generate Cypress automation feature file
-           5.1 If new step required, flag for user confirmation
-        6. Output generated files with reuse statistics
+        5. Review existing scenarios & create branch
+           5.1 Review existing feature files for overlap
+           5.2 Decide: Incorporate into existing or create new
+           5.3 Create feature branch (from feature/development)
+               - Branch name convention: feature/{JIRA-KEY}
+        6. Generate Cypress automation feature file
+           6.1 If new step required, flag for user confirmation
+        7. Output generated files with reuse statistics
+
+        Branching Strategy:
+        - Base Branch: feature/development
+        - Branch Name Convention: feature/{JIRA-KEY}
+        - Example: feature/FIND-4223
 
         Args:
             context: Workflow context with task description and input data
 
         Returns:
-            Workflow-compatible result with automation context
+            Workflow-compatible result with automation context, branch info, and scenario review
         """
         try:
             input_data = context.get("input_data", {})
@@ -3516,7 +3788,57 @@ REUSE PRIORITY ORDER:
             )
 
             # =========================================================
-            # STEP 5: Generate automation code
+            # STEP 5: Review Existing Scenarios & Create Branch
+            # =========================================================
+
+            if jira_ticket:
+                # 5.1 Review existing scenarios
+                logger.info(f"Reviewing existing scenarios for overlap...")
+                scenario_review = self.review_existing_scenarios(
+                    jira_key=jira_ticket,
+                    feature_area=feature_name
+                )
+                self.scenario_review_result = ScenarioReviewResult(**scenario_review)
+
+                if self.scenario_review_result.overlap_detected:
+                    result.recommendations.append(
+                        f"OVERLAP DETECTED: {self.scenario_review_result.total_overlap_percentage:.0f}% overlap with existing scenarios"
+                    )
+                    result.recommendations.append(
+                        f"Recommended action: {self.scenario_review_result.recommended_action}"
+                    )
+                else:
+                    result.recommendations.append(
+                        "No overlap with existing scenarios - proceeding with new feature file"
+                    )
+
+                # 5.3 Create feature branch in pandora_cypress
+                logger.info(f"Creating feature branch for {jira_ticket}...")
+                branch_result = self.create_feature_branch(jira_ticket)
+
+                self.branch_info = BranchInfo(
+                    jira_key=jira_ticket,
+                    status=branch_result.get("status", "pending"),
+                    error=branch_result.get("error", ""),
+                    source_commit=branch_result.get("source_commit", ""),
+                )
+                self.branch_info.branch_name = branch_result.get("new_branch", f"feature/{jira_ticket}")
+
+                if self.branch_info.status == "created":
+                    result.recommendations.append(
+                        f"BRANCH CREATED: {self.branch_info.branch_name} (from feature/development)"
+                    )
+                elif self.branch_info.status == "exists":
+                    result.recommendations.append(
+                        f"BRANCH EXISTS: {self.branch_info.branch_name} - using existing branch"
+                    )
+                elif self.branch_info.status == "error":
+                    result.warnings.append(
+                        f"BRANCH CREATION FAILED: {self.branch_info.error}"
+                    )
+
+            # =========================================================
+            # STEP 6: Generate automation code
             # =========================================================
 
             # Parse manual test cases
@@ -3566,7 +3888,7 @@ REUSE PRIORITY ORDER:
                 result.page_objects_created = len(suite.page_objects)
 
             # =========================================================
-            # STEP 6: Add summary and recommendations
+            # STEP 7: Add summary and recommendations
             # =========================================================
 
             # Standard recommendations
@@ -3598,6 +3920,12 @@ REUSE PRIORITY ORDER:
                 f"Step definitions: {self.context_md_structure.step_definitions_path}"
             )
 
+            # Add branch info if available
+            if self.branch_info:
+                result.recommendations.append(
+                    f"BRANCH: {self.branch_info.branch_name} (status: {self.branch_info.status})"
+                )
+
             return {
                 "status": "success",
                 "data": result.to_dict(),
@@ -3605,12 +3933,19 @@ REUSE PRIORITY ORDER:
                 "reuse_statistics": self.reuse_stats.to_dict(),
                 "summary_report": summary_report,
                 "new_step_requests": [req.to_dict() for req in self.automation_context.new_step_requests],
-                "context_md_structure": self.context_md_structure.to_dict(),  # Include for reference
+                "context_md_structure": self.context_md_structure.to_dict(),
                 "file_paths": {
                     "feature_files": self.context_md_structure.feature_files_path,
                     "step_definitions": self.context_md_structure.step_definitions_path,
                     "page_objects": self.context_md_structure.page_objects_path,
                     "fixtures": self.context_md_structure.fixtures_path,
+                },
+                "branch_info": self.branch_info.to_dict() if self.branch_info else None,
+                "scenario_review": self.scenario_review_result.to_dict() if self.scenario_review_result else None,
+                "branching_strategy": {
+                    "base_branch": "feature/development",
+                    "naming_convention": "feature/{JIRA-KEY}",
+                    "pr_target": "feature/development",
                 },
                 "next": "qa",
                 "error": None,

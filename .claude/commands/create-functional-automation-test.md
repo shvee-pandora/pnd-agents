@@ -167,15 +167,105 @@ Using information gathered from Step 1:
    - Search for matching step definition in pandora_cypress
    - If found → **REUSE** (mark as "Existing")
    - If similar → **ADAPT** with parameters
-   - If not found → Flag for Step 5.1
+   - If not found → Flag for Step 6.1
 
 ---
 
-### STEP 5: Generate Cypress Automation Feature File (STRICT STRUCTURE COMPLIANCE)
+### STEP 5: Review Existing Scenarios & Create Branch (MANDATORY)
+
+**Before generating ANY new feature files, review existing scenarios to avoid duplication.**
+
+#### 5.1 Review Existing Feature Files
+
+Search for existing scenarios that might cover the same functionality:
+
+```
+Search in: cypress/e2e/features/**/*.feature
+Look for:
+- Similar scenario names
+- Same feature area/module
+- Overlapping test coverage
+- Same JIRA ticket references
+```
+
+**Analysis Output:**
+```
+Existing Scenarios Review:
+┌─────────────────────────────────────────────────────────────────────┐
+│ Feature File                    │ Scenarios │ Overlap │ Action     │
+├─────────────────────────────────┼───────────┼─────────┼────────────┤
+│ search/search-basic.feature     │ 5         │ 60%     │ EXTEND     │
+│ search/search-filters.feature   │ 3         │ 20%     │ SEPARATE   │
+│ None found                      │ -         │ 0%      │ CREATE NEW │
+└─────────────────────────────────┴───────────┴─────────┴────────────┘
+```
+
+#### 5.2 Decide: Incorporate or Create New
+
+Use AskUserQuestion:
+> "I found existing scenarios with similar coverage. How should I proceed?"
+> - **Incorporate into existing** (Recommended if >50% overlap): Add scenarios to existing feature file
+> - **Create new feature file**: Create separate feature file for this JIRA ticket
+> - **Show details**: Display existing scenarios for manual review
+
+**If incorporating into existing:**
+- Identify the best matching feature file
+- Add new scenarios to that file
+- Maintain existing structure and organization
+
+**If creating new:**
+- Proceed to Step 5.3 (Branch Creation)
+
+#### 5.3 Create Feature Branch in pandora_cypress
+
+**CRITICAL: Always create a new branch before making changes.**
+
+**Branching Strategy:**
+```
+Base Branch: feature/development
+Branch Name Convention: feature/{JIRA-KEY}
+
+Example:
+- JIRA Ticket: FIND-4223
+- New Branch: feature/FIND-4223
+- Full Path: feature/FIND-4223 (from feature/development)
+```
+
+**Branch Creation Steps:**
+1. Checkout `feature/development` branch
+2. Pull latest changes
+3. Create new branch: `feature/{JIRA-KEY}`
+4. Verify branch created successfully
+
+```bash
+# Example commands (executed internally - NOT shown to user)
+git checkout feature/development
+git pull origin feature/development
+git checkout -b feature/FIND-4223
+```
+
+**Branch Creation Confirmation:**
+```
+Branch Created Successfully:
+- Base Branch: feature/development
+- New Branch: feature/FIND-4223
+- Repository: pandora_cypress
+- Status: Ready for automation files
+```
+
+**If branch already exists:**
+> "Branch `feature/{JIRA-KEY}` already exists. Would you like to:"
+> - Use existing branch (Recommended)
+> - Create with suffix: feature/{JIRA-KEY}-v2
+> - Cancel and review
+
+---
+
+### STEP 6: Generate Cypress Automation Feature File (STRICT STRUCTURE COMPLIANCE)
 
 **CRITICAL: All files MUST follow the folder structure and naming conventions from context.md**
 
-#### 5.0 Validate Output Paths Before Generation
+#### 6.0 Validate Output Paths Before Generation
 
 Before generating ANY file:
 1. Verify target path matches context.md folder structure
@@ -215,7 +305,7 @@ Feature: Product Search API Contracts
     And results should contain "bracelet"      # NEW STEP NEEDED
 ```
 
-#### 5.1 Handle New Step Definitions
+#### 6.1 Handle New Step Definitions
 
 For each step marked as "NEW STEP NEEDED":
 
@@ -225,7 +315,7 @@ Use AskUserQuestion:
 > - Provide custom implementation: You specify the step code
 > - Skip this step: Remove from feature file
 
-##### 5.1.1 If User Agrees (Create New Step)
+##### 6.1.1 If User Agrees (Create New Step)
 Generate step definition following pandora_cypress patterns:
 
 ```typescript
@@ -239,12 +329,12 @@ Then('results should contain {string}', (expectedText: string) => {
 });
 ```
 
-##### 5.1.2 If User Provides Custom Implementation
+##### 6.1.2 If User Provides Custom Implementation
 Accept user's step definition code and integrate it.
 
 ---
 
-### STEP 6: Output Generated Files with Reuse Statistics
+### STEP 7: Output Generated Files with Reuse Statistics
 
 #### Generated Files Summary
 
@@ -300,13 +390,34 @@ Next Steps:
 5. **Check repository access** - Verify access to development branches/PRs
 6. **Review code changes** - Understand what's being tested
 7. **REUSE before CREATE** - Search existing steps, page objects, fixtures FIRST
-8. **Ask before creating new steps** - Get user confirmation for new step definitions
-9. **Follow existing patterns** - Match coding conventions from context.md
-10. **Never ask user to run bash commands** - Handle all operations internally
-11. **Use data-testid selectors** - Never use CSS classes or tag names
-12. **Link to JIRA** - Include ticket ID in feature tags
-13. **Validate paths before write** - Check all paths against context.md before creating files
-14. **Use approved tags only** - Only use tags defined in context.md
+8. **REVIEW EXISTING SCENARIOS** - Check if new scenarios can be incorporated into existing feature files
+9. **CREATE BRANCH BEFORE CHANGES** - Always create feature branch from `feature/development`
+10. **Ask before creating new steps** - Get user confirmation for new step definitions
+11. **Follow existing patterns** - Match coding conventions from context.md
+12. **Never ask user to run bash commands** - Handle all operations internally
+13. **Use data-testid selectors** - Never use CSS classes or tag names
+14. **Link to JIRA** - Include ticket ID in feature tags
+15. **Validate paths before write** - Check all paths against context.md before creating files
+16. **Use approved tags only** - Only use tags defined in context.md
+
+---
+
+## Branching Strategy
+
+| Aspect | Value |
+|--------|-------|
+| **Base Branch** | `feature/development` |
+| **Branch Name Convention** | `feature/{JIRA-KEY}` |
+| **Example** | `feature/FIND-4223` |
+| **Repository** | pandora_cypress |
+
+**Branch Creation Flow:**
+1. Checkout `feature/development`
+2. Pull latest changes
+3. Create branch: `feature/{JIRA-KEY}`
+4. Make automation changes
+5. Commit and push
+6. Create PR to `feature/development`
 
 ---
 
