@@ -823,6 +823,58 @@ def register_tools(server: Server) -> None:
                 }
             ),
 
+            # JIRA Status Management Tools
+            types.Tool(
+                name="jira_get_issue",
+                description="Get details of a JIRA issue including summary, status, and description.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "issue_key": {
+                            "type": "string",
+                            "description": "JIRA issue key (e.g., 'EPA-123', 'INS-456')"
+                        }
+                    },
+                    "required": ["issue_key"]
+                }
+            ),
+            types.Tool(
+                name="jira_get_transitions",
+                description="Get available status transitions for a JIRA issue. Returns list of transitions with IDs and names.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "issue_key": {
+                            "type": "string",
+                            "description": "JIRA issue key (e.g., 'EPA-123', 'INS-456')"
+                        }
+                    },
+                    "required": ["issue_key"]
+                }
+            ),
+            types.Tool(
+                name="jira_transition_issue",
+                description="Transition a JIRA issue to a new status. Use jira_get_transitions first to get available transition IDs.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "issue_key": {
+                            "type": "string",
+                            "description": "JIRA issue key (e.g., 'EPA-123', 'INS-456')"
+                        },
+                        "transition_id": {
+                            "type": "string",
+                            "description": "ID of the transition to perform (from jira_get_transitions)"
+                        },
+                        "comment": {
+                            "type": "string",
+                            "description": "Optional comment to add with the transition"
+                        }
+                    },
+                    "required": ["issue_key", "transition_id"]
+                }
+            ),
+
             # Task Manager Agent Tools
             types.Tool(
                 name="task_manager_analyze",
@@ -1885,6 +1937,71 @@ AI Productivity Tracker Agent v1.0"""
                     return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
                 except Exception as analytics_error:
                     return [types.TextContent(type="text", text=f"Analytics Error: {str(analytics_error)}")]
+
+            # JIRA Status Management tools
+            elif name == "jira_get_issue":
+                import json
+                try:
+                    jira_client = JiraClient()
+                    issue = jira_client.get_issue(arguments["issue_key"])
+                    if issue:
+                        result = {
+                            "key": issue.key,
+                            "summary": issue.summary,
+                            "status": issue.status,
+                            "issue_type": issue.issue_type,
+                            "description": issue.description,
+                            "assignee": issue.assignee,
+                            "priority": issue.priority,
+                            "labels": issue.labels,
+                        }
+                        return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                    else:
+                        return [types.TextContent(type="text", text=f"Issue {arguments['issue_key']} not found")]
+                except Exception as jira_error:
+                    return [types.TextContent(type="text", text=f"JIRA Error: {str(jira_error)}")]
+
+            elif name == "jira_get_transitions":
+                import json
+                try:
+                    jira_client = JiraClient()
+                    transitions = jira_client.get_transitions(arguments["issue_key"])
+                    result = {
+                        "issue_key": arguments["issue_key"],
+                        "transitions": [
+                            {"id": t["id"], "name": t["name"]}
+                            for t in transitions
+                        ]
+                    }
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as jira_error:
+                    return [types.TextContent(type="text", text=f"JIRA Error: {str(jira_error)}")]
+
+            elif name == "jira_transition_issue":
+                import json
+                try:
+                    jira_client = JiraClient()
+                    success = jira_client.transition_issue(
+                        issue_key=arguments["issue_key"],
+                        transition_id=arguments["transition_id"],
+                        comment=arguments.get("comment")
+                    )
+                    if success:
+                        # Fetch updated issue to confirm new status
+                        updated_issue = jira_client.get_issue(arguments["issue_key"])
+                        result = {
+                            "status": "success",
+                            "message": f"Issue {arguments['issue_key']} transitioned successfully",
+                            "new_status": updated_issue.status if updated_issue else "Unknown"
+                        }
+                    else:
+                        result = {
+                            "status": "failed",
+                            "message": f"Failed to transition issue {arguments['issue_key']}"
+                        }
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as jira_error:
+                    return [types.TextContent(type="text", text=f"JIRA Error: {str(jira_error)}")]
 
             # Task Manager Agent tools
             elif name == "task_manager_analyze":
