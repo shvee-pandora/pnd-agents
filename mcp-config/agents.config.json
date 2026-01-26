@@ -598,6 +598,26 @@
       "description": "Analyze HTTP Archive files for performance metrics and optimization recommendations.",
       "module": "tools.har_analyzer",
       "class": "HARAnalyzer"
+    },
+    {
+      "id": "jira-client",
+      "name": "JIRA Client",
+      "description": "Integration with Atlassian JIRA REST API for reading and managing issues, projects, and comments. Requires JIRA_BASE_URL, JIRA_EMAIL, and JIRA_API_TOKEN environment variables.",
+      "module": "tools.jira_client",
+      "class": "JiraClient",
+      "tools": [
+        "jira_get_issue",
+        "jira_search_issues",
+        "jira_get_project",
+        "jira_test_connection",
+        "jira_add_comment",
+        "jira_get_transitions"
+      ],
+      "environment": {
+        "JIRA_BASE_URL": "Your JIRA instance URL (e.g., https://your-instance.atlassian.net)",
+        "JIRA_EMAIL": "Your JIRA account email",
+        "JIRA_API_TOKEN": "Your JIRA API token (generate at https://id.atlassian.com/manage-profile/security/api-tokens)"
+      }
     }
   ],
   "workflows": [
