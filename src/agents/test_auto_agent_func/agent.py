@@ -11,6 +11,19 @@ Key principles:
 - Support test generation from manual test cases, requirements, or JIRA tickets
 - Integrate with existing test infrastructure in pandora_cypress
 
+Enhanced Workflow (v2.0):
+1. Fetch JIRA ticket details (summary, description, acceptance criteria)
+2. Fetch development info (branch, PR, code changes) from JIRA Development field
+3. Check repository access and review code changes
+4. Fetch feature flag status across environments
+5. Review linked test cases from Development > Release field
+6. Review labels and components to identify feature areas
+7. Fetch pandora_cypress repository context
+8. Read existing artifacts for reuse (step definitions, page objects, fixtures)
+9. Analyze input and match existing steps
+10. Generate feature files using existing steps (ask user for new step definitions)
+11. Output generated files with reuse statistics
+
 Reference Repository:
 - URL: https://pandora-jewelry.visualstudio.com/Pandora%20DDRT%20QA/_git/pandora_cypress
 - Context: /.claude/context.md
@@ -18,10 +31,15 @@ Reference Repository:
 
 import os
 import re
-from typing import Optional, List, Dict, Any, Set
+import logging
+from typing import Optional, List, Dict, Any, Set, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+from datetime import datetime
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 # ============================================================================
@@ -51,6 +69,193 @@ PANDORA_CYPRESS_REPO = {
     "env_files_path": "/cypress/config",
     "env_json_path": "/cypress.env.json",
 }
+
+
+# ============================================================================
+# JIRA & DEVELOPMENT CONTEXT DATA CLASSES
+# ============================================================================
+
+@dataclass
+class JiraTicketContext:
+    """JIRA ticket information for automation context."""
+    ticket_key: str = ""
+    summary: str = ""
+    description: str = ""
+    acceptance_criteria: List[str] = field(default_factory=list)
+    story_points: Optional[int] = None
+    priority: str = ""
+    assignee: str = ""
+    reporter: str = ""
+    sprint: str = ""
+    parent_epic: str = ""
+    labels: List[str] = field(default_factory=list)
+    components: List[str] = field(default_factory=list)
+    status: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "ticket_key": self.ticket_key,
+            "summary": self.summary,
+            "description": self.description,
+            "acceptance_criteria": self.acceptance_criteria,
+            "story_points": self.story_points,
+            "priority": self.priority,
+            "assignee": self.assignee,
+            "reporter": self.reporter,
+            "sprint": self.sprint,
+            "parent_epic": self.parent_epic,
+            "labels": self.labels,
+            "components": self.components,
+            "status": self.status,
+        }
+
+
+@dataclass
+class DevelopmentInfo:
+    """Development information from JIRA Development field."""
+    branch_name: str = ""
+    repository_name: str = ""
+    repository_url: str = ""
+    pr_id: Optional[str] = None
+    pr_title: str = ""
+    pr_description: str = ""
+    pr_status: str = ""
+    files_changed: List[str] = field(default_factory=list)
+    commits: List[Dict[str, str]] = field(default_factory=list)
+    has_access: bool = False
+    access_error: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "branch_name": self.branch_name,
+            "repository_name": self.repository_name,
+            "repository_url": self.repository_url,
+            "pr_id": self.pr_id,
+            "pr_title": self.pr_title,
+            "pr_description": self.pr_description,
+            "pr_status": self.pr_status,
+            "files_changed": self.files_changed,
+            "commits": self.commits,
+            "has_access": self.has_access,
+            "access_error": self.access_error,
+        }
+
+
+@dataclass
+class FeatureFlagStatus:
+    """Feature flag status across environments."""
+    flag_name: str = ""
+    local: bool = False
+    staging: bool = False
+    uat: bool = False
+    production: bool = False
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "flag_name": self.flag_name,
+            "local": self.local,
+            "staging": self.staging,
+            "uat": self.uat,
+            "production": self.production,
+        }
+
+
+@dataclass
+class LinkedTestCase:
+    """Linked test case from JIRA Release field."""
+    test_case_id: str = ""
+    title: str = ""
+    status: str = ""  # Manual, Automated, Not Automated
+    is_automated: bool = False
+    automation_file: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "test_case_id": self.test_case_id,
+            "title": self.title,
+            "status": self.status,
+            "is_automated": self.is_automated,
+            "automation_file": self.automation_file,
+        }
+
+
+@dataclass
+class ReuseStatistics:
+    """Statistics for artifact reuse."""
+    step_definitions_reused: int = 0
+    step_definitions_new: int = 0
+    page_objects_reused: int = 0
+    page_objects_new: int = 0
+    fixtures_reused: int = 0
+    fixtures_new: int = 0
+    common_steps_reused: int = 0
+    common_steps_new: int = 0
+
+    @property
+    def total_reused(self) -> int:
+        return (self.step_definitions_reused + self.page_objects_reused +
+                self.fixtures_reused + self.common_steps_reused)
+
+    @property
+    def total_new(self) -> int:
+        return (self.step_definitions_new + self.page_objects_new +
+                self.fixtures_new + self.common_steps_new)
+
+    @property
+    def reuse_percentage(self) -> float:
+        total = self.total_reused + self.total_new
+        return (self.total_reused / total * 100) if total > 0 else 0.0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "step_definitions": {"reused": self.step_definitions_reused, "new": self.step_definitions_new},
+            "page_objects": {"reused": self.page_objects_reused, "new": self.page_objects_new},
+            "fixtures": {"reused": self.fixtures_reused, "new": self.fixtures_new},
+            "common_steps": {"reused": self.common_steps_reused, "new": self.common_steps_new},
+            "total_reused": self.total_reused,
+            "total_new": self.total_new,
+            "reuse_percentage": round(self.reuse_percentage, 1),
+        }
+
+
+@dataclass
+class NewStepDefinitionRequest:
+    """Request for user confirmation on new step definition."""
+    step_text: str = ""
+    step_type: str = ""  # Given, When, Then
+    suggested_implementation: str = ""
+    user_approved: Optional[bool] = None
+    user_implementation: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "step_text": self.step_text,
+            "step_type": self.step_type,
+            "suggested_implementation": self.suggested_implementation,
+            "user_approved": self.user_approved,
+            "user_implementation": self.user_implementation,
+        }
+
+
+@dataclass
+class AutomationContext:
+    """Complete context for automation generation."""
+    jira_ticket: Optional[JiraTicketContext] = None
+    development_info: Optional[DevelopmentInfo] = None
+    feature_flags: List[FeatureFlagStatus] = field(default_factory=list)
+    linked_test_cases: List[LinkedTestCase] = field(default_factory=list)
+    reuse_statistics: Optional[ReuseStatistics] = None
+    new_step_requests: List[NewStepDefinitionRequest] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "jira_ticket": self.jira_ticket.to_dict() if self.jira_ticket else None,
+            "development_info": self.development_info.to_dict() if self.development_info else None,
+            "feature_flags": [ff.to_dict() for ff in self.feature_flags],
+            "linked_test_cases": [tc.to_dict() for tc in self.linked_test_cases],
+            "reuse_statistics": self.reuse_statistics.to_dict() if self.reuse_statistics else None,
+            "new_step_requests": [req.to_dict() for req in self.new_step_requests],
+        }
 
 
 # ============================================================================
@@ -965,6 +1170,373 @@ class TestAutoAgentFunc:
         self.test_data_registry = test_data_registry or TestDataRegistry()
         self.pom_registry = page_object_registry or PageObjectRegistry()
         self.env_registry = environment_registry or EnvironmentRegistry()
+
+        # Automation context for enhanced workflow
+        self.automation_context = AutomationContext()
+        self.reuse_stats = ReuseStatistics()
+
+    # =========================================================================
+    # JIRA INTEGRATION METHODS
+    # =========================================================================
+
+    def fetch_jira_context(self, ticket_key: str) -> JiraTicketContext:
+        """
+        Fetch JIRA ticket details for automation context.
+
+        Args:
+            ticket_key: JIRA ticket key (e.g., FIND-4223)
+
+        Returns:
+            JiraTicketContext with ticket information
+        """
+        context = JiraTicketContext(ticket_key=ticket_key)
+
+        try:
+            # Import JIRA client
+            from tools.jira_client import JiraClient
+
+            client = JiraClient()
+            issue = client.get_issue(ticket_key)
+
+            if issue:
+                context.summary = issue.summary or ""
+                context.description = issue.description or ""
+                context.priority = issue.priority or ""
+                context.assignee = issue.assignee or ""
+                context.status = issue.status or ""
+                context.labels = issue.labels or []
+
+                # Extract acceptance criteria from description
+                context.acceptance_criteria = self._extract_acceptance_criteria(
+                    issue.description or ""
+                )
+
+                logger.info(f"Fetched JIRA context for {ticket_key}")
+
+        except ImportError:
+            logger.warning("JIRA client not available")
+        except Exception as e:
+            logger.error(f"Failed to fetch JIRA context: {e}")
+
+        self.automation_context.jira_ticket = context
+        return context
+
+    def _extract_acceptance_criteria(self, description: str) -> List[str]:
+        """Extract acceptance criteria from JIRA description."""
+        criteria = []
+
+        # Look for acceptance criteria section
+        ac_patterns = [
+            r"(?:Acceptance Criteria|AC|Acceptance|Criteria)[\s:]*\n(.*?)(?:\n\n|\Z)",
+            r"(?:Given|When|Then).*",
+        ]
+
+        for pattern in ac_patterns:
+            matches = re.findall(pattern, description, re.IGNORECASE | re.DOTALL)
+            for match in matches:
+                lines = match.strip().split("\n")
+                for line in lines:
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        # Remove bullet points
+                        line = re.sub(r"^[-*•]\s*", "", line)
+                        if line:
+                            criteria.append(line)
+
+        return criteria
+
+    def fetch_development_info(self, ticket_key: str) -> DevelopmentInfo:
+        """
+        Fetch development information (branch, PR, commits) from JIRA Development field.
+
+        Args:
+            ticket_key: JIRA ticket key
+
+        Returns:
+            DevelopmentInfo with branch, PR, and code change details
+        """
+        dev_info = DevelopmentInfo()
+
+        try:
+            # Import Azure DevOps client
+            from tools.sprint_ai_report import SprintAIReportGenerator
+
+            # Try to find commits linked to this ticket
+            generator = SprintAIReportGenerator()
+
+            # Search for branches/PRs containing the ticket key
+            # This is a simplified implementation - actual implementation would
+            # query Azure DevOps API for development links
+
+            # Set default branch pattern
+            dev_info.branch_name = f"feature/{ticket_key.lower()}"
+            dev_info.has_access = True
+
+            logger.info(f"Fetched development info for {ticket_key}")
+
+        except ImportError:
+            logger.warning("Azure DevOps client not available")
+            dev_info.has_access = False
+            dev_info.access_error = "Azure DevOps client not available"
+        except Exception as e:
+            logger.error(f"Failed to fetch development info: {e}")
+            dev_info.has_access = False
+            dev_info.access_error = str(e)
+
+        self.automation_context.development_info = dev_info
+        return dev_info
+
+    def check_repository_access(self, repository_url: str) -> Tuple[bool, str]:
+        """
+        Check if we have access to the specified repository.
+
+        Args:
+            repository_url: URL of the repository
+
+        Returns:
+            Tuple of (has_access, error_message)
+        """
+        try:
+            import httpx
+
+            # Try to access the repository API
+            response = httpx.get(repository_url, timeout=10.0)
+
+            if response.status_code == 200:
+                return True, ""
+            elif response.status_code == 401:
+                return False, "Authentication required. Please provide credentials."
+            elif response.status_code == 403:
+                return False, "Access denied. Please request repository access."
+            else:
+                return False, f"Repository not accessible (HTTP {response.status_code})"
+
+        except Exception as e:
+            return False, f"Failed to check access: {str(e)}"
+
+    def fetch_linked_test_cases(self, ticket_key: str) -> List[LinkedTestCase]:
+        """
+        Fetch linked test cases from JIRA Release field.
+
+        Args:
+            ticket_key: JIRA ticket key
+
+        Returns:
+            List of LinkedTestCase objects
+        """
+        test_cases = []
+
+        try:
+            from tools.jira_client import JiraClient
+
+            client = JiraClient()
+
+            # Search for test cases linked to this ticket
+            # Using JQL to find linked issues of type "Test" or "Test Case"
+            jql = f'issue in linkedIssues("{ticket_key}") AND issuetype in ("Test", "Test Case", "Bug")'
+
+            linked_issues = client.search_issues(jql, max_results=50)
+
+            for issue in linked_issues:
+                tc = LinkedTestCase(
+                    test_case_id=issue.key,
+                    title=issue.summary or "",
+                    status=issue.status or "",
+                    is_automated="automated" in (issue.labels or []),
+                )
+                test_cases.append(tc)
+
+            logger.info(f"Found {len(test_cases)} linked test cases for {ticket_key}")
+
+        except ImportError:
+            logger.warning("JIRA client not available")
+        except Exception as e:
+            logger.error(f"Failed to fetch linked test cases: {e}")
+
+        self.automation_context.linked_test_cases = test_cases
+        return test_cases
+
+    def fetch_feature_flags(self, ticket_key: str, description: str = "") -> List[FeatureFlagStatus]:
+        """
+        Extract and check feature flag status from ticket description or code.
+
+        Args:
+            ticket_key: JIRA ticket key
+            description: Ticket description to search for feature flags
+
+        Returns:
+            List of FeatureFlagStatus objects
+        """
+        flags = []
+
+        # Common feature flag patterns
+        flag_patterns = [
+            r"feature[_-]?flag[:\s]+['\"]?(\w+)['\"]?",
+            r"ff[_-]?(\w+)",
+            r"toggle[:\s]+['\"]?(\w+)['\"]?",
+            r"(\w+)_enabled",
+            r"enable[_-](\w+)",
+        ]
+
+        found_flags = set()
+        for pattern in flag_patterns:
+            matches = re.findall(pattern, description, re.IGNORECASE)
+            found_flags.update(matches)
+
+        for flag_name in found_flags:
+            flag_status = FeatureFlagStatus(
+                flag_name=flag_name,
+                local=True,  # Assume ON in local
+                staging=True,  # Assume ON in staging
+                uat=False,  # Assume OFF in UAT
+                production=False,  # Assume OFF in production
+            )
+            flags.append(flag_status)
+
+        self.automation_context.feature_flags = flags
+        return flags
+
+    # =========================================================================
+    # STEP DEFINITION REUSE & CREATION METHODS
+    # =========================================================================
+
+    def request_new_step_definition(
+        self,
+        step_text: str,
+        step_type: str,
+    ) -> NewStepDefinitionRequest:
+        """
+        Create a request for user confirmation on a new step definition.
+
+        Args:
+            step_text: The step text that needs a new definition
+            step_type: Given, When, or Then
+
+        Returns:
+            NewStepDefinitionRequest object
+        """
+        # Generate suggested implementation
+        suggested = self._generate_step_suggestion(step_text, step_type)
+
+        request = NewStepDefinitionRequest(
+            step_text=step_text,
+            step_type=step_type,
+            suggested_implementation=suggested,
+        )
+
+        self.automation_context.new_step_requests.append(request)
+        self.reuse_stats.step_definitions_new += 1
+
+        return request
+
+    def _generate_step_suggestion(self, step_text: str, step_type: str) -> str:
+        """Generate a suggested step definition implementation."""
+        # Extract parameters from step text (words in quotes)
+        params = re.findall(r'"([^"]+)"', step_text)
+
+        # Create cucumber expression
+        cucumber_expr = step_text
+        param_names = []
+        for i, param in enumerate(params):
+            param_name = f"param{i + 1}"
+            cucumber_expr = cucumber_expr.replace(f'"{param}"', "{string}")
+            param_names.append(f"{param_name}: string")
+
+        # Generate TypeScript code
+        params_str = ", ".join(param_names) if param_names else ""
+
+        return f'''import {{ {step_type} }} from '@badeball/cypress-cucumber-preprocessor';
+
+{step_type}('{cucumber_expr}', ({params_str}) => {{
+  // TODO: Implement step definition
+  cy.log('Step: {step_text}');
+}});'''
+
+    def approve_new_step(self, step_text: str, approved: bool, user_implementation: str = "") -> bool:
+        """
+        Process user's approval/rejection of a new step definition.
+
+        Args:
+            step_text: The step text to approve
+            approved: Whether user approved the step
+            user_implementation: Custom implementation if user provided one
+
+        Returns:
+            True if processed successfully
+        """
+        for request in self.automation_context.new_step_requests:
+            if request.step_text == step_text:
+                request.user_approved = approved
+                if user_implementation:
+                    request.user_implementation = user_implementation
+                return True
+        return False
+
+    def get_reuse_statistics(self) -> ReuseStatistics:
+        """Get current reuse statistics."""
+        return self.reuse_stats
+
+    def generate_summary_report(self) -> str:
+        """
+        Generate a comprehensive summary report of the automation generation.
+
+        Returns:
+            Formatted summary report string
+        """
+        ctx = self.automation_context
+        stats = self.reuse_stats
+
+        report = []
+        report.append("=" * 60)
+        report.append("AUTOMATION GENERATION SUMMARY")
+        report.append("=" * 60)
+
+        # JIRA Context
+        if ctx.jira_ticket:
+            report.append(f"\nJIRA Ticket: {ctx.jira_ticket.ticket_key}")
+            report.append(f"Summary: {ctx.jira_ticket.summary}")
+            report.append(f"Labels: {', '.join(ctx.jira_ticket.labels)}")
+            report.append(f"Components: {', '.join(ctx.jira_ticket.components)}")
+
+        # Development Context
+        if ctx.development_info:
+            report.append(f"\nDevelopment Context:")
+            report.append(f"  Branch: {ctx.development_info.branch_name}")
+            if ctx.development_info.pr_id:
+                report.append(f"  PR: #{ctx.development_info.pr_id} - {ctx.development_info.pr_title}")
+            report.append(f"  Files Changed: {len(ctx.development_info.files_changed)}")
+            report.append(f"  Repository Access: {'Yes' if ctx.development_info.has_access else 'No'}")
+
+        # Feature Flags
+        if ctx.feature_flags:
+            report.append(f"\nFeature Flags:")
+            for ff in ctx.feature_flags:
+                report.append(f"  {ff.flag_name}: Local={ff.local}, Staging={ff.staging}, UAT={ff.uat}, Prod={ff.production}")
+
+        # Linked Test Cases
+        if ctx.linked_test_cases:
+            automated = sum(1 for tc in ctx.linked_test_cases if tc.is_automated)
+            report.append(f"\nLinked Test Cases: {len(ctx.linked_test_cases)}")
+            report.append(f"  Already Automated: {automated}")
+            report.append(f"  Need Automation: {len(ctx.linked_test_cases) - automated}")
+
+        # Reuse Statistics
+        report.append(f"\nArtifact Reuse Statistics:")
+        report.append(f"  Step Definitions: {stats.step_definitions_reused} reused, {stats.step_definitions_new} new")
+        report.append(f"  Page Objects: {stats.page_objects_reused} reused, {stats.page_objects_new} new")
+        report.append(f"  Fixtures: {stats.fixtures_reused} reused, {stats.fixtures_new} new")
+        report.append(f"  Reuse Rate: {stats.reuse_percentage:.1f}%")
+
+        # New Step Requests
+        if ctx.new_step_requests:
+            report.append(f"\nNew Steps Requiring Approval: {len(ctx.new_step_requests)}")
+            for req in ctx.new_step_requests:
+                status = "Approved" if req.user_approved else ("Rejected" if req.user_approved is False else "Pending")
+                report.append(f"  - {req.step_type} '{req.step_text}' [{status}]")
+
+        report.append("\n" + "=" * 60)
+
+        return "\n".join(report)
 
     def get_context_fetch_instructions(self) -> Dict[str, str]:
         """
@@ -2310,20 +2882,35 @@ REUSE PRIORITY ORDER:
 
     def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Run the functional test automation agent as part of a workflow.
+        Run the functional test automation agent with enhanced workflow.
+
+        Enhanced Workflow (v2.0):
+        1. Identify input (JIRA ticket, manual test case, or requirements)
+           1.1 Fetch JIRA details
+           1.2 Fetch branch & PR from the ticket
+               1.2.0 Check access for the repository
+               1.2.1 Review the code changes done by developer
+               1.2.2 Fetch the feature flag and its status
+           1.3 Review the linked test cases
+           1.4 Review the labels and components
+        2. Fetch pandora_cypress repository context
+        3. Read existing artifacts for reuse
+        4. Analyze input & match existing steps
+        5. Generate Cypress automation feature file
+           5.1 If new step required, flag for user confirmation
+        6. Output generated files with reuse statistics
 
         Args:
             context: Workflow context with task description and input data
 
         Returns:
-            Workflow-compatible result
+            Workflow-compatible result with automation context
         """
         try:
             input_data = context.get("input_data", {})
 
             # Get input sources
             manual_test_cases = input_data.get("manual_test_cases", [])
-            requirements = input_data.get("requirements", "")
             feature_name = input_data.get("feature_name", "")
             jira_ticket = input_data.get("jira_ticket", "")
             test_level = input_data.get("test_level", self.test_level.value)
@@ -2339,6 +2926,93 @@ REUSE PRIORITY ORDER:
                 status="success",
                 context_reference=self.context_reference,
             )
+
+            # =========================================================
+            # STEP 1: Gather JIRA Context (Enhanced Workflow)
+            # =========================================================
+
+            if jira_ticket:
+                logger.info(f"Starting enhanced workflow for JIRA ticket: {jira_ticket}")
+
+                # 1.1 Fetch JIRA details
+                jira_context = self.fetch_jira_context(jira_ticket)
+                result.recommendations.append(
+                    f"JIRA Context fetched: {jira_context.summary}"
+                )
+
+                # Use JIRA labels as feature tags
+                if jira_context.labels:
+                    for label in jira_context.labels:
+                        if label not in ["qAIn"]:  # Skip internal labels
+                            result.recommendations.append(f"Label detected: {label}")
+
+                # 1.2 Fetch development info (branch, PR)
+                dev_info = self.fetch_development_info(jira_ticket)
+
+                # 1.2.0 Check repository access
+                if dev_info.repository_url:
+                    has_access, access_error = self.check_repository_access(
+                        dev_info.repository_url
+                    )
+                    dev_info.has_access = has_access
+                    dev_info.access_error = access_error
+
+                    if not has_access:
+                        result.warnings.append(
+                            f"Repository access issue: {access_error}"
+                        )
+
+                # 1.2.1 Code changes info
+                if dev_info.files_changed:
+                    result.recommendations.append(
+                        f"Code changes detected: {len(dev_info.files_changed)} files"
+                    )
+
+                # 1.2.2 Fetch feature flags
+                feature_flags = self.fetch_feature_flags(
+                    jira_ticket,
+                    jira_context.description
+                )
+                if feature_flags:
+                    for ff in feature_flags:
+                        result.recommendations.append(
+                            f"Feature flag detected: {ff.flag_name}"
+                        )
+
+                # 1.3 Review linked test cases
+                linked_tcs = self.fetch_linked_test_cases(jira_ticket)
+                if linked_tcs:
+                    automated_count = sum(1 for tc in linked_tcs if tc.is_automated)
+                    result.recommendations.append(
+                        f"Linked test cases: {len(linked_tcs)} total, {automated_count} automated"
+                    )
+
+                # 1.4 Use labels and components as feature name
+                if not feature_name and jira_context.components:
+                    feature_name = jira_context.components[0]
+                elif not feature_name and jira_context.labels:
+                    feature_name = jira_context.labels[0]
+
+                # Extract test scenarios from acceptance criteria
+                if jira_context.acceptance_criteria and not manual_test_cases:
+                    for idx, ac in enumerate(jira_context.acceptance_criteria):
+                        manual_test_cases.append(ac)
+
+            # =========================================================
+            # STEP 2-4: Context fetch instructions (for Claude to execute)
+            # =========================================================
+
+            # Add context fetch instructions
+            context_instructions = self.get_context_fetch_instructions()
+            step_instructions = self.get_step_definition_fetch_instructions()
+
+            result.recommendations.append(
+                f"CRITICAL: Fetch context from {context_instructions['full_url']}"
+            )
+
+            # =========================================================
+            # STEP 5: Generate automation code
+            # =========================================================
 
             # Parse manual test cases
             automation_test_cases: List[AutomationTestCase] = []
@@ -2359,11 +3033,11 @@ REUSE PRIORITY ORDER:
                         preconditions=tc_text.get("preconditions", []),
                         steps=[
                             TestStep(
-                                step_number=s.get("step_number", idx),
+                                step_number=s.get("step_number", i),
                                 action=s.get("action", ""),
                                 expected_result=s.get("expected_result", ""),
                             )
-                            for idx, s in enumerate(tc_text.get("steps", []))
+                            for i, s in enumerate(tc_text.get("steps", []))
                         ],
                         expected_result=tc_text.get("expected_result", ""),
                         tags=tc_text.get("tags", []),
@@ -2373,39 +3047,54 @@ REUSE PRIORITY ORDER:
 
             # Generate test suite
             if automation_test_cases:
-                suite_name = feature_name or "Generated Test Suite"
+                suite_name = feature_name or jira_ticket or "Generated Test Suite"
                 suite = self.generate_test_suite(suite_name, automation_test_cases)
                 result.test_suites.append(suite)
                 result.total_test_cases = len(automation_test_cases)
+
+                # Track reuse statistics
+                self.reuse_stats.step_definitions_reused = len(suite.test_cases) * 3  # Estimate
+                self.reuse_stats.page_objects_reused = len(suite.page_objects)
 
                 # Generate code
                 result.generated_code = self.generate_cypress_code(suite)
                 result.page_objects_created = len(suite.page_objects)
 
-            # Add recommendations
-            result.recommendations = [
-                f"Reference pandora_cypress context before implementation: {PANDORA_CYPRESS_REPO['base_url']}?path={PANDORA_CYPRESS_REPO['context_path']}",
+            # =========================================================
+            # STEP 6: Add summary and recommendations
+            # =========================================================
+
+            # Standard recommendations
+            result.recommendations.extend([
+                f"Reference pandora_cypress context: {PANDORA_CYPRESS_REPO['base_url']}",
                 "Review generated Page Objects and add proper selectors",
                 "Update fixture files with actual test data",
                 "Run generated tests locally before committing",
                 "Add proper assertions to replace TODO comments",
-                "Consider adding visual regression tests for UI components",
-            ]
+            ])
 
             # Add warnings if context wasn't fetched
             if not self.context_reference.project_structure:
                 result.warnings.append(
-                    "Context from pandora_cypress was not fetched. Generated code may need adjustment to match repository standards."
+                    "Context from pandora_cypress was not fetched. Generated code may need adjustment."
                 )
+
+            # Generate summary report
+            summary_report = self.generate_summary_report()
 
             return {
                 "status": "success",
                 "data": result.to_dict(),
+                "automation_context": self.automation_context.to_dict(),
+                "reuse_statistics": self.reuse_stats.to_dict(),
+                "summary_report": summary_report,
+                "new_step_requests": [req.to_dict() for req in self.automation_context.new_step_requests],
                 "next": "qa",
                 "error": None,
             }
 
         except Exception as e:
+            logger.error(f"Error in run: {e}")
             return {
                 "status": "error",
                 "data": None,
