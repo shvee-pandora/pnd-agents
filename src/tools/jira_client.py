@@ -8,9 +8,11 @@ Supports adding comments, updating custom fields, and querying issues.
 import json
 import logging
 import os
-from dataclasses import dataclass
+import re
+import time
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Callable
 
 import httpx
 
@@ -31,6 +33,16 @@ class JiraConfig:
     field_efficiency_score: str = "customfield_ai_efficiency_score"
     field_duration: str = "customfield_ai_duration"
     
+    # Retry and rate limiting configuration
+    max_retries: int = 3
+    retry_delay_ms: int = 1000
+    timeout_ms: int = 30000
+    
+    # Debug options
+    debug: bool = False
+    on_request: Optional[Callable[[str, str, Any], None]] = field(default=None, repr=False)
+    on_response: Optional[Callable[[str, str, int, int], None]] = field(default=None, repr=False)
+    
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "JiraConfig":
         """Create config from dictionary."""
@@ -43,6 +55,10 @@ class JiraConfig:
             field_agent_name=data.get("field_agent_name", "customfield_agent_name"),
             field_efficiency_score=data.get("field_efficiency_score", "customfield_ai_efficiency_score"),
             field_duration=data.get("field_duration", "customfield_ai_duration"),
+            max_retries=data.get("max_retries", 3),
+            retry_delay_ms=data.get("retry_delay_ms", 1000),
+            timeout_ms=data.get("timeout_ms", 30000),
+            debug=data.get("debug", False),
         )
     
     @classmethod
@@ -57,6 +73,10 @@ class JiraConfig:
             field_agent_name=os.environ.get("JIRA_FIELD_AGENT_NAME", "customfield_agent_name"),
             field_efficiency_score=os.environ.get("JIRA_FIELD_EFFICIENCY_SCORE", "customfield_ai_efficiency_score"),
             field_duration=os.environ.get("JIRA_FIELD_DURATION", "customfield_ai_duration"),
+            max_retries=int(os.environ.get("JIRA_MAX_RETRIES", "3")),
+            retry_delay_ms=int(os.environ.get("JIRA_RETRY_DELAY_MS", "1000")),
+            timeout_ms=int(os.environ.get("JIRA_TIMEOUT_MS", "30000")),
+            debug=os.environ.get("JIRA_DEBUG", "").lower() in ("true", "1", "yes"),
         )
     
     def to_dict(self) -> Dict[str, Any]:
@@ -177,7 +197,7 @@ class JiraClient:
                     "Accept": "application/json",
                     "Content-Type": "application/json",
                 },
-                timeout=30.0,
+                timeout=self.config.timeout_ms / 1000.0,
             )
         return self._client
     
@@ -185,6 +205,76 @@ class JiraClient:
         """Get the API base URL."""
         base = self.config.base_url.rstrip("/")
         return f"{base}/rest/api/{self.API_VERSION}/"
+    
+    def _calculate_backoff(self, retry_count: int) -> float:
+        """Calculate exponential backoff delay with jitter."""
+        import random
+        base_delay = self.config.retry_delay_ms / 1000.0
+        delay = min(base_delay * (2 ** retry_count) + random.random(), 30.0)
+        return delay
+    
+    def _request_with_retry(
+        self,
+        method: str,
+        endpoint: str,
+        retry_count: int = 0,
+        **kwargs
+    ) -> httpx.Response:
+        """Make HTTP request with retry logic and rate limit handling."""
+        start_time = time.time()
+        url = f"{self._get_api_base_url()}{endpoint}"
+        
+        if self.config.debug:
+            logger.debug(f"[JIRA] {method} {endpoint}")
+        if self.config.on_request:
+            self.config.on_request(method, url, kwargs.get("json"))
+        
+        try:
+            response = getattr(self.client, method.lower())(endpoint, **kwargs)
+            duration_ms = int((time.time() - start_time) * 1000)
+            
+            if self.config.debug:
+                logger.debug(f"[JIRA] {method} {endpoint} -> {response.status_code} ({duration_ms}ms)")
+            if self.config.on_response:
+                self.config.on_response(method, url, response.status_code, duration_ms)
+            
+            if response.status_code == 429:
+                if retry_count < self.config.max_retries:
+                    retry_after = response.headers.get("Retry-After")
+                    if retry_after:
+                        delay = int(retry_after)
+                    else:
+                        delay = self._calculate_backoff(retry_count)
+                    logger.warning(f"Rate limited, retrying in {delay}s...")
+                    time.sleep(delay)
+                    return self._request_with_retry(method, endpoint, retry_count + 1, **kwargs)
+                raise httpx.HTTPStatusError(
+                    f"Rate limit exceeded after {self.config.max_retries} retries",
+                    request=response.request,
+                    response=response
+                )
+            
+            if response.status_code >= 500 and retry_count < self.config.max_retries:
+                delay = self._calculate_backoff(retry_count)
+                logger.warning(f"Server error {response.status_code}, retrying in {delay}s...")
+                time.sleep(delay)
+                return self._request_with_retry(method, endpoint, retry_count + 1, **kwargs)
+            
+            return response
+        except httpx.TimeoutException:
+            if retry_count < self.config.max_retries:
+                delay = self._calculate_backoff(retry_count)
+                logger.warning(f"Request timeout, retrying in {delay}s...")
+                time.sleep(delay)
+                return self._request_with_retry(method, endpoint, retry_count + 1, **kwargs)
+            raise
+        except httpx.RequestError as e:
+            if retry_count < self.config.max_retries:
+                delay = self._calculate_backoff(retry_count)
+                logger.warning(f"Request error: {e}, retrying in {delay}s...")
+                time.sleep(delay)
+                return self._request_with_retry(method, endpoint, retry_count + 1, **kwargs)
+            raise
     
     def close(self):
         """Close the HTTP client."""
@@ -255,7 +345,7 @@ class JiraClient:
             if fields:
                 payload["fields"] = fields
             
-            response = self.client.post("search", json=payload)
+            response = self._request_with_retry("POST", "search", json=payload)
             response.raise_for_status()
             
             data = response.json()
@@ -263,6 +353,47 @@ class JiraClient:
         except Exception as e:
             logger.error(f"Failed to search issues: {e}")
             raise
+    
+    def get_issues(
+        self,
+        issue_keys: List[str],
+        fields: Optional[List[str]] = None
+    ) -> Dict[str, Optional[JiraIssue]]:
+        """
+        Get multiple JIRA issues by keys efficiently using batch JQL query.
+        
+        Args:
+            issue_keys: List of issue keys (e.g., ["EPA-123", "EPA-456"])
+            fields: Optional list of fields to retrieve
+            
+        Returns:
+            Dictionary mapping issue keys to JiraIssue objects (or None if not found)
+        """
+        if not issue_keys:
+            return {}
+        
+        results: Dict[str, Optional[JiraIssue]] = {}
+        batch_size = 50
+        
+        for i in range(0, len(issue_keys), batch_size):
+            batch = issue_keys[i:i + batch_size]
+            quoted_keys = [f'"{k}"' for k in batch]
+            jql = f'key in ({",".join(quoted_keys)})'
+            
+            try:
+                issues = self.search_issues(jql, max_results=len(batch), fields=fields)
+                for issue in issues:
+                    results[issue.key] = issue
+                
+                for key in batch:
+                    if key not in results:
+                        results[key] = None
+            except Exception as e:
+                logger.error(f"Failed to batch fetch issues: {e}")
+                for key in batch:
+                    results[key] = None
+        
+        return results
     
     def create_issue(
         self,
@@ -600,18 +731,42 @@ class JiraClient:
         """
         Convert markdown text to Atlassian Document Format (ADF).
         
-        This is a simplified conversion that handles basic formatting.
+        Supports: headings, bold, italic, strikethrough, links, code blocks,
+        blockquotes, bullet lists, and ordered lists.
         """
-        # Split into paragraphs
         paragraphs = markdown.strip().split("\n\n")
-        
         content = []
+        
         for para in paragraphs:
             lines = para.split("\n")
             
-            # Check if it's a list
+            heading_match = re.match(r'^(#{1,6})\s+(.+)$', lines[0]) if lines else None
+            if heading_match and len(lines) == 1:
+                level = len(heading_match.group(1))
+                content.append({
+                    "type": "heading",
+                    "attrs": {"level": level},
+                    "content": self._parse_inline_formatting(heading_match.group(2))
+                })
+                continue
+            
+            if lines[0].startswith("```"):
+                language = lines[0][3:].strip() or None
+                code_lines = []
+                i = 1
+                while i < len(lines) and not lines[i].startswith("```"):
+                    code_lines.append(lines[i])
+                    i += 1
+                code_block: Dict[str, Any] = {
+                    "type": "codeBlock",
+                    "content": [{"type": "text", "text": "\n".join(code_lines)}]
+                }
+                if language:
+                    code_block["attrs"] = {"language": language}
+                content.append(code_block)
+                continue
+            
             if all(line.strip().startswith("- ") for line in lines if line.strip()):
-                # Bullet list
                 list_items = []
                 for line in lines:
                     if line.strip().startswith("- "):
@@ -620,7 +775,7 @@ class JiraClient:
                             "type": "listItem",
                             "content": [{
                                 "type": "paragraph",
-                                "content": [{"type": "text", "text": text}]
+                                "content": self._parse_inline_formatting(text)
                             }]
                         })
                 if list_items:
@@ -628,40 +783,131 @@ class JiraClient:
                         "type": "bulletList",
                         "content": list_items
                     })
-            else:
-                # Regular paragraph
-                text_content = []
+                continue
+            
+            if all(re.match(r'^\d+\.\s+', line.strip()) for line in lines if line.strip()):
+                list_items = []
                 for line in lines:
-                    if text_content:
-                        text_content.append({"type": "hardBreak"})
-                    
-                    # Handle bold text
-                    if "**" in line:
-                        parts = line.split("**")
-                        for i, part in enumerate(parts):
-                            if part:
-                                if i % 2 == 1:  # Bold
-                                    text_content.append({
-                                        "type": "text",
-                                        "text": part,
-                                        "marks": [{"type": "strong"}]
-                                    })
-                                else:
-                                    text_content.append({"type": "text", "text": part})
-                    else:
-                        text_content.append({"type": "text", "text": line})
-                
-                if text_content:
+                    match = re.match(r'^\d+\.\s+(.+)$', line.strip())
+                    if match:
+                        list_items.append({
+                            "type": "listItem",
+                            "content": [{
+                                "type": "paragraph",
+                                "content": self._parse_inline_formatting(match.group(1))
+                            }]
+                        })
+                if list_items:
                     content.append({
-                        "type": "paragraph",
-                        "content": text_content
+                        "type": "orderedList",
+                        "content": list_items
                     })
+                continue
+            
+            if all(line.startswith(">") or not line.strip() for line in lines):
+                quote_content = []
+                for line in lines:
+                    if line.strip():
+                        quote_text = re.sub(r'^>\s?', '', line)
+                        quote_content.append({
+                            "type": "paragraph",
+                            "content": self._parse_inline_formatting(quote_text)
+                        })
+                if quote_content:
+                    content.append({
+                        "type": "blockquote",
+                        "content": quote_content
+                    })
+                continue
+            
+            text_content: List[Dict[str, Any]] = []
+            for line in lines:
+                if text_content:
+                    text_content.append({"type": "hardBreak"})
+                text_content.extend(self._parse_inline_formatting(line))
+            
+            if text_content:
+                content.append({
+                    "type": "paragraph",
+                    "content": text_content
+                })
         
         return {
             "type": "doc",
             "version": 1,
             "content": content
         }
+    
+    def _parse_inline_formatting(self, text: str) -> List[Dict[str, Any]]:
+        """Parse inline markdown formatting (bold, italic, links, strikethrough, code)."""
+        nodes: List[Dict[str, Any]] = []
+        remaining = text
+        
+        while remaining:
+            link_match = re.match(r'\[([^\]]+)\]\(([^)]+)\)', remaining)
+            if link_match:
+                nodes.append({
+                    "type": "text",
+                    "text": link_match.group(1),
+                    "marks": [{"type": "link", "attrs": {"href": link_match.group(2)}}]
+                })
+                remaining = remaining[len(link_match.group(0)):]
+                continue
+            
+            bold_match = re.match(r'\*\*(.+?)\*\*', remaining)
+            if bold_match:
+                nodes.append({
+                    "type": "text",
+                    "text": bold_match.group(1),
+                    "marks": [{"type": "strong"}]
+                })
+                remaining = remaining[len(bold_match.group(0)):]
+                continue
+            
+            italic_match = re.match(r'\*(.+?)\*', remaining)
+            if italic_match:
+                nodes.append({
+                    "type": "text",
+                    "text": italic_match.group(1),
+                    "marks": [{"type": "em"}]
+                })
+                remaining = remaining[len(italic_match.group(0)):]
+                continue
+            
+            strike_match = re.match(r'~~(.+?)~~', remaining)
+            if strike_match:
+                nodes.append({
+                    "type": "text",
+                    "text": strike_match.group(1),
+                    "marks": [{"type": "strike"}]
+                })
+                remaining = remaining[len(strike_match.group(0)):]
+                continue
+            
+            code_match = re.match(r'`([^`]+)`', remaining)
+            if code_match:
+                nodes.append({
+                    "type": "text",
+                    "text": code_match.group(1),
+                    "marks": [{"type": "code"}]
+                })
+                remaining = remaining[len(code_match.group(0)):]
+                continue
+            
+            next_special = len(remaining)
+            for pattern in [r'\[', r'\*\*', r'\*', r'~~', r'`']:
+                match = re.search(pattern, remaining[1:])
+                if match:
+                    next_special = min(next_special, match.start() + 1)
+            
+            if next_special > 0:
+                nodes.append({"type": "text", "text": remaining[:next_special]})
+                remaining = remaining[next_special:]
+            else:
+                nodes.append({"type": "text", "text": remaining})
+                break
+        
+        return nodes if nodes else [{"type": "text", "text": ""}]
     
     # ==================== Custom Field Operations ====================
     

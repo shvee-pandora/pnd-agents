@@ -1459,6 +1459,105 @@ def register_tools(server: Server) -> None:
                     "required": []
                 }
             ),
+
+            # Jira Integration Tools
+            types.Tool(
+                name="jira_get_issue",
+                description="Get a JIRA issue by its key. Returns issue details including summary, status, type, description, assignee, priority, and labels. Requires JIRA_BASE_URL, JIRA_EMAIL, and JIRA_API_TOKEN environment variables.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "issue_key": {
+                            "type": "string",
+                            "description": "JIRA issue key (e.g., 'EPA-123', 'PANDORA-456')"
+                        },
+                        "fields": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Optional list of specific fields to retrieve (e.g., ['summary', 'status', 'assignee']). If not provided, returns all standard fields."
+                        }
+                    },
+                    "required": ["issue_key"]
+                }
+            ),
+            types.Tool(
+                name="jira_search_issues",
+                description="Search for JIRA issues using JQL (JIRA Query Language). Returns a list of matching issues with their details. Requires JIRA_BASE_URL, JIRA_EMAIL, and JIRA_API_TOKEN environment variables.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "jql": {
+                            "type": "string",
+                            "description": "JQL query string (e.g., 'project = EPA AND status = \"In Progress\"', 'assignee = currentUser() AND sprint in openSprints()')"
+                        },
+                        "max_results": {
+                            "type": "integer",
+                            "description": "Maximum number of results to return (default: 50, max: 100)",
+                            "default": 50
+                        },
+                        "fields": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Optional list of specific fields to retrieve"
+                        }
+                    },
+                    "required": ["jql"]
+                }
+            ),
+            types.Tool(
+                name="jira_get_project",
+                description="Get JIRA project details by project key. Returns project information including name, description, lead, and issue types. Requires JIRA_BASE_URL, JIRA_EMAIL, and JIRA_API_TOKEN environment variables.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "project_key": {
+                            "type": "string",
+                            "description": "JIRA project key (e.g., 'EPA', 'PANDORA')"
+                        }
+                    },
+                    "required": ["project_key"]
+                }
+            ),
+            types.Tool(
+                name="jira_test_connection",
+                description="Test the JIRA API connection. Returns connection status and authenticated user information. Requires JIRA_BASE_URL, JIRA_EMAIL, and JIRA_API_TOKEN environment variables.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {}
+                }
+            ),
+            types.Tool(
+                name="jira_add_comment",
+                description="Add a comment to a JIRA issue. Supports markdown formatting. Requires JIRA_BASE_URL, JIRA_EMAIL, and JIRA_API_TOKEN environment variables.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "issue_key": {
+                            "type": "string",
+                            "description": "JIRA issue key (e.g., 'EPA-123')"
+                        },
+                        "comment": {
+                            "type": "string",
+                            "description": "Comment text (supports markdown formatting)"
+                        }
+                    },
+                    "required": ["issue_key", "comment"]
+                }
+            ),
+            types.Tool(
+                name="jira_get_transitions",
+                description="Get available status transitions for a JIRA issue. Returns list of transitions that can be performed on the issue. Requires JIRA_BASE_URL, JIRA_EMAIL, and JIRA_API_TOKEN environment variables.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "issue_key": {
+                            "type": "string",
+                            "description": "JIRA issue key (e.g., 'EPA-123')"
+                        }
+                    },
+                    "required": ["issue_key"]
+                }
+            ),
         ]
 
     # Register call_tool handler
@@ -2436,6 +2535,133 @@ AI Productivity Tracker Agent v1.0"""
                     return [types.TextContent(type="text", text=register)]
                 except Exception as td_error:
                     return [types.TextContent(type="text", text=f"Technical Debt Register Error: {str(td_error)}")]
+
+            # Jira Integration Tools
+            elif name == "jira_get_issue":
+                import json
+                try:
+                    jira_client = JiraClient()
+                    issue = jira_client.get_issue(
+                        arguments["issue_key"],
+                        arguments.get("fields")
+                    )
+                    jira_client.close()
+                    
+                    if issue:
+                        result = {
+                            "key": issue.key,
+                            "id": issue.id,
+                            "summary": issue.summary,
+                            "status": issue.status,
+                            "issue_type": issue.issue_type,
+                            "description": issue.description,
+                            "assignee": issue.assignee,
+                            "priority": issue.priority,
+                            "labels": issue.labels,
+                        }
+                        return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                    else:
+                        return [types.TextContent(type="text", text=f"Issue {arguments['issue_key']} not found")]
+                except Exception as jira_error:
+                    return [types.TextContent(type="text", text=f"JIRA Error: {str(jira_error)}")]
+
+            elif name == "jira_search_issues":
+                import json
+                try:
+                    jira_client = JiraClient()
+                    issues = jira_client.search_issues(
+                        arguments["jql"],
+                        arguments.get("max_results", 50),
+                        arguments.get("fields")
+                    )
+                    jira_client.close()
+                    
+                    results = []
+                    for issue in issues:
+                        results.append({
+                            "key": issue.key,
+                            "id": issue.id,
+                            "summary": issue.summary,
+                            "status": issue.status,
+                            "issue_type": issue.issue_type,
+                            "assignee": issue.assignee,
+                            "priority": issue.priority,
+                            "labels": issue.labels,
+                        })
+                    
+                    return [types.TextContent(type="text", text=json.dumps({
+                        "total": len(results),
+                        "issues": results
+                    }, indent=2))]
+                except Exception as jira_error:
+                    return [types.TextContent(type="text", text=f"JIRA Search Error: {str(jira_error)}")]
+
+            elif name == "jira_get_project":
+                import json
+                try:
+                    jira_client = JiraClient()
+                    project = jira_client.get_project(arguments["project_key"])
+                    jira_client.close()
+                    
+                    if project:
+                        return [types.TextContent(type="text", text=json.dumps(project, indent=2))]
+                    else:
+                        return [types.TextContent(type="text", text=f"Project {arguments['project_key']} not found")]
+                except Exception as jira_error:
+                    return [types.TextContent(type="text", text=f"JIRA Project Error: {str(jira_error)}")]
+
+            elif name == "jira_test_connection":
+                import json
+                try:
+                    jira_client = JiraClient()
+                    success = jira_client.test_connection()
+                    jira_client.close()
+                    
+                    if success:
+                        return [types.TextContent(type="text", text=json.dumps({
+                            "status": "connected",
+                            "message": "Successfully connected to JIRA"
+                        }, indent=2))]
+                    else:
+                        return [types.TextContent(type="text", text=json.dumps({
+                            "status": "failed",
+                            "message": "Failed to connect to JIRA. Check JIRA_BASE_URL, JIRA_EMAIL, and JIRA_API_TOKEN environment variables."
+                        }, indent=2))]
+                except Exception as jira_error:
+                    return [types.TextContent(type="text", text=f"JIRA Connection Error: {str(jira_error)}")]
+
+            elif name == "jira_add_comment":
+                import json
+                try:
+                    jira_client = JiraClient()
+                    result = jira_client.add_comment(
+                        arguments["issue_key"],
+                        arguments["comment"],
+                        add_qain_label=False  # Don't auto-add qAIn label for general comments
+                    )
+                    jira_client.close()
+                    
+                    return [types.TextContent(type="text", text=json.dumps({
+                        "status": "success",
+                        "message": f"Comment added to {arguments['issue_key']}",
+                        "comment_id": result.get("id")
+                    }, indent=2))]
+                except Exception as jira_error:
+                    return [types.TextContent(type="text", text=f"JIRA Comment Error: {str(jira_error)}")]
+
+            elif name == "jira_get_transitions":
+                import json
+                try:
+                    jira_client = JiraClient()
+                    transitions = jira_client.get_transitions(arguments["issue_key"])
+                    jira_client.close()
+                    
+                    return [types.TextContent(type="text", text=json.dumps({
+                        "issue_key": arguments["issue_key"],
+                        "transitions": transitions
+                    }, indent=2))]
+                except Exception as jira_error:
+                    return [types.TextContent(type="text", text=f"JIRA Transitions Error: {str(jira_error)}")]
 
             else:
                 raise ValueError(f"Unknown tool: {name}")
