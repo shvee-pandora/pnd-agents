@@ -22,7 +22,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -109,6 +109,10 @@ class Pillar3Report:
     outcomes: List[Outcome] = field(default_factory=list)
     route_to_green: List[str] = field(default_factory=list)
     
+    # Progress sections (required by Pillar 3 template)
+    progress_last_month: List[str] = field(default_factory=list)
+    plan_this_month: List[str] = field(default_factory=list)
+    
     # Metadata
     generated_at: str = ""
     source_epic_key: str = ""
@@ -129,6 +133,8 @@ class Pillar3Report:
             "milestones": [m.to_dict() for m in self.milestones],
             "outcomes": [o.to_dict() for o in self.outcomes],
             "route_to_green": self.route_to_green,
+            "progress_last_month": self.progress_last_month,
+            "plan_this_month": self.plan_this_month,
             "generated_at": self.generated_at,
             "source_epic_key": self.source_epic_key,
             "source_initiative_key": self.source_initiative_key
@@ -501,7 +507,9 @@ class Pillar3ReportGenerator:
             status=self._derive_rag_from_issues(child_issues),
             milestones=self._extract_milestones_from_issues(child_issues),
             outcomes=self._extract_outcomes_from_issues(child_issues),
-            route_to_green=self._extract_route_to_green(fields, child_issues)
+            route_to_green=self._extract_route_to_green(fields, child_issues),
+            progress_last_month=self._extract_progress_last_month(child_issues),
+            plan_this_month=self._extract_plan_this_month(child_issues)
         )
         
         # If no objectives found, use child issue summaries
@@ -555,7 +563,9 @@ class Pillar3ReportGenerator:
             status=self._derive_rag_from_issues(all_child_issues),
             milestones=self._extract_milestones_from_issues(all_child_issues),
             outcomes=self._extract_outcomes_from_issues(all_child_issues),
-            route_to_green=self._extract_route_to_green(fields, all_child_issues)
+            route_to_green=self._extract_route_to_green(fields, all_child_issues),
+            progress_last_month=self._extract_progress_last_month(all_child_issues),
+            plan_this_month=self._extract_plan_this_month(all_child_issues)
         )
         
         # If no objectives found, use Epic summaries
@@ -595,7 +605,9 @@ class Pillar3ReportGenerator:
             status=self._derive_rag_from_issues(issues),
             milestones=self._extract_milestones_from_issues(issues),
             outcomes=self._extract_outcomes_from_issues(issues),
-            route_to_green=self._extract_route_to_green_from_issues(issues)
+            route_to_green=self._extract_route_to_green_from_issues(issues),
+            progress_last_month=self._extract_progress_last_month(issues),
+            plan_this_month=self._extract_plan_this_month(issues)
         )
         
         return report
@@ -729,6 +741,86 @@ class Pillar3ReportGenerator:
         
         return watchouts[:6]
     
+    def _extract_progress_last_month(self, issues: List[Dict[str, Any]]) -> List[str]:
+        """Extract progress from last month based on recently completed issues."""
+        progress = []
+        
+        # Get issues completed in the last 30 days
+        thirty_days_ago = datetime.now() - timedelta(days=30)
+        
+        for issue in issues:
+            fields = issue.get("fields", {})
+            status_cat = fields.get("status", {}).get("statusCategory", {}).get("name", "")
+            summary = fields.get("summary", "")
+            
+            # Check if issue was completed recently
+            if status_cat == "Done":
+                # Try to get resolution date
+                resolution_date = fields.get("resolutiondate")
+                if resolution_date:
+                    try:
+                        resolved = datetime.fromisoformat(resolution_date.replace("Z", "+00:00"))
+                        if resolved.replace(tzinfo=None) >= thirty_days_ago:
+                            progress.append(f"Completed: {summary}")
+                    except (ValueError, TypeError):
+                        # If we can't parse date, include it anyway
+                        progress.append(f"Completed: {summary}")
+                else:
+                    # No resolution date, include if status is Done
+                    progress.append(f"Completed: {summary}")
+            
+            # Also include issues that moved to In Progress
+            elif status_cat == "In Progress":
+                updated = fields.get("updated")
+                if updated:
+                    try:
+                        update_date = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+                        if update_date.replace(tzinfo=None) >= thirty_days_ago:
+                            progress.append(f"In progress: {summary}")
+                    except (ValueError, TypeError):
+                        pass
+        
+        if not progress:
+            progress = ["Work continued on planned deliverables"]
+        
+        return progress[:5]
+    
+    def _extract_plan_this_month(self, issues: List[Dict[str, Any]]) -> List[str]:
+        """Extract plan for this month based on upcoming/in-progress issues."""
+        plan = []
+        
+        # Get current date info
+        now = datetime.now()
+        next_month = now + timedelta(days=30)
+        
+        for issue in issues:
+            fields = issue.get("fields", {})
+            status_cat = fields.get("status", {}).get("statusCategory", {}).get("name", "")
+            summary = fields.get("summary", "")
+            
+            # Include issues that are in progress or to do
+            if status_cat in ["In Progress", "To Do"]:
+                due_date = fields.get("duedate")
+                if due_date:
+                    try:
+                        due = datetime.strptime(due_date, "%Y-%m-%d")
+                        # Include if due within next 30 days
+                        if due <= next_month:
+                            plan.append(f"Complete: {summary}")
+                    except ValueError:
+                        plan.append(f"Continue: {summary}")
+                else:
+                    # No due date, include if in progress
+                    if status_cat == "In Progress":
+                        plan.append(f"Continue: {summary}")
+                    else:
+                        plan.append(f"Start: {summary}")
+        
+        if not plan:
+            plan = ["Continue work on planned deliverables"]
+        
+        return plan[:5]
+    
     # ==================== Output Formatting ====================
     
     def to_markdown(self, report: Pillar3Report) -> str:
@@ -816,7 +908,7 @@ class Pillar3ReportGenerator:
 
 def generate_pillar3_pdf(report: Pillar3Report, output_path: str, editable: bool = True) -> str:
     """
-    Generate a PDF from a Pillar 3 report.
+    Generate a PDF from a Pillar 3 report matching the Pillar 3 template 2026 HYBRID v2 format.
     
     Args:
         report: Pillar3Report data
@@ -839,13 +931,23 @@ def generate_pillar3_pdf(report: Pillar3Report, output_path: str, editable: bool
     PAGE_WIDTH = 960
     PAGE_HEIGHT = 540
     
-    # Colors
+    # Layout constants - two column layout
+    LEFT_MARGIN = 30
+    RIGHT_MARGIN = 30
+    COLUMN_GAP = 20
+    LEFT_COL_WIDTH = 450
+    RIGHT_COL_X = LEFT_MARGIN + LEFT_COL_WIDTH + COLUMN_GAP
+    RIGHT_COL_WIDTH = PAGE_WIDTH - RIGHT_COL_X - RIGHT_MARGIN
+    
+    # Colors matching Pandora brand
     PANDORA_PINK = HexColor('#E91E8C')
     DARK_GRAY = HexColor('#333333')
     LIGHT_GRAY = HexColor('#666666')
+    VERY_LIGHT_GRAY = HexColor('#CCCCCC')
     GREEN = HexColor('#00A651')
     AMBER = HexColor('#FFC107')
     RED = HexColor('#DC3545')
+    WHITE = HexColor('#FFFFFF')
     
     def get_rag_color(rag: RAGStatus):
         if rag == RAGStatus.GREEN:
@@ -856,139 +958,209 @@ def generate_pillar3_pdf(report: Pillar3Report, output_path: str, editable: bool
             return RED
         return LIGHT_GRAY
     
-    def draw_rag_indicator(c, x, y, rag: RAGStatus, size=12):
+    def draw_rag_indicator(c, x, y, rag: RAGStatus, size=14):
         c.setFillColor(get_rag_color(rag))
         c.circle(x + size/2, y + size/2, size/2, fill=1, stroke=0)
     
+    def draw_section_header(c, x, y, text, width=200):
+        c.setFont("Helvetica-Bold", 11)
+        c.setFillColor(PANDORA_PINK)
+        c.drawString(x, y, text)
+    
+    def truncate_text(text, max_len):
+        if len(text) > max_len:
+            return text[:max_len-3] + "..."
+        return text
+    
     c = canvas.Canvas(output_path, pagesize=(PAGE_WIDTH, PAGE_HEIGHT))
     
-    # Header
-    c.setFont("Helvetica-Bold", 14)
-    c.setFillColor(DARK_GRAY)
-    c.drawString(40, PAGE_HEIGHT - 35, f"PL: {report.product_line}")
-    c.drawString(196, PAGE_HEIGHT - 35, f"TEAM/INITIATIVE: {report.team_initiative}")
-    c.drawString(700, PAGE_HEIGHT - 35, f"TYPE: {report.report_type.value.upper()}")
+    # ==================== HEADER ====================
+    y_header = PAGE_HEIGHT - 30
     
-    # Objectives
-    c.setFont("Helvetica-Bold", 12)
-    c.setFillColor(PANDORA_PINK)
-    c.drawString(37, PAGE_HEIGHT - 60, "Objectives")
-    
-    c.setFont("Helvetica", 11)
-    c.setFillColor(DARK_GRAY)
-    y_pos = PAGE_HEIGHT - 80
-    for obj in report.objectives[:4]:
-        # Truncate long objectives
-        display_obj = obj[:60] + "..." if len(obj) > 60 else obj
-        c.drawString(37, y_pos, f"- {display_obj}")
-        y_pos -= 18
-    
-    # Status Section
-    c.setFont("Helvetica-Bold", 12)
-    c.setFillColor(PANDORA_PINK)
-    c.drawString(37, PAGE_HEIGHT - 157, "Status")
-    
+    # PL label
     c.setFont("Helvetica-Bold", 10)
     c.setFillColor(LIGHT_GRAY)
-    c.drawString(191, PAGE_HEIGHT - 157, "RAG")
-    c.drawString(420, PAGE_HEIGHT - 157, "RAG")
-    
-    c.setFont("Helvetica", 11)
-    c.setFillColor(DARK_GRAY)
-    
-    # Resources
-    c.drawString(37, PAGE_HEIGHT - 180, "Resources")
-    draw_rag_indicator(c, 191, PAGE_HEIGHT - 192, report.status.resources)
-    
-    # Timing
-    c.drawString(265, PAGE_HEIGHT - 180, "Timing")
-    draw_rag_indicator(c, 420, PAGE_HEIGHT - 192, report.status.timing)
-    
-    # Budget
-    c.drawString(37, PAGE_HEIGHT - 202, "Budget")
-    draw_rag_indicator(c, 191, PAGE_HEIGHT - 214, report.status.budget)
-    
-    # Scope
-    c.drawString(265, PAGE_HEIGHT - 202, "Scope")
-    draw_rag_indicator(c, 420, PAGE_HEIGHT - 214, report.status.scope)
-    
-    # Outcomes Section
+    c.drawString(LEFT_MARGIN, y_header, "PL:")
     c.setFont("Helvetica-Bold", 12)
-    c.setFillColor(PANDORA_PINK)
-    c.drawString(37, PAGE_HEIGHT - 234, "Outcomes")
-    c.drawString(490, PAGE_HEIGHT - 234, "Progress")
-    
-    c.setFont("Helvetica", 10)
     c.setFillColor(DARK_GRAY)
-    y_pos = PAGE_HEIGHT - 260
+    c.drawString(LEFT_MARGIN + 25, y_header, report.product_line)
+    
+    # TEAM/INITIATIVE label (center)
+    team_x = 200
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(LIGHT_GRAY)
+    c.drawString(team_x, y_header, "TEAM/INITIATIVE:")
+    c.setFont("Helvetica-Bold", 14)
+    c.setFillColor(PANDORA_PINK)
+    c.drawString(team_x + 110, y_header, report.team_initiative.upper())
+    
+    # TYPE label (right)
+    type_x = PAGE_WIDTH - 180
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(LIGHT_GRAY)
+    c.drawString(type_x, y_header, "TYPE:")
+    c.setFont("Helvetica-Bold", 12)
+    c.setFillColor(DARK_GRAY)
+    c.drawString(type_x + 40, y_header, report.report_type.value.upper())
+    
+    # ==================== LEFT COLUMN ====================
+    
+    # --- Objectives Section ---
+    y_pos = PAGE_HEIGHT - 60
+    draw_section_header(c, LEFT_MARGIN, y_pos, "Objectives")
+    
+    c.setFont("Helvetica", 9)
+    c.setFillColor(DARK_GRAY)
+    y_pos -= 16
+    for obj in report.objectives[:4]:
+        display_obj = truncate_text(obj, 70)
+        c.drawString(LEFT_MARGIN, y_pos, f"• {display_obj}")
+        y_pos -= 14
+    
+    # --- Status Section (RAG indicators) ---
+    y_pos -= 10
+    draw_section_header(c, LEFT_MARGIN, y_pos, "Status")
+    
+    # RAG header
+    c.setFont("Helvetica-Bold", 8)
+    c.setFillColor(LIGHT_GRAY)
+    c.drawString(LEFT_MARGIN + 100, y_pos, "RAG")
+    c.drawString(LEFT_MARGIN + 250, y_pos, "RAG")
+    
+    y_pos -= 18
+    c.setFont("Helvetica", 9)
+    c.setFillColor(DARK_GRAY)
+    
+    # Row 1: Resources and Timing
+    c.drawString(LEFT_MARGIN, y_pos, "Resources")
+    draw_rag_indicator(c, LEFT_MARGIN + 95, y_pos - 4, report.status.resources)
+    c.drawString(LEFT_MARGIN + 150, y_pos, "Timing")
+    draw_rag_indicator(c, LEFT_MARGIN + 245, y_pos - 4, report.status.timing)
+    
+    y_pos -= 20
+    # Row 2: Budget and Scope
+    c.drawString(LEFT_MARGIN, y_pos, "Budget")
+    draw_rag_indicator(c, LEFT_MARGIN + 95, y_pos - 4, report.status.budget)
+    c.drawString(LEFT_MARGIN + 150, y_pos, "Scope")
+    draw_rag_indicator(c, LEFT_MARGIN + 245, y_pos - 4, report.status.scope)
+    
+    # --- Route to Green & Key Watchouts ---
+    y_pos -= 25
+    draw_section_header(c, LEFT_MARGIN, y_pos, "Route to Green & Key Watchouts")
+    
+    c.setFont("Helvetica", 9)
+    c.setFillColor(DARK_GRAY)
+    y_pos -= 14
+    for item in report.route_to_green[:4]:
+        display_item = truncate_text(item, 70)
+        c.drawString(LEFT_MARGIN, y_pos, f"• {display_item}")
+        y_pos -= 13
+    
+    # --- Progress last month ---
+    y_pos -= 10
+    draw_section_header(c, LEFT_MARGIN, y_pos, "Progress last month")
+    
+    c.setFont("Helvetica", 9)
+    c.setFillColor(DARK_GRAY)
+    y_pos -= 14
+    if report.progress_last_month:
+        for item in report.progress_last_month[:3]:
+            display_item = truncate_text(item, 70)
+            c.drawString(LEFT_MARGIN, y_pos, f"• {display_item}")
+            y_pos -= 13
+    else:
+        c.drawString(LEFT_MARGIN, y_pos, "• TBD")
+        y_pos -= 13
+    
+    # --- Plan for this month ---
+    y_pos -= 10
+    draw_section_header(c, LEFT_MARGIN, y_pos, "Plan for this month")
+    
+    c.setFont("Helvetica", 9)
+    c.setFillColor(DARK_GRAY)
+    y_pos -= 14
+    if report.plan_this_month:
+        for item in report.plan_this_month[:3]:
+            display_item = truncate_text(item, 70)
+            c.drawString(LEFT_MARGIN, y_pos, f"• {display_item}")
+            y_pos -= 13
+    else:
+        c.drawString(LEFT_MARGIN, y_pos, "• TBD")
+        y_pos -= 13
+    
+    # ==================== RIGHT COLUMN ====================
+    
+    # --- Key Results Section ---
+    y_pos = PAGE_HEIGHT - 60
+    draw_section_header(c, RIGHT_COL_X, y_pos, "Key Results")
+    
+    c.setFont("Helvetica", 9)
+    c.setFillColor(DARK_GRAY)
+    y_pos -= 16
+    for kr in report.key_results[:4]:
+        display_kr = truncate_text(kr, 55)
+        c.drawString(RIGHT_COL_X, y_pos, f"• {display_kr}")
+        y_pos -= 14
+    
+    # --- Outcomes Table ---
+    y_pos -= 15
+    draw_section_header(c, RIGHT_COL_X, y_pos, "Outcomes")
+    c.setFont("Helvetica-Bold", 11)
+    c.setFillColor(PANDORA_PINK)
+    c.drawString(RIGHT_COL_X + 250, y_pos, "Progress")
+    
+    c.setFont("Helvetica", 9)
+    c.setFillColor(DARK_GRAY)
+    y_pos -= 16
+    
     for outcome in report.outcomes[:4]:
-        name = outcome.name[:40] + "..." if len(outcome.name) > 40 else outcome.name
-        progress = outcome.progress[:45] + "..." if len(outcome.progress) > 45 else outcome.progress
-        c.drawString(37, y_pos, name)
-        c.drawString(490, y_pos, progress)
-        y_pos -= 26
+        name = truncate_text(outcome.name, 35)
+        progress = truncate_text(outcome.progress, 30)
+        c.drawString(RIGHT_COL_X, y_pos, name)
+        c.drawString(RIGHT_COL_X + 250, y_pos, progress)
+        y_pos -= 14
     
-    # Key Milestones Section
-    c.setFont("Helvetica-Bold", 12)
+    # --- Key Milestones Table ---
+    y_pos -= 15
+    draw_section_header(c, RIGHT_COL_X, y_pos, "Key Milestone")
+    c.setFont("Helvetica-Bold", 11)
     c.setFillColor(PANDORA_PINK)
-    c.drawString(37, PAGE_HEIGHT - 372, "Key Milestone")
-    c.drawString(500, PAGE_HEIGHT - 372, "Date")
-    c.drawString(700, PAGE_HEIGHT - 372, "Status")
+    c.drawString(RIGHT_COL_X + 250, y_pos, "Date")
+    c.drawString(RIGHT_COL_X + 350, y_pos, "Status")
     
-    c.setFont("Helvetica", 10)
+    c.setFont("Helvetica", 9)
     c.setFillColor(DARK_GRAY)
-    y_pos = PAGE_HEIGHT - 393
+    y_pos -= 16
+    
     for milestone in report.milestones[:5]:
-        name = milestone.name[:55] + "..." if len(milestone.name) > 55 else milestone.name
-        c.drawString(37, y_pos, name)
-        c.drawString(500, y_pos, milestone.date)
+        name = truncate_text(milestone.name, 35)
+        c.drawString(RIGHT_COL_X, y_pos, name)
+        c.drawString(RIGHT_COL_X + 250, y_pos, milestone.date)
         
         # Color code status
-        if milestone.status == "Completed":
+        status_lower = milestone.status.lower()
+        if "completed" in status_lower or "done" in status_lower:
             c.setFillColor(GREEN)
-        elif milestone.status == "In progress":
+        elif "progress" in status_lower:
             c.setFillColor(AMBER)
-        elif milestone.status == "Blocked":
+        elif "blocked" in status_lower or "not started" in status_lower:
             c.setFillColor(RED)
         else:
-            c.setFillColor(LIGHT_GRAY)
-        c.drawString(700, y_pos, milestone.status)
+            c.setFillColor(DARK_GRAY)
+        c.drawString(RIGHT_COL_X + 350, y_pos, milestone.status)
         c.setFillColor(DARK_GRAY)
-        y_pos -= 21
+        y_pos -= 14
     
-    # Key Results (Right Column)
-    c.setFont("Helvetica-Bold", 12)
+    # ==================== FOOTER ====================
+    # Team/Initiative name in bottom left
+    c.setFont("Helvetica-Bold", 8)
     c.setFillColor(PANDORA_PINK)
-    c.drawString(501, PAGE_HEIGHT - 60, "Key Results")
+    c.drawString(LEFT_MARGIN, 15, report.team_initiative)
     
-    c.setFont("Helvetica", 11)
-    c.setFillColor(DARK_GRAY)
-    y_pos = PAGE_HEIGHT - 80
-    for kr in report.key_results[:4]:
-        display_kr = kr[:50] + "..." if len(kr) > 50 else kr
-        c.drawString(501, y_pos, f"- {display_kr}")
-        y_pos -= 18
-    
-    # Route to Green Section
-    c.setFont("Helvetica-Bold", 12)
-    c.setFillColor(PANDORA_PINK)
-    c.drawString(501, PAGE_HEIGHT - 157, "Route to Green & Key Watchouts")
-    
-    c.setFont("Helvetica", 10)
-    c.setFillColor(DARK_GRAY)
-    y_pos = PAGE_HEIGHT - 177
-    for item in report.route_to_green[:4]:
-        display_item = item[:55] + "..." if len(item) > 55 else item
-        c.drawString(501, y_pos, f"- {display_item}")
-        y_pos -= 18
-    
-    # Footer
-    c.setFont("Helvetica", 7)
+    # Classification in center
+    c.setFont("Helvetica", 9)
     c.setFillColor(LIGHT_GRAY)
-    c.drawString(30, 28, report.team_initiative)
-    
-    c.setFont("Helvetica", 12)
-    c.drawString(405, 5, "Classification: Pandora Internal")
+    c.drawCentredString(PAGE_WIDTH / 2, 15, "Classification: Pandora Internal")
     
     c.save()
     logger.info(f"Generated PDF: {output_path}")
