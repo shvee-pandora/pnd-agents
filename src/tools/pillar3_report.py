@@ -227,20 +227,45 @@ class Pillar3ReportGenerator:
             logger.error(f"Failed to get issue {issue_key}: {e}")
             raise
     
+    # Default fields to request from JIRA search API
+    DEFAULT_SEARCH_FIELDS = [
+        "summary",
+        "status",
+        "duedate",
+        "resolutiondate",
+        "updated",
+        "created",
+        "description",
+        "issuelinks",
+        "parent",
+        "project",
+        "issuetype",
+        "priority",
+        "labels",
+        "assignee",
+        "reporter",
+    ]
+    
     def search_issues(self, jql: str, max_results: int = 100, fields: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """Search for issues using JQL.
         
         Uses the newer /search/jql endpoint which is the recommended approach
         for JIRA Cloud REST API v3.
+        
+        Note: The /search/jql endpoint requires explicit field specification.
+        If no fields are provided, a default set of commonly needed fields is used.
         """
         try:
+            # Use default fields if none specified - the /search/jql endpoint
+            # doesn't return fields by default
+            request_fields = fields if fields else self.DEFAULT_SEARCH_FIELDS
+            
             # Build query parameters for GET request to /search/jql
             params = {
                 "jql": jql,
                 "maxResults": max_results,
+                "fields": ",".join(request_fields) if isinstance(request_fields, list) else request_fields,
             }
-            if fields:
-                params["fields"] = ",".join(fields) if isinstance(fields, list) else fields
             
             # Try the newer /search/jql endpoint first (GET method)
             try:
@@ -254,9 +279,8 @@ class Pillar3ReportGenerator:
                     payload = {
                         "jql": jql,
                         "maxResults": max_results,
+                        "fields": request_fields,
                     }
-                    if fields:
-                        payload["fields"] = fields
                     response = self.client.post("search", json=payload)
                     response.raise_for_status()
                     return response.json().get("issues", [])
