@@ -8,6 +8,7 @@ from .amplience_placement_agent import AmplicencePlacementAgent
 from .analytics_agent import AnalyticsAgent
 from .broken_experience_detector_agent import BrokenExperienceDetectorAgent
 from .commerce_agent import CommerceAgent
+from .data_scientist_agent import DataScientistAgent
 from .figma_reader_agent import FigmaReaderAgent
 from .qa_agent import QAAgent
 from .sonar_validation_agent import SonarValidationAgent
@@ -28,6 +29,7 @@ __all__ = [
     "AnalyticsAgent",
     "BrokenExperienceDetectorAgent",
     "CommerceAgent",
+    "DataScientistAgent",
     "FigmaReaderAgent",
     "QAAgent",
     "SonarValidationAgent",
