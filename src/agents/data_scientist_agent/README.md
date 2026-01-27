@@ -161,6 +161,76 @@ The agent returns a dictionary with:
 }
 ```
 
+## Example Prompts
+
+Here are example prompts you can use when interacting with the Data Scientist Agent:
+
+### Basic Analysis Prompts
+
+**Analyze delivery preferences:**
+> "Analyze the survey data in /data/delivery_survey.csv and tell me which delivery option customers prefer most."
+
+**Get a full report:**
+> "Generate a comprehensive analysis report from the sustainability survey data at /surveys/2024_delivery_choices.csv"
+
+**Quick summary:**
+> "Give me a summary of the delivery choice survey results from survey_data.csv"
+
+### Environmental Impact Prompts
+
+**Environmental influence analysis:**
+> "How important is environmental impact to customers when choosing delivery options? Analyze the survey at /data/survey.csv"
+
+**Sustainability correlation:**
+> "Do customers who care about the environment prefer in-store pickup? Check the data in delivery_survey.csv"
+
+**Environmental score breakdown:**
+> "What's the average environmental importance score and how does it vary by delivery choice?"
+
+### Generational Analysis Prompts
+
+**Compare generations:**
+> "Compare delivery preferences between Gen Z and Gen X customers using the survey data"
+
+**Generational environmental awareness:**
+> "Which generation cares most about environmental impact when choosing delivery? Analyze the survey data."
+
+**Age group insights:**
+> "Show me how different age groups choose between in-store pickup, standard delivery, and express delivery"
+
+### Specific Insights Prompts
+
+**Reasons analysis:**
+> "What are the top reasons customers choose in-store pickup over home delivery?"
+
+**Express delivery users:**
+> "Who chooses express delivery and why? Analyze the survey responses."
+
+**In-store pickup drivers:**
+> "What factors encourage customers to choose in-store pickup? Is sustainability one of them?"
+
+### Output Format Prompts
+
+**Markdown report:**
+> "Analyze the survey and generate a markdown report I can share with the team"
+
+**Confluence output:**
+> "Analyze the delivery survey and format the output for Confluence at https://our-wiki.atlassian.net/wiki/spaces/RETAIL/pages/12345"
+
+**Structured data:**
+> "Analyze the survey and return the raw data so I can create my own visualizations"
+
+### Combined Analysis Prompts
+
+**Full business insights:**
+> "I need to understand how sustainability impacts customer delivery choices. Analyze the survey data and tell me: 1) What delivery options do customers prefer? 2) Does environmental concern influence their choice? 3) Are there generational differences?"
+
+**Executive summary:**
+> "Prepare an executive summary of the delivery options survey for our sustainability report. Include key metrics on environmental awareness and generational trends."
+
+**Actionable recommendations:**
+> "Based on the survey data, what can we learn about promoting in-store pickup as a sustainable option? Which customer segments should we target?"
+
 ## Example Report Output
 
 The agent generates comprehensive reports including:
