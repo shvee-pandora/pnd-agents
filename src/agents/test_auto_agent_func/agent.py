@@ -72,6 +72,19 @@ PANDORA_CYPRESS_REPO = {
 
 
 # ============================================================================
+# LINKED TEST CASE FILTERING CRITERIA
+# ============================================================================
+# Only fetch and automate test cases matching these criteria to reduce API calls
+# and focus on high-value automation targets.
+
+# Priorities that are candidates for automation (skip Low, Lowest)
+AUTOMATABLE_PRIORITIES = ["Highest", "High"]
+
+# Testing cycles/levels that are candidates for automation (skip Sanity, Exploratory)
+AUTOMATABLE_TESTING_CYCLES = ["Smoke", "Regression"]
+
+
+# ============================================================================
 # JIRA & DEVELOPMENT CONTEXT DATA CLASSES
 # ============================================================================
 
@@ -168,6 +181,16 @@ class LinkedTestCase:
     status: str = ""  # Manual, Automated, Not Automated
     is_automated: bool = False
     automation_file: str = ""
+    # Content fields
+    description: str = ""  # Full test case description/steps
+    parsed_steps: List[Dict[str, str]] = field(default_factory=list)  # Parsed step list
+    preconditions: str = ""
+    expected_results: List[str] = field(default_factory=list)
+    tags: List[str] = field(default_factory=list)
+    # Filtering criteria fields
+    priority: str = ""  # Highest, High, Medium, Low, Lowest
+    testing_cycle: str = ""  # Smoke, Sanity, Regression, Exploratory
+    test_level: str = ""  # FT-UI, FT-API, SIT, E2E, UAT, etc.
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -176,6 +199,14 @@ class LinkedTestCase:
             "status": self.status,
             "is_automated": self.is_automated,
             "automation_file": self.automation_file,
+            "description": self.description,
+            "parsed_steps": self.parsed_steps,
+            "preconditions": self.preconditions,
+            "expected_results": self.expected_results,
+            "tags": self.tags,
+            "priority": self.priority,
+            "testing_cycle": self.testing_cycle,
+            "test_level": self.test_level,
         }
 
 
@@ -1375,6 +1406,12 @@ class TestAutoAgentFunc:
         self.branch_info: Optional[BranchInfo] = None
         self.scenario_review_result: Optional[ScenarioReviewResult] = None
 
+        # Merged linked scenarios (populated during step 1.3)
+        self.merged_linked_scenarios: List[Dict[str, Any]] = []
+
+        # Overlap analysis results (populated during step 5.5)
+        self.overlap_analysis: Dict[str, Any] = {}
+
     # =========================================================================
     # JIRA INTEGRATION METHODS
     # =========================================================================
@@ -1518,35 +1555,76 @@ class TestAutoAgentFunc:
         """
         Fetch linked test cases from JIRA Release field.
 
+        Filters test cases by:
+        - Priority: Only Highest and High priority tests
+        - Testing cycle: Only Smoke and Regression tests
+
+        Fetches full issue details including description for content analysis.
+
         Args:
             ticket_key: JIRA ticket key
 
         Returns:
-            List of LinkedTestCase objects
+            List of LinkedTestCase objects that match filtering criteria
         """
         test_cases = []
+        skipped_count = 0
+        skipped_reasons: Dict[str, int] = {"priority": 0, "testing_cycle": 0}
 
         try:
             from tools.jira_client import JiraClient
 
             client = JiraClient()
 
-            # Search for test cases linked to this ticket
-            # Using JQL to find linked issues of type "Test" or "Test Case"
-            jql = f'issue in linkedIssues("{ticket_key}") AND issuetype in ("Test", "Test Case", "Bug")'
+            # Enhanced JQL to filter by priority upfront (reduces API calls)
+            # Note: Testing cycle is often in labels, so we filter after fetching
+            priority_filter = ", ".join(f'"{p}"' for p in AUTOMATABLE_PRIORITIES)
+            jql = f'''issue in linkedIssues("{ticket_key}")
+                AND issuetype in ("Test", "Test Case", "Bug")
+                AND priority in ({priority_filter})'''
 
             linked_issues = client.search_issues(jql, max_results=50)
 
             for issue in linked_issues:
+                # Fetch full issue details including description
+                full_issue = client.get_issue(issue.key)
+
+                # Extract testing cycle from labels
+                labels = issue.labels or []
+                testing_cycle = self._extract_testing_cycle(labels)
+
+                # Filter by testing cycle (Smoke or Regression only)
+                if testing_cycle not in AUTOMATABLE_TESTING_CYCLES:
+                    skipped_count += 1
+                    skipped_reasons["testing_cycle"] += 1
+                    logger.info(
+                        f"Skipping {issue.key}: testing_cycle={testing_cycle} "
+                        f"(not in {AUTOMATABLE_TESTING_CYCLES})"
+                    )
+                    continue
+
+                # Get description from full issue if available
+                description = ""
+                if full_issue and full_issue.description:
+                    description = full_issue.description
+
                 tc = LinkedTestCase(
                     test_case_id=issue.key,
                     title=issue.summary or "",
                     status=issue.status or "",
-                    is_automated="automated" in (issue.labels or []),
+                    is_automated="automated" in labels,
+                    description=description,
+                    tags=labels,
+                    priority=issue.priority or "",
+                    testing_cycle=testing_cycle,
                 )
                 test_cases.append(tc)
 
-            logger.info(f"Found {len(test_cases)} linked test cases for {ticket_key}")
+            logger.info(
+                f"Fetched {len(test_cases)} automatable test cases for {ticket_key}, "
+                f"skipped {skipped_count} (priority: {skipped_reasons['priority']}, "
+                f"testing_cycle: {skipped_reasons['testing_cycle']})"
+            )
 
         except ImportError:
             logger.warning("JIRA client not available")
@@ -1555,6 +1633,37 @@ class TestAutoAgentFunc:
 
         self.automation_context.linked_test_cases = test_cases
         return test_cases
+
+    def _extract_testing_cycle(self, labels: List[str]) -> str:
+        """
+        Extract testing cycle from labels.
+
+        Maps common label variations to standardized testing cycle names.
+
+        Args:
+            labels: List of JIRA labels
+
+        Returns:
+            Standardized testing cycle name or "Unknown" if not found
+        """
+        cycle_labels = {
+            "smoke": "Smoke",
+            "regression": "Regression",
+            "sanity": "Sanity",
+            "exploratory": "Exploratory",
+            # Common variations
+            "smoke-test": "Smoke",
+            "smoke_test": "Smoke",
+            "regression-test": "Regression",
+            "regression_test": "Regression",
+        }
+
+        for label in labels:
+            label_lower = label.lower()
+            if label_lower in cycle_labels:
+                return cycle_labels[label_lower]
+
+        return "Unknown"
 
     def fetch_feature_flags(self, ticket_key: str, description: str = "") -> List[FeatureFlagStatus]:
         """
@@ -3307,6 +3416,302 @@ REUSE PRIORITY ORDER:
 
         return TestPriority.MEDIUM
 
+    # =========================================================================
+    # LINKED TEST CASE ANALYSIS METHODS
+    # =========================================================================
+
+    def parse_linked_test_cases(self) -> None:
+        """
+        Parse the content of all linked test cases.
+
+        Uses the existing parse_manual_test_case() method to extract structured
+        data from each linked test case's description. Populates parsed_steps,
+        preconditions, and expected_results fields.
+        """
+        for tc in self.automation_context.linked_test_cases:
+            if tc.description:
+                try:
+                    parsed = self.parse_manual_test_case(tc.description)
+                    # Convert TestStep objects to dict format for storage
+                    tc.parsed_steps = [
+                        {
+                            "step_number": step.step_number,
+                            "action": step.action,
+                            "expected_result": step.expected_result,
+                            "cypress_command": step.cypress_command,
+                        }
+                        for step in parsed.steps
+                    ]
+                    tc.preconditions = "\n".join(parsed.preconditions)
+                    tc.expected_results = [parsed.expected_result] if parsed.expected_result else []
+                    logger.debug(
+                        f"Parsed {tc.test_case_id}: {len(tc.parsed_steps)} steps, "
+                        f"preconditions: {bool(tc.preconditions)}"
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to parse test case {tc.test_case_id}: {e}")
+                    # Keep empty parsed_steps on failure
+
+    def merge_automated_scenarios(
+        self,
+        linked_test_cases: List[LinkedTestCase],
+    ) -> List[Dict[str, Any]]:
+        """
+        Merge similar automated scenarios from linked test cases.
+
+        Uses Jaccard similarity to identify overlapping scenarios and consolidates
+        them to avoid duplicate automation code.
+
+        Args:
+            linked_test_cases: List of LinkedTestCase objects with parsed_steps
+
+        Returns:
+            List of merged scenarios with:
+            - source_test_cases: List of test case IDs that were merged
+            - merged_steps: Consolidated list of unique steps
+            - scenario_name: Generated name for the merged scenario
+            - tags: Combined tags from all source test cases
+        """
+        merged_scenarios = []
+        processed_ids: Set[str] = set()
+
+        for tc in linked_test_cases:
+            if tc.test_case_id in processed_ids or not tc.is_automated:
+                continue
+
+            # Find similar scenarios among remaining unprocessed test cases
+            similar = [tc]
+            for other in linked_test_cases:
+                if (other.test_case_id != tc.test_case_id and
+                        other.test_case_id not in processed_ids and
+                        other.is_automated):
+                    similarity = self._calculate_step_similarity(
+                        tc.parsed_steps,
+                        other.parsed_steps
+                    )
+                    if similarity > 0.7:  # 70% similarity threshold
+                        similar.append(other)
+                        processed_ids.add(other.test_case_id)
+
+            processed_ids.add(tc.test_case_id)
+
+            # Merge similar scenarios
+            if len(similar) > 1:
+                merged = self._merge_scenario_group(similar)
+                merged_scenarios.append(merged)
+                logger.info(
+                    f"Merged {len(similar)} similar scenarios: "
+                    f"{[s.test_case_id for s in similar]}"
+                )
+            else:
+                merged_scenarios.append({
+                    "source_test_cases": [tc.test_case_id],
+                    "merged_steps": tc.parsed_steps,
+                    "scenario_name": tc.title,
+                    "tags": tc.tags,
+                })
+
+        return merged_scenarios
+
+    def _calculate_step_similarity(
+        self,
+        steps1: List[Dict[str, str]],
+        steps2: List[Dict[str, str]],
+    ) -> float:
+        """
+        Calculate Jaccard similarity between two sets of test steps.
+
+        Args:
+            steps1: First list of parsed steps
+            steps2: Second list of parsed steps
+
+        Returns:
+            Similarity score between 0.0 and 1.0
+        """
+        if not steps1 or not steps2:
+            return 0.0
+
+        # Extract action text for comparison
+        actions1 = {step.get("action", "").lower().strip() for step in steps1}
+        actions2 = {step.get("action", "").lower().strip() for step in steps2}
+
+        # Remove empty strings
+        actions1.discard("")
+        actions2.discard("")
+
+        if not actions1 or not actions2:
+            return 0.0
+
+        # Jaccard similarity
+        intersection = len(actions1 & actions2)
+        union = len(actions1 | actions2)
+
+        return intersection / union if union > 0 else 0.0
+
+    def _merge_scenario_group(
+        self,
+        scenarios: List[LinkedTestCase],
+    ) -> Dict[str, Any]:
+        """
+        Merge a group of similar scenarios into one consolidated scenario.
+
+        Args:
+            scenarios: List of LinkedTestCase objects to merge
+
+        Returns:
+            Dict with merged scenario data
+        """
+        source_ids = [s.test_case_id for s in scenarios]
+
+        # Collect all unique steps (preserving order from first scenario)
+        seen_actions: Set[str] = set()
+        merged_steps = []
+
+        for scenario in scenarios:
+            for step in scenario.parsed_steps:
+                action_key = step.get("action", "").lower().strip()
+                if action_key and action_key not in seen_actions:
+                    seen_actions.add(action_key)
+                    merged_steps.append(step)
+
+        # Combine tags from all scenarios
+        all_tags: Set[str] = set()
+        for scenario in scenarios:
+            all_tags.update(scenario.tags)
+
+        # Generate merged scenario name
+        if len(scenarios) == 1:
+            scenario_name = scenarios[0].title
+        else:
+            scenario_name = f"Merged: {scenarios[0].title} (+{len(scenarios) - 1} similar)"
+
+        return {
+            "source_test_cases": source_ids,
+            "merged_steps": merged_steps,
+            "scenario_name": scenario_name,
+            "tags": list(all_tags),
+        }
+
+    def analyze_linked_test_overlap(
+        self,
+        proposed_scenarios: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """
+        Analyze overlap between linked test cases and proposed scenarios.
+
+        Compares the parsed content of linked test cases against proposed
+        automation scenarios to identify:
+        - Overlapping scenarios that may be duplicates
+        - Unique linked test cases not covered by proposals
+        - Unique proposed scenarios not covered by linked tests
+
+        Args:
+            proposed_scenarios: List of proposed scenario dicts with "steps" key
+
+        Returns:
+            Dict with overlap analysis:
+            - overlapping_scenarios: List of scenario pairs with similarity scores
+            - unique_linked: Linked test cases not covered by proposals
+            - unique_proposed: Proposed scenarios not covered by linked tests
+            - recommendations: List of recommended actions
+        """
+        overlapping_scenarios = []
+        unique_linked = []
+        unique_proposed = []
+        recommendations = []
+
+        linked_tcs = self.automation_context.linked_test_cases
+
+        # Track which linked test cases have overlapping proposed scenarios
+        linked_overlap_found: Set[str] = set()
+        proposed_overlap_found: Set[int] = set()
+
+        # Compare each linked test case against each proposed scenario
+        for tc in linked_tcs:
+            if not tc.parsed_steps:
+                continue
+
+            tc_matched = False
+            for idx, proposed in enumerate(proposed_scenarios):
+                proposed_steps = proposed.get("steps", [])
+                if not proposed_steps:
+                    continue
+
+                # Calculate similarity
+                similarity = self._calculate_step_similarity(
+                    tc.parsed_steps,
+                    proposed_steps
+                )
+
+                if similarity > 0.5:  # 50% threshold for overlap detection
+                    tc_matched = True
+                    overlapping_scenarios.append({
+                        "linked_test_case": tc.test_case_id,
+                        "linked_title": tc.title,
+                        "proposed_index": idx,
+                        "proposed_name": proposed.get("name", f"Scenario {idx + 1}"),
+                        "similarity": round(similarity * 100, 1),
+                    })
+                    linked_overlap_found.add(tc.test_case_id)
+                    proposed_overlap_found.add(idx)
+
+            if not tc_matched and tc.parsed_steps:
+                unique_linked.append({
+                    "test_case_id": tc.test_case_id,
+                    "title": tc.title,
+                    "step_count": len(tc.parsed_steps),
+                    "is_automated": tc.is_automated,
+                })
+
+        # Find unique proposed scenarios
+        for idx, proposed in enumerate(proposed_scenarios):
+            if idx not in proposed_overlap_found:
+                unique_proposed.append({
+                    "index": idx,
+                    "name": proposed.get("name", f"Scenario {idx + 1}"),
+                    "step_count": len(proposed.get("steps", [])),
+                })
+
+        # Generate recommendations
+        if overlapping_scenarios:
+            recommendations.append(
+                f"OVERLAP WARNING: {len(overlapping_scenarios)} proposed scenarios "
+                f"overlap with existing linked test cases. Consider reusing existing "
+                f"test case content instead of creating duplicates."
+            )
+
+            for overlap in overlapping_scenarios:
+                if overlap["similarity"] >= 70:
+                    recommendations.append(
+                        f"  - HIGH OVERLAP ({overlap['similarity']}%): "
+                        f"'{overlap['proposed_name']}' overlaps with {overlap['linked_test_case']} "
+                        f"('{overlap['linked_title']}'). Consider extending existing test."
+                    )
+
+        if unique_linked:
+            automated_unique = [u for u in unique_linked if u["is_automated"]]
+            if automated_unique:
+                recommendations.append(
+                    f"NOTE: {len(automated_unique)} existing automated test cases have no "
+                    f"overlap with proposed scenarios. They may cover different scenarios."
+                )
+
+        if unique_proposed:
+            recommendations.append(
+                f"NEW SCENARIOS: {len(unique_proposed)} proposed scenarios are unique "
+                f"and don't overlap with existing linked test cases."
+            )
+
+        return {
+            "overlapping_scenarios": overlapping_scenarios,
+            "unique_linked": unique_linked,
+            "unique_proposed": unique_proposed,
+            "recommendations": recommendations,
+            "total_linked": len(linked_tcs),
+            "total_proposed": len(proposed_scenarios),
+            "overlap_count": len(overlapping_scenarios),
+        }
+
     def generate_page_object(
         self,
         page_name: str,
@@ -3756,13 +4161,61 @@ REUSE PRIORITY ORDER:
                             f"Feature flag detected: {ff.flag_name}"
                         )
 
-                # 1.3 Review linked test cases
+                # 1.3 Review linked test cases (ENHANCED with filtering & merging)
                 linked_tcs = self.fetch_linked_test_cases(jira_ticket)
                 if linked_tcs:
+                    # Parse all linked test case content
+                    self.parse_linked_test_cases()
+
+                    # Count statistics
                     automated_count = sum(1 for tc in linked_tcs if tc.is_automated)
-                    result.recommendations.append(
-                        f"Linked test cases: {len(linked_tcs)} total, {automated_count} automated"
+                    high_priority = sum(
+                        1 for tc in linked_tcs if tc.priority in AUTOMATABLE_PRIORITIES
                     )
+                    smoke_regression = sum(
+                        1 for tc in linked_tcs if tc.testing_cycle in AUTOMATABLE_TESTING_CYCLES
+                    )
+
+                    result.recommendations.append(
+                        f"Linked test cases: {len(linked_tcs)} filtered "
+                        f"(Highest/High priority, Smoke/Regression only)"
+                    )
+                    result.recommendations.append(
+                        f"  - {automated_count} already automated"
+                    )
+                    result.recommendations.append(
+                        f"  - {high_priority} Highest/High priority, {smoke_regression} Smoke/Regression"
+                    )
+
+                    # Merge similar automated scenarios to avoid duplication
+                    if automated_count > 0:
+                        merged = self.merge_automated_scenarios(linked_tcs)
+                        self.merged_linked_scenarios = merged
+                        result.recommendations.append(
+                            f"  - {len(merged)} merged scenario groups from "
+                            f"{automated_count} automated tests"
+                        )
+                    else:
+                        self.merged_linked_scenarios = []
+
+                    # Report parsed content summary
+                    parsed_count = sum(1 for tc in linked_tcs if tc.parsed_steps)
+                    if parsed_count > 0:
+                        result.recommendations.append(
+                            f"  - {parsed_count} test cases with parsed steps:"
+                        )
+                        for tc in linked_tcs[:5]:  # Limit to first 5 for brevity
+                            if tc.parsed_steps:
+                                result.recommendations.append(
+                                    f"    - {tc.test_case_id} [{tc.priority}][{tc.testing_cycle}]: "
+                                    f"{len(tc.parsed_steps)} steps"
+                                )
+                        if parsed_count > 5:
+                            result.recommendations.append(
+                                f"    - ... and {parsed_count - 5} more"
+                            )
+                else:
+                    self.merged_linked_scenarios = []
 
                 # 1.4 Use labels and components as feature name
                 if not feature_name and jira_context.components:
@@ -3836,6 +4289,54 @@ REUSE PRIORITY ORDER:
                     result.warnings.append(
                         f"BRANCH CREATION FAILED: {self.branch_info.error}"
                     )
+
+            # =========================================================
+            # STEP 5.5: Check for overlap with linked test cases
+            # =========================================================
+
+            # Prepare proposed scenarios from manual test cases for overlap analysis
+            proposed_scenarios_for_analysis: List[Dict[str, Any]] = []
+            for idx, tc_text in enumerate(manual_test_cases):
+                if isinstance(tc_text, str):
+                    parsed = self.parse_manual_test_case(tc_text)
+                    proposed_scenarios_for_analysis.append({
+                        "name": parsed.title or f"Scenario {idx + 1}",
+                        "steps": [
+                            {
+                                "action": step.action,
+                                "expected_result": step.expected_result,
+                            }
+                            for step in parsed.steps
+                        ],
+                    })
+                elif isinstance(tc_text, dict):
+                    proposed_scenarios_for_analysis.append({
+                        "name": tc_text.get("title", f"Scenario {idx + 1}"),
+                        "steps": tc_text.get("steps", []),
+                    })
+
+            # Analyze overlap if we have both linked test cases and proposed scenarios
+            if (self.automation_context.linked_test_cases and
+                    proposed_scenarios_for_analysis):
+                logger.info("Analyzing overlap between linked test cases and proposed scenarios...")
+                overlap_analysis = self.analyze_linked_test_overlap(
+                    proposed_scenarios_for_analysis
+                )
+
+                if overlap_analysis.get("overlapping_scenarios"):
+                    result.warnings.append(
+                        f"OVERLAP WARNING: {overlap_analysis['overlap_count']} proposed scenarios "
+                        f"overlap with existing linked test cases"
+                    )
+
+                # Add recommendations from overlap analysis
+                for rec in overlap_analysis.get("recommendations", []):
+                    result.recommendations.append(rec)
+
+                # Store overlap analysis for potential use
+                self.overlap_analysis = overlap_analysis
+            else:
+                self.overlap_analysis = {}
 
             # =========================================================
             # STEP 6: Generate automation code
