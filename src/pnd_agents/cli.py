@@ -249,17 +249,17 @@ ENV_VARS = {
     # Jira Integration
     "JIRA_BASE_URL": {
         "description": "Jira instance base URL (e.g., https://your-domain.atlassian.net)",
-        "required_for": ["prd-to-jira", "exec-summary", "analytics"],
+        "required_for": ["prd-to-jira", "exec-summary", "analytics", "test-analysis", "task-manager"],
         "sensitive": False,
     },
     "JIRA_EMAIL": {
         "description": "Email address for Jira authentication",
-        "required_for": ["prd-to-jira", "exec-summary", "analytics"],
+        "required_for": ["prd-to-jira", "exec-summary", "analytics", "test-analysis", "task-manager"],
         "sensitive": False,
     },
     "JIRA_API_TOKEN": {
         "description": "Jira API token (create at id.atlassian.com/manage-profile/security/api-tokens)",
-        "required_for": ["prd-to-jira", "exec-summary", "analytics"],
+        "required_for": ["prd-to-jira", "exec-summary", "analytics", "test-analysis", "task-manager"],
         "sensitive": True,
     },
     "JIRA_CLOUD_ID": {
