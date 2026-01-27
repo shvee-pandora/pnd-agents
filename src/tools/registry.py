@@ -1506,6 +1506,116 @@ def register_tools(server: Server) -> None:
                     "required": ["issue_key"]
                 }
             ),
+
+            # Pillar 3 Report Tools
+            types.Tool(
+                name="pillar3_generate_report",
+                description="Generate a Pillar 3 status report from JIRA data. Fetches Epic/Initiative data and maps it to the Pillar 3 template format with objectives, key results, RAG status, milestones, and outcomes. Requires JIRA_BASE_URL, JIRA_EMAIL, and JIRA_API_TOKEN environment variables.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "epic_key": {
+                            "type": "string",
+                            "description": "JIRA Epic key to generate report from (e.g., 'EPA-123')"
+                        },
+                        "initiative_key": {
+                            "type": "string",
+                            "description": "JIRA Initiative key to generate report from"
+                        },
+                        "jql": {
+                            "type": "string",
+                            "description": "JQL query to fetch issues for the report"
+                        },
+                        "team_name": {
+                            "type": "string",
+                            "description": "Team/Initiative name (used with JQL)",
+                            "default": "TBD"
+                        },
+                        "output_format": {
+                            "type": "string",
+                            "description": "Output format: 'markdown', 'json', or 'pdf'",
+                            "enum": ["markdown", "json", "pdf"],
+                            "default": "markdown"
+                        }
+                    },
+                    "required": []
+                }
+            ),
+            types.Tool(
+                name="pillar3_publish_to_confluence",
+                description="Generate a Pillar 3 report from JIRA and publish it to Confluence. Optionally also generates a PDF. Requires JIRA and Confluence credentials.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "epic_key": {
+                            "type": "string",
+                            "description": "JIRA Epic key to generate report from"
+                        },
+                        "initiative_key": {
+                            "type": "string",
+                            "description": "JIRA Initiative key to generate report from"
+                        },
+                        "jql": {
+                            "type": "string",
+                            "description": "JQL query to fetch issues for the report"
+                        },
+                        "team_name": {
+                            "type": "string",
+                            "description": "Team/Initiative name (used with JQL)",
+                            "default": "TBD"
+                        },
+                        "space_key": {
+                            "type": "string",
+                            "description": "Confluence space key to publish to"
+                        },
+                        "page_title": {
+                            "type": "string",
+                            "description": "Optional page title (defaults to report team/initiative name)"
+                        },
+                        "parent_page_id": {
+                            "type": "string",
+                            "description": "Optional parent page ID in Confluence"
+                        },
+                        "also_generate_pdf": {
+                            "type": "boolean",
+                            "description": "Also generate a PDF file (default: false)",
+                            "default": False
+                        }
+                    },
+                    "required": ["space_key"]
+                }
+            ),
+            types.Tool(
+                name="pillar3_generate_pdf",
+                description="Generate a Pillar 3 report PDF from JIRA data. Creates a professionally formatted PDF following the Pandora Pillar 3 template.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "epic_key": {
+                            "type": "string",
+                            "description": "JIRA Epic key to generate report from"
+                        },
+                        "initiative_key": {
+                            "type": "string",
+                            "description": "JIRA Initiative key to generate report from"
+                        },
+                        "jql": {
+                            "type": "string",
+                            "description": "JQL query to fetch issues for the report"
+                        },
+                        "team_name": {
+                            "type": "string",
+                            "description": "Team/Initiative name (used with JQL)",
+                            "default": "TBD"
+                        },
+                        "output_path": {
+                            "type": "string",
+                            "description": "Path for the output PDF file (default: /tmp/pillar3_report_<team_name>.pdf)"
+                        }
+                    },
+                    "required": []
+                }
+            ),
         ]
 
     # Register call_tool handler
@@ -2545,6 +2655,79 @@ AI Productivity Tracker Agent v1.0"""
                     }, indent=2))]
                 except Exception as jira_error:
                     return [types.TextContent(type="text", text=f"JIRA Transitions Error: {str(jira_error)}")]
+
+            # Pillar 3 Report Tools
+            elif name == "pillar3_generate_report":
+                import json
+                try:
+                    from tools.pillar3_report import generate_pillar3_report
+                    
+                    result = generate_pillar3_report(
+                        epic_key=arguments.get("epic_key"),
+                        initiative_key=arguments.get("initiative_key"),
+                        jql=arguments.get("jql"),
+                        team_name=arguments.get("team_name", "TBD"),
+                        output_format=arguments.get("output_format", "markdown")
+                    )
+                    
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as pillar3_error:
+                    return [types.TextContent(type="text", text=f"Pillar 3 Report Error: {str(pillar3_error)}")]
+
+            elif name == "pillar3_publish_to_confluence":
+                import json
+                try:
+                    from tools.pillar3_report import generate_and_publish_pillar3_report
+                    
+                    result = generate_and_publish_pillar3_report(
+                        epic_key=arguments.get("epic_key"),
+                        initiative_key=arguments.get("initiative_key"),
+                        jql=arguments.get("jql"),
+                        team_name=arguments.get("team_name", "TBD"),
+                        space_key=arguments["space_key"],
+                        page_title=arguments.get("page_title"),
+                        parent_page_id=arguments.get("parent_page_id"),
+                        also_generate_pdf=arguments.get("also_generate_pdf", False)
+                    )
+                    
+                    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                except Exception as pillar3_error:
+                    return [types.TextContent(type="text", text=f"Pillar 3 Confluence Error: {str(pillar3_error)}")]
+
+            elif name == "pillar3_generate_pdf":
+                import json
+                try:
+                    from tools.pillar3_report import Pillar3ReportGenerator, generate_pillar3_pdf
+                    
+                    with Pillar3ReportGenerator() as generator:
+                        epic_key = arguments.get("epic_key")
+                        initiative_key = arguments.get("initiative_key")
+                        jql = arguments.get("jql")
+                        team_name = arguments.get("team_name", "TBD")
+                        
+                        if epic_key:
+                            report = generator.generate_report_from_epic(epic_key)
+                        elif initiative_key:
+                            report = generator.generate_report_from_initiative(initiative_key)
+                        elif jql:
+                            report = generator.generate_report_from_jql(jql, team_name)
+                        else:
+                            return [types.TextContent(type="text", text="Error: Must provide epic_key, initiative_key, or jql")]
+                        
+                        output_path = arguments.get(
+                            "output_path",
+                            f"/tmp/pillar3_report_{report.team_initiative.replace(' ', '_')}.pdf"
+                        )
+                        generate_pillar3_pdf(report, output_path)
+                        
+                        return [types.TextContent(type="text", text=json.dumps({
+                            "status": "success",
+                            "pdf_path": output_path,
+                            "team_initiative": report.team_initiative,
+                            "report": report.to_dict()
+                        }, indent=2))]
+                except Exception as pillar3_error:
+                    return [types.TextContent(type="text", text=f"Pillar 3 PDF Error: {str(pillar3_error)}")]
 
             else:
                 raise ValueError(f"Unknown tool: {name}")
