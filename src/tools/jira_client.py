@@ -329,6 +329,9 @@ class JiraClient:
         """
         Search for issues using JQL.
         
+        Uses the newer /search/jql endpoint which is the recommended approach
+        for JIRA Cloud REST API v3. Falls back to legacy /search endpoint if needed.
+        
         Args:
             jql: JQL query string
             max_results: Maximum number of results
@@ -338,18 +341,35 @@ class JiraClient:
             List of JiraIssue objects
         """
         try:
-            payload = {
+            # Build query parameters for GET request to /search/jql
+            params = {
                 "jql": jql,
                 "maxResults": max_results,
             }
             if fields:
-                payload["fields"] = fields
+                params["fields"] = ",".join(fields) if isinstance(fields, list) else fields
             
-            response = self._request_with_retry("POST", "search", json=payload)
-            response.raise_for_status()
-            
-            data = response.json()
-            return [JiraIssue.from_api_response(issue) for issue in data.get("issues", [])]
+            # Try the newer /search/jql endpoint first (GET method)
+            try:
+                response = self._request_with_retry("GET", "search/jql", params=params)
+                response.raise_for_status()
+                data = response.json()
+                return [JiraIssue.from_api_response(issue) for issue in data.get("issues", [])]
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 404:
+                    # Fall back to legacy POST /search endpoint
+                    logger.info("Falling back to legacy /search endpoint")
+                    payload = {
+                        "jql": jql,
+                        "maxResults": max_results,
+                    }
+                    if fields:
+                        payload["fields"] = fields
+                    response = self._request_with_retry("POST", "search", json=payload)
+                    response.raise_for_status()
+                    data = response.json()
+                    return [JiraIssue.from_api_response(issue) for issue in data.get("issues", [])]
+                raise
         except Exception as e:
             logger.error(f"Failed to search issues: {e}")
             raise

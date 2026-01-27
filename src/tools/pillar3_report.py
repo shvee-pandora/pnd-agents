@@ -222,18 +222,39 @@ class Pillar3ReportGenerator:
             raise
     
     def search_issues(self, jql: str, max_results: int = 100, fields: Optional[List[str]] = None) -> List[Dict[str, Any]]:
-        """Search for issues using JQL."""
+        """Search for issues using JQL.
+        
+        Uses the newer /search/jql endpoint which is the recommended approach
+        for JIRA Cloud REST API v3.
+        """
         try:
-            payload = {
+            # Build query parameters for GET request to /search/jql
+            params = {
                 "jql": jql,
                 "maxResults": max_results,
             }
             if fields:
-                payload["fields"] = fields
+                params["fields"] = ",".join(fields) if isinstance(fields, list) else fields
             
-            response = self.client.post("search", json=payload)
-            response.raise_for_status()
-            return response.json().get("issues", [])
+            # Try the newer /search/jql endpoint first (GET method)
+            try:
+                response = self.client.get("search/jql", params=params)
+                response.raise_for_status()
+                return response.json().get("issues", [])
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 404:
+                    # Fall back to legacy POST /search endpoint
+                    logger.info("Falling back to legacy /search endpoint")
+                    payload = {
+                        "jql": jql,
+                        "maxResults": max_results,
+                    }
+                    if fields:
+                        payload["fields"] = fields
+                    response = self.client.post("search", json=payload)
+                    response.raise_for_status()
+                    return response.json().get("issues", [])
+                raise
         except Exception as e:
             logger.error(f"Failed to search issues: {e}")
             raise
