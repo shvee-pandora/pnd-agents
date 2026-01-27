@@ -959,6 +959,70 @@ AI Productivity Tracker Agent v1.0"""
                 "data": {"tasks": analytics},
             }
         
+        elif action == "pillar3_report":
+            # Generate Pillar 3 report from JIRA
+            try:
+                from tools.pillar3_report import (
+                    Pillar3ReportGenerator,
+                    generate_pillar3_pdf,
+                    publish_pillar3_to_confluence
+                )
+                
+                with Pillar3ReportGenerator() as generator:
+                    # Determine source
+                    epic_key = input_data.get("epic_key")
+                    initiative_key = input_data.get("initiative_key")
+                    jql = input_data.get("jql")
+                    team_name = input_data.get("team_name", "TBD")
+                    
+                    if epic_key:
+                        report = generator.generate_report_from_epic(epic_key)
+                    elif initiative_key:
+                        report = generator.generate_report_from_initiative(initiative_key)
+                    elif jql:
+                        report = generator.generate_report_from_jql(jql, team_name)
+                    else:
+                        return {
+                            "status": "error",
+                            "error": "Must provide epic_key, initiative_key, or jql"
+                        }
+                    
+                    result = {
+                        "report": report.to_dict(),
+                        "markdown": generator.to_markdown(report)
+                    }
+                    
+                    # Publish to Confluence if requested
+                    space_key = input_data.get("confluence_space_key")
+                    if space_key:
+                        confluence_result = publish_pillar3_to_confluence(
+                            report=report,
+                            space_key=space_key,
+                            page_title=input_data.get("page_title"),
+                            parent_page_id=input_data.get("parent_page_id")
+                        )
+                        result["confluence"] = confluence_result
+                    
+                    # Generate PDF if requested
+                    if input_data.get("generate_pdf", False):
+                        output_path = input_data.get(
+                            "pdf_path",
+                            f"/tmp/pillar3_report_{report.team_initiative.replace(' ', '_')}.pdf"
+                        )
+                        generate_pillar3_pdf(report, output_path)
+                        result["pdf_path"] = output_path
+                    
+                    return {
+                        "status": "success",
+                        "data": result
+                    }
+            except Exception as e:
+                logger.error(f"Failed to generate Pillar 3 report: {e}")
+                return {
+                    "status": "error",
+                    "error": str(e)
+                }
+        
         else:
             return {
                 "status": "error",
