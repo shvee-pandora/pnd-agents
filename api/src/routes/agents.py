@@ -2,27 +2,30 @@
 Agents API routes.
 
 Provides read-only access to agent metadata from agent.yaml files.
+Validates agents against the canonical schema on startup.
 """
 
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
-from ..services.agent_discovery import AgentDiscoveryService
-from ..models.agent import AgentSummary, AgentDetail, AgentListResponse
+from ..services.agent_discovery import AgentDiscoveryService, SchemaValidationError
+from ..models.agent import AgentDetail, AgentListResponse, ValidationResult
 
 router = APIRouter(tags=["agents"])
 
-# Initialize the discovery service
-discovery_service = AgentDiscoveryService()
+# Initialize the discovery service (validates agents on startup)
+# Set fail_on_validation_error=False to allow API to start even with invalid agents
+discovery_service = AgentDiscoveryService(fail_on_validation_error=False)
 
 
 @router.get("/agents", response_model=AgentListResponse)
 async def list_agents(
     category: Optional[str] = Query(None, description="Filter by category"),
-    status: Optional[str] = Query(None, description="Filter by status (stable, beta, experimental)"),
+    maturity: Optional[str] = Query(None, description="Filter by maturity (alpha, beta, stable, deprecated)"),
     tag: Optional[str] = Query(None, description="Filter by tag"),
     search: Optional[str] = Query(None, description="Search in name and description"),
+    visibility: Optional[str] = Query(None, description="Filter by visibility (public, internal, private)"),
 ) -> AgentListResponse:
     """
     List all available agents with optional filtering.
@@ -31,9 +34,10 @@ async def list_agents(
     """
     agents = discovery_service.list_agents(
         category=category,
-        status=status,
+        maturity=maturity,
         tag=tag,
         search=search,
+        visibility=visibility,
     )
     return AgentListResponse(
         agents=agents,
@@ -83,3 +87,13 @@ async def list_tags():
     """
     tags = discovery_service.list_tags()
     return {"tags": tags}
+
+
+@router.get("/validation", response_model=ValidationResult)
+async def get_validation_result() -> ValidationResult:
+    """
+    Get the schema validation result for all agents.
+    
+    Returns information about which agents passed/failed validation.
+    """
+    return discovery_service.get_validation_result()

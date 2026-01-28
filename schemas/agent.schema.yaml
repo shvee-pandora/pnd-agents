@@ -1,138 +1,202 @@
-# JSON Schema for agent.yaml files (YAML representation)
-# This schema defines the UI-focused metadata for agents in the marketplace
+# PND Agent Metadata Schema
+# This is the single source of truth for what an agent is.
+# Powers: marketplace listing, UI rendering, and execution.
 
 $schema: "http://json-schema.org/draft-07/schema#"
-title: Agent Marketplace Metadata
-description: UI-focused metadata for agents displayed in the marketplace
+title: PND Agent Metadata Schema
+description: Machine-readable schema for agent.yaml files that powers marketplace, UI, and execution
 type: object
 
 required:
   - id
   - name
   - description
-  - version
+  - category
+  - maturity
+  - owner
+  - entrypoint
 
 properties:
   id:
     type: string
-    description: Unique identifier for the agent (kebab-case)
-    pattern: "^[a-z][a-z0-9-]*$"
+    description: Unique, stable agent identifier (kebab-case)
+    pattern: "^[a-z0-9-]+$"
 
   name:
     type: string
-    description: Human-readable display name
+    description: Human-readable agent name (shown in UI)
 
   description:
     type: string
-    description: Short description (1-2 sentences) for card display
-
-  long_description:
-    type: string
-    description: Detailed description for agent detail page (markdown supported)
-
-  version:
-    type: string
-    description: Semantic version of the agent
-    pattern: "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9.]+)?$"
-
-  author:
-    type: string
-    description: Author or team name
+    description: Short description for marketplace cards (1-2 lines)
+    maxLength: 200
 
   category:
     type: string
-    description: Primary category for filtering
+    description: Primary marketplace category
     enum:
-      - Development
-      - Quality
-      - Security
-      - Product Management
-      - Analytics
-      - CMS
-      - Performance
+      - frontend
+      - backend
+      - qa
+      - security
+      - performance
+      - devex
+      - architecture
+      - analytics
+      - platform
+
+  subCategory:
+    type: string
+    description: Optional finer classification (UI filter)
 
   tags:
     type: array
-    description: Tags for search and filtering
+    description: Searchable keywords
     items:
       type: string
 
-  icon:
+  maturity:
     type: string
-    description: Icon identifier or emoji for display
-
-  status:
-    type: string
-    description: Current status of the agent
+    description: Stability level of the agent
     enum:
-      - stable
+      - alpha
       - beta
-      - experimental
+      - stable
       - deprecated
-    default: stable
+
+  owner:
+    type: object
+    description: Team or individual responsible for the agent
+    required:
+      - team
+    properties:
+      team:
+        type: string
+        description: Owning team or squad
+      contact:
+        type: string
+        description: Slack/email contact
 
   visibility:
     type: string
-    description: Who can see this agent in the marketplace
+    description: Who can see/install the agent
     enum:
       - public
       - internal
-      - hidden
-    default: public
+      - private
+    default: internal
+
+  entrypoint:
+    type: object
+    description: How the agent is executed
+    required:
+      - type
+      - command
+    properties:
+      type:
+        type: string
+        description: Runtime environment
+        enum:
+          - python
+          - node
+          - shell
+      command:
+        type: string
+        description: CLI command or script entry
 
   inputs:
     type: array
-    description: Required inputs for running the agent
+    description: Inputs required to run the agent
     items:
       type: object
       required:
         - name
         - type
+        - required
       properties:
         name:
           type: string
+          description: Input parameter name
         type:
           type: string
-          enum: [string, file, url, json, boolean, number]
-        description:
-          type: string
+          description: Input data type
+          enum:
+            - string
+            - number
+            - boolean
+            - repo
+            - branch
+            - file
+            - json
         required:
           type: boolean
-          default: true
+          description: Whether this input is mandatory
+        description:
+          type: string
+          description: Human-readable description of the input
         default:
           description: Default value if not provided
 
   outputs:
     type: array
-    description: What the agent produces
+    description: Artifacts produced by the agent
     items:
       type: object
       required:
-        - name
         - type
       properties:
-        name:
-          type: string
         type:
           type: string
-          enum: [file, json, markdown, html, log]
+          description: Output artifact type
+          enum:
+            - site
+            - json
+            - markdown
+            - text
+            - pr
+            - report
+        path:
+          type: string
+          description: Relative output path (if applicable)
         description:
+          type: string
+          description: Human-readable description of the output
+
+  capabilities:
+    type: array
+    description: High-level capabilities (used for meta-agents and chaining)
+    items:
+      type: string
+
+  dependencies:
+    type: object
+    description: Runtime dependencies (informational for UI)
+    properties:
+      python:
+        type: array
+        description: Python package dependencies
+        items:
+          type: string
+      node:
+        type: array
+        description: Node.js package dependencies
+        items:
           type: string
 
-  examples:
-    type: array
-    description: Example use cases for documentation
-    items:
-      type: object
-      properties:
-        title:
-          type: string
-        description:
-          type: string
-        input:
-          type: object
-        expected_output:
-          type: string
+  installable:
+    type: boolean
+    description: Whether this agent supports single-click install
+    default: true
+
+  version:
+    type: string
+    description: Agent version (semantic versioning)
+    pattern: "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9.]+)?$"
+    default: "0.1.0"
+
+  icon:
+    type: string
+    description: Icon identifier for UI display
 
   documentation_url:
     type: string
@@ -143,32 +207,3 @@ properties:
     type: string
     description: Link to source code
     format: uri
-
-  constraints:
-    type: object
-    description: Safety and operational constraints
-    properties:
-      read_only:
-        type: boolean
-        description: Agent only reads, never modifies
-      human_approval_required:
-        type: boolean
-        description: Requires human approval before execution
-      max_execution_time:
-        type: integer
-        description: Maximum execution time in seconds
-
-  requirements:
-    type: object
-    description: Runtime requirements
-    properties:
-      python_version:
-        type: string
-      env_vars:
-        type: array
-        items:
-          type: string
-      dependencies:
-        type: array
-        items:
-          type: string

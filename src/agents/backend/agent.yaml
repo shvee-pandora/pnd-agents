@@ -1,13 +1,8 @@
-id: backend
+id: backend-engineer
 name: Backend Agent
-description: Creates Next.js API routes, Server Components, and mock API services following Pandora backend patterns.
-version: "1.0.0"
-author: Pandora Group
-category: Development
-icon: "server"
-status: stable
-visibility: public
-
+description: Creates Next.js API routes, Server Components, and mock API services.
+category: backend
+subCategory: api
 tags:
   - backend
   - api
@@ -15,55 +10,51 @@ tags:
   - server-components
   - rest
 
-long_description: |
-  The Backend Agent generates backend code following Pandora's patterns for 
-  Next.js applications. It handles API routes, Server Components, and mock services.
-  
-  Key capabilities:
-  - Next.js API route creation
-  - Server Component generation
-  - Mock API service generation (MSW)
-  - Data fetching patterns implementation
-  - Caching strategy implementation
+maturity: stable
+
+owner:
+  team: Backend Platform
+  contact: backend-platform@pandora.com
+
+visibility: internal
+
+entrypoint:
+  type: python
+  command: python -m agents.backend
 
 inputs:
   - name: endpoint_spec
     type: json
-    description: API endpoint specification
     required: true
+    description: API endpoint specification
+
   - name: include_mocks
     type: boolean
-    description: Generate MSW mock handlers
     required: false
-    default: true
+    description: Generate MSW mock handlers
 
 outputs:
-  - name: route_file
-    type: file
+  - type: text
+    path: outputs/route.ts
     description: Generated API route file
-  - name: schema
-    type: file
+
+  - type: text
+    path: outputs/types.ts
     description: TypeScript types/schemas
-  - name: mock_handlers
-    type: file
+
+  - type: text
+    path: outputs/handlers.ts
     description: MSW mock handlers
 
-examples:
-  - title: Create a products API endpoint
-    description: Generate a REST endpoint for product listing
-    input:
-      endpoint_spec:
-        path: "/api/products"
-        methods: ["GET", "POST"]
-        auth_required: true
-    expected_output: "route.ts, types.ts, handlers.ts"
+capabilities:
+  - api-route-creation
+  - server-component-generation
+  - mock-api-generation
 
+dependencies:
+  python: []
+
+installable: true
+version: "1.0.0"
+icon: server
 documentation_url: "https://github.com/shvee-pandora/pnd-agents/blob/main/docs/agents/backend.md"
-
-constraints:
-  read_only: false
-  human_approval_required: false
-  max_execution_time: 300
-
-requirements:
-  python_version: ">=3.10"
