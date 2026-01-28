@@ -64,7 +64,28 @@ Once ticket details are available, ask these questions using the AskUserQuestion
 2. Generate test cases in Gherkin format
 3. Include all relevant test categories (functional, negative, edge case, boundary, etc.)
 4. Generate coverage matrix
-5. If JIRA connected: Create test cases in JIRA and link to story
+5. If JIRA connected: Create test cases in JIRA with the following requirements:
+   - **MANDATORY: Add labels** - Always include `qAIn` label plus a feature-specific label (e.g., `login`, `checkout`)
+   - Link test cases to the source story using "Tests" link type
+   - Set appropriate priority and component fields
+
+---
+
+## JIRA Test Case Creation Requirements
+
+When creating test cases in JIRA, **always include these fields**:
+
+| Field | Requirement |
+|-------|-------------|
+| **Labels** | MANDATORY: `qAIn` + feature label (e.g., `qAIn, login-feature`) |
+| **Priority** | Map from test case priority (Critical→Highest, High→High, Medium→Medium, Low→Low) |
+| **Link** | Create "Tests" link to the source story |
+| **Component** | Set based on test type (UI, API, E2E, etc.) |
+
+**Label format example:**
+```
+labels: ["qAIn", "search-suggestions"]
+```
 
 ---
 
