@@ -1,0 +1,73 @@
+id: task-manager
+name: Task Manager Agent
+description: Scrum Master Agent that orchestrates the PG AI Squad, decomposes tasks, assigns to specialized agents, and produces PR-ready deliverables.
+version: "1.0.0"
+author: Pandora Group
+category: Development
+icon: "layout-grid"
+status: stable
+visibility: public
+
+tags:
+  - orchestration
+  - task-management
+  - workflow
+  - scrum-master
+
+long_description: |
+  The Task Manager Agent acts as the Scrum Master for the PG AI Squad. It accepts 
+  user tasks in natural language, decomposes them into subtasks, assigns work to 
+  specialized agents, and produces final PR-ready deliverables.
+  
+  Key capabilities:
+  - Natural language task understanding
+  - Task decomposition into subtasks
+  - Dependency planning between tasks
+  - Agent routing based on task type
+  - Output merging from multiple agents
+  - Pandora standards enforcement
+
+inputs:
+  - name: task_description
+    type: string
+    description: Natural language description of the task
+    required: true
+  - name: context
+    type: json
+    description: Additional context (repo info, constraints)
+    required: false
+  - name: agents_to_use
+    type: json
+    description: Specific agents to include in workflow
+    required: false
+
+outputs:
+  - name: task_plan
+    type: json
+    description: Decomposed task plan with subtasks
+  - name: agent_assignments
+    type: json
+    description: Which agents handle which subtasks
+  - name: deliverables
+    type: json
+    description: Final merged output from all agents
+  - name: pr_summary
+    type: markdown
+    description: Summary suitable for PR description
+
+examples:
+  - title: Build a new feature from Figma
+    description: Orchestrate full workflow from design to implementation
+    input:
+      task_description: "Build the new header component from Figma design at https://figma.com/..."
+    expected_output: "Coordinated output from Figma, Frontend, Unit Test, and Code Review agents"
+
+documentation_url: "https://github.com/shvee-pandora/pnd-agents/blob/main/docs/agents/task-manager.md"
+
+constraints:
+  read_only: false
+  human_approval_required: false
+  max_execution_time: 1800
+
+requirements:
+  python_version: ">=3.10"

@@ -1,0 +1,17 @@
+{
+  "name": "pnd-agents-monorepo",
+  "private": true,
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:ui": "cd ui && npm run dev",
+    "dev:api": "cd api && uvicorn src.main:app --reload --port 8000",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test:py": "source venv/bin/activate && pytest tests/ -v",
+    "test:ts": "turbo run test"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0"
+  },
+  "packageManager": "pnpm@8.15.0"
+}

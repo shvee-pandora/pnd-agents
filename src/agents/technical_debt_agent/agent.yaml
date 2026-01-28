@@ -1,0 +1,88 @@
+id: technical-debt
+name: Technical Debt Agent
+description: READ-ONLY agent that identifies, classifies, and prioritizes technical debt across a repository.
+version: "1.0.0"
+author: Pandora Group
+category: Analytics
+icon: "chart-bar"
+status: stable
+visibility: public
+
+tags:
+  - technical-debt
+  - analysis
+  - sonarcloud
+  - code-quality
+  - read-only
+
+long_description: |
+  The Technical Debt Agent performs READ-ONLY analysis to identify, classify, 
+  prioritize, and explain technical debt across a repository. It uses static 
+  analysis, repository context, and optional SonarCloud integration.
+  
+  Key capabilities:
+  - Repository-wide debt scanning
+  - TODO/FIXME/deprecated pattern detection
+  - Debt classification by type and severity
+  - Impact assessment and prioritization
+  - SonarCloud integration for additional metrics
+  - Actionable reports for engineers and leadership
+  
+  This agent NEVER modifies code - it only analyzes and reports.
+
+inputs:
+  - name: repo_path
+    type: string
+    description: Path to the repository to analyze
+    required: true
+  - name: include_sonarcloud
+    type: boolean
+    description: Include SonarCloud metrics if available
+    required: false
+    default: false
+  - name: sonar_project_key
+    type: string
+    description: SonarCloud project key
+    required: false
+  - name: focus_areas
+    type: json
+    description: Specific areas to analyze (e.g., ["complexity", "duplication"])
+    required: false
+
+outputs:
+  - name: report
+    type: markdown
+    description: Comprehensive technical debt report
+  - name: summary
+    type: json
+    description: Executive summary with key metrics
+  - name: register
+    type: json
+    description: Detailed debt register with all items
+  - name: hotspots
+    type: json
+    description: Files with highest debt concentration
+  - name: recommendations
+    type: markdown
+    description: Prioritized recommendations for addressing debt
+
+examples:
+  - title: Analyze repository debt
+    description: Generate a technical debt report for the entire repository
+    input:
+      repo_path: "/path/to/repo"
+      include_sonarcloud: true
+      sonar_project_key: "my-project"
+    expected_output: "Technical debt report with prioritized recommendations"
+
+documentation_url: "https://github.com/shvee-pandora/pnd-agents/blob/main/docs/agents/technical-debt.md"
+
+constraints:
+  read_only: true
+  human_approval_required: false
+  max_execution_time: 300
+
+requirements:
+  python_version: ">=3.10"
+  env_vars:
+    - SONAR_TOKEN

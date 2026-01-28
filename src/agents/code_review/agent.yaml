@@ -1,0 +1,74 @@
+id: code-review
+name: Code Review Agent
+description: Validates code against Pandora coding standards, architecture patterns, accessibility, and TypeScript rules.
+version: "1.0.0"
+author: Pandora Group
+category: Quality
+icon: "search"
+status: stable
+visibility: public
+
+tags:
+  - code-review
+  - standards
+  - typescript
+  - eslint
+  - accessibility
+
+long_description: |
+  The Code Review Agent performs comprehensive code validation using a 3-tier 
+  standards hierarchy: Pandora Standards (primary), Context7 Framework Standards, 
+  and Universal JS/TS Standards.
+  
+  Key capabilities:
+  - Standards validation against Pandora coding guidelines
+  - Architecture review (INS-2509 patterns)
+  - Accessibility audit (WCAG compliance)
+  - TypeScript strict mode validation
+  - PR commenting with actionable feedback
+  
+  The agent enforces a "Review Budget" of max 10 findings per review, prioritizing
+  by impact: security > correctness > maintainability.
+
+inputs:
+  - name: files
+    type: json
+    description: List of file paths to review
+    required: true
+  - name: pr_url
+    type: url
+    description: Pull request URL for context
+    required: false
+  - name: focus_areas
+    type: json
+    description: Specific areas to focus on (security, performance, accessibility)
+    required: false
+
+outputs:
+  - name: review_report
+    type: markdown
+    description: Detailed review findings with suggestions
+  - name: issues
+    type: json
+    description: Structured list of issues found
+  - name: passed
+    type: json
+    description: Whether the code passes review
+
+examples:
+  - title: Review a React component
+    description: Validate a new component against Pandora standards
+    input:
+      files: ["src/components/Header/Header.tsx"]
+      focus_areas: ["accessibility", "typescript"]
+    expected_output: "Review report with 0-10 findings"
+
+documentation_url: "https://github.com/shvee-pandora/pnd-agents/blob/main/docs/agents/code-review.md"
+
+constraints:
+  read_only: true
+  human_approval_required: false
+  max_execution_time: 180
+
+requirements:
+  python_version: ">=3.10"

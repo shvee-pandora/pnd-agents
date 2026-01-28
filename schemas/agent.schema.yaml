@@ -1,0 +1,174 @@
+# JSON Schema for agent.yaml files (YAML representation)
+# This schema defines the UI-focused metadata for agents in the marketplace
+
+$schema: "http://json-schema.org/draft-07/schema#"
+title: Agent Marketplace Metadata
+description: UI-focused metadata for agents displayed in the marketplace
+type: object
+
+required:
+  - id
+  - name
+  - description
+  - version
+
+properties:
+  id:
+    type: string
+    description: Unique identifier for the agent (kebab-case)
+    pattern: "^[a-z][a-z0-9-]*$"
+
+  name:
+    type: string
+    description: Human-readable display name
+
+  description:
+    type: string
+    description: Short description (1-2 sentences) for card display
+
+  long_description:
+    type: string
+    description: Detailed description for agent detail page (markdown supported)
+
+  version:
+    type: string
+    description: Semantic version of the agent
+    pattern: "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9.]+)?$"
+
+  author:
+    type: string
+    description: Author or team name
+
+  category:
+    type: string
+    description: Primary category for filtering
+    enum:
+      - Development
+      - Quality
+      - Security
+      - Product Management
+      - Analytics
+      - CMS
+      - Performance
+
+  tags:
+    type: array
+    description: Tags for search and filtering
+    items:
+      type: string
+
+  icon:
+    type: string
+    description: Icon identifier or emoji for display
+
+  status:
+    type: string
+    description: Current status of the agent
+    enum:
+      - stable
+      - beta
+      - experimental
+      - deprecated
+    default: stable
+
+  visibility:
+    type: string
+    description: Who can see this agent in the marketplace
+    enum:
+      - public
+      - internal
+      - hidden
+    default: public
+
+  inputs:
+    type: array
+    description: Required inputs for running the agent
+    items:
+      type: object
+      required:
+        - name
+        - type
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [string, file, url, json, boolean, number]
+        description:
+          type: string
+        required:
+          type: boolean
+          default: true
+        default:
+          description: Default value if not provided
+
+  outputs:
+    type: array
+    description: What the agent produces
+    items:
+      type: object
+      required:
+        - name
+        - type
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [file, json, markdown, html, log]
+        description:
+          type: string
+
+  examples:
+    type: array
+    description: Example use cases for documentation
+    items:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        input:
+          type: object
+        expected_output:
+          type: string
+
+  documentation_url:
+    type: string
+    description: Link to detailed documentation
+    format: uri
+
+  repository_url:
+    type: string
+    description: Link to source code
+    format: uri
+
+  constraints:
+    type: object
+    description: Safety and operational constraints
+    properties:
+      read_only:
+        type: boolean
+        description: Agent only reads, never modifies
+      human_approval_required:
+        type: boolean
+        description: Requires human approval before execution
+      max_execution_time:
+        type: integer
+        description: Maximum execution time in seconds
+
+  requirements:
+    type: object
+    description: Runtime requirements
+    properties:
+      python_version:
+        type: string
+      env_vars:
+        type: array
+        items:
+          type: string
+      dependencies:
+        type: array
+        items:
+          type: string
