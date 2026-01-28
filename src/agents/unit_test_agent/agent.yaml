@@ -1,0 +1,74 @@
+id: unit-test
+name: Unit Test Agent
+description: Standalone agent that writes comprehensive unit tests for any code with 100% coverage target.
+version: "1.0.0"
+author: Pandora Group
+category: Quality
+icon: "test-tube"
+status: stable
+visibility: public
+
+tags:
+  - testing
+  - jest
+  - vitest
+  - coverage
+  - react-testing-library
+
+long_description: |
+  The Unit Test Agent generates comprehensive unit tests targeting 100% code coverage.
+  It can be used independently or as part of a workflow pipeline.
+  
+  Key capabilities:
+  - Unit test generation for React components
+  - Jest and Vitest support
+  - React Testing Library patterns
+  - Branch coverage analysis
+  - Snapshot testing
+  - Mock generation for dependencies
+
+inputs:
+  - name: files
+    type: json
+    description: List of file paths to generate tests for
+    required: true
+  - name: test_framework
+    type: string
+    description: Testing framework to use (jest, vitest)
+    required: false
+    default: jest
+  - name: coverage_target
+    type: number
+    description: Target coverage percentage
+    required: false
+    default: 100
+
+outputs:
+  - name: test_files
+    type: file
+    description: Generated test files
+  - name: coverage_report
+    type: json
+    description: Coverage analysis report
+  - name: recommendations
+    type: markdown
+    description: Suggestions for improving testability
+
+examples:
+  - title: Generate tests for a utility function
+    description: Create comprehensive tests for a date formatting utility
+    input:
+      files: ["src/utils/formatDate.ts"]
+      test_framework: jest
+      coverage_target: 100
+    expected_output: "formatDate.test.ts with 100% coverage"
+
+documentation_url: "https://github.com/shvee-pandora/pnd-agents/blob/main/docs/agents/unit-test.md"
+
+constraints:
+  read_only: false
+  human_approval_required: false
+  max_execution_time: 300
+
+requirements:
+  python_version: ">=3.10"

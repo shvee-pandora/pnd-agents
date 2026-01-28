@@ -1,0 +1,81 @@
+id: qa
+name: QA Agent
+description: Validates implementation against test cases and acceptance criteria from user input or previous workflow stages.
+version: "1.0.0"
+author: Pandora Group
+category: Quality
+icon: "check-circle"
+status: stable
+visibility: public
+
+tags:
+  - qa
+  - validation
+  - acceptance-criteria
+  - testing
+  - integration
+
+long_description: |
+  The QA Agent validates that implementations meet their test cases and 
+  acceptance criteria. It can receive test cases from user input or from 
+  previous workflow stages (like the Unit Test Agent).
+  
+  Key capabilities:
+  - Implementation validation against specs
+  - Acceptance criteria verification
+  - Scenario testing execution
+  - Test case validation
+  - Integration test validation
+
+inputs:
+  - name: test_cases
+    type: json
+    description: Test cases to validate against
+    required: false
+  - name: code_paths
+    type: json
+    description: Paths to code being validated
+    required: true
+  - name: acceptance_criteria
+    type: string
+    description: Acceptance criteria text
+    required: false
+  - name: previous_output
+    type: json
+    description: Output from previous workflow stage
+    required: false
+
+outputs:
+  - name: validation_status
+    type: json
+    description: Overall validation pass/fail status
+  - name: scenarios
+    type: json
+    description: Individual scenario results
+  - name: pass_rate
+    type: json
+    description: Percentage of tests passing
+  - name: issues_found
+    type: json
+    description: List of issues discovered
+  - name: recommendations
+    type: markdown
+    description: Recommendations for fixing issues
+
+examples:
+  - title: Validate a feature implementation
+    description: Check if implementation meets acceptance criteria
+    input:
+      code_paths: ["src/features/checkout"]
+      acceptance_criteria: "User can complete checkout in under 3 clicks"
+    expected_output: "Validation report with pass/fail status"
+
+documentation_url: "https://github.com/shvee-pandora/pnd-agents/blob/main/docs/agents/qa.md"
+
+constraints:
+  read_only: true
+  human_approval_required: false
+  max_execution_time: 300
+
+requirements:
+  python_version: ">=3.10"

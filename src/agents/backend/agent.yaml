@@ -1,0 +1,69 @@
+id: backend
+name: Backend Agent
+description: Creates Next.js API routes, Server Components, and mock API services following Pandora backend patterns.
+version: "1.0.0"
+author: Pandora Group
+category: Development
+icon: "server"
+status: stable
+visibility: public
+
+tags:
+  - backend
+  - api
+  - nextjs
+  - server-components
+  - rest
+
+long_description: |
+  The Backend Agent generates backend code following Pandora's patterns for 
+  Next.js applications. It handles API routes, Server Components, and mock services.
+  
+  Key capabilities:
+  - Next.js API route creation
+  - Server Component generation
+  - Mock API service generation (MSW)
+  - Data fetching patterns implementation
+  - Caching strategy implementation
+
+inputs:
+  - name: endpoint_spec
+    type: json
+    description: API endpoint specification
+    required: true
+  - name: include_mocks
+    type: boolean
+    description: Generate MSW mock handlers
+    required: false
+    default: true
+
+outputs:
+  - name: route_file
+    type: file
+    description: Generated API route file
+  - name: schema
+    type: file
+    description: TypeScript types/schemas
+  - name: mock_handlers
+    type: file
+    description: MSW mock handlers
+
+examples:
+  - title: Create a products API endpoint
+    description: Generate a REST endpoint for product listing
+    input:
+      endpoint_spec:
+        path: "/api/products"
+        methods: ["GET", "POST"]
+        auth_required: true
+    expected_output: "route.ts, types.ts, handlers.ts"
+
+documentation_url: "https://github.com/shvee-pandora/pnd-agents/blob/main/docs/agents/backend.md"
+
+constraints:
+  read_only: false
+  human_approval_required: false
+  max_execution_time: 300
+
+requirements:
+  python_version: ">=3.10"

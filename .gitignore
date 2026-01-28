@@ -5,3 +5,16 @@ lib
 venv
 *.egg-info/
 
+# Node.js
+node_modules/
+.next/
+dist/
+
+# Turborepo
+.turbo/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
