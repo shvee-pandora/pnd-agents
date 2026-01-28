@@ -1,88 +1,68 @@
-name: snyk-predictor
-displayName: Snyk Predictor Agent
-version: 1.0.0
-description: >
-  Proactively detect and predict Snyk vulnerabilities before CI/CD pipelines are blocked.
-  Analyzes dependencies, calculates risk scores using heuristics, and sends Microsoft Teams notifications.
+id: snyk-predictor
+name: Snyk Predictor Agent
+description: Proactively detects and predicts Snyk vulnerabilities before CI/CD pipelines are blocked.
+category: security
+subCategory: vulnerability-scanning
+tags:
+  - security
+  - snyk
+  - vulnerabilities
+  - dependencies
+  - devsecops
 
-category: Security / DevSecOps
+maturity: stable
 
-author: PND Agents Team
-license: MIT
+owner:
+  team: Security Engineering
+  contact: security-engineering@pandora.com
 
-permissions:
-  level: read_only
-  tools:
-    - filesystem_read
-    - http_client
-    - command_runner
+visibility: internal
 
-execution:
-  environment: both
-  runtime: node
-  entrypoint: index.ts
+entrypoint:
+  type: node
+  command: npx ts-node index.ts
 
 inputs:
-  repo:
+  - name: repo
     type: string
     required: true
     description: Repository name for reporting
-  repoPath:
+
+  - name: repoPath
     type: string
     required: true
     description: Path to the repository to scan
-  packageManager:
-    type: enum
-    values: [npm, pnpm, yarn]
-    default: npm
-    description: Package manager used by the repository
-  notify:
-    type: enum
-    values: [teams, none]
-    default: none
-    description: Notification channel
-  severity:
-    type: array
-    items: enum
-    values: [low, medium, high, critical]
-    default: [high, critical]
+
+  - name: packageManager
+    type: string
+    required: false
+    description: Package manager used (npm, pnpm, yarn)
+
+  - name: severity
+    type: json
+    required: false
     description: Minimum severity levels to report
 
 outputs:
-  format: structured_data
-  schema:
-    scanDate: string
-    repoName: string
-    riskSummary:
-      totalDependencies: number
-      highRiskCount: number
-      mediumRiskCount: number
-      lowRiskCount: number
-      overallRiskLevel: string
-      pipelineBlockProbability: number
-    highRiskDependencies: array
-    suggestedFixes: array
+  - type: json
+    path: outputs/scan-results.json
+    description: Vulnerability scan results with risk summary
 
-environment:
-  required:
-    - SNYK_TOKEN
-  optional:
-    - TEAMS_WEBHOOK_URL
+  - type: report
+    path: outputs/risk-report.md
+    description: Human-readable risk assessment report
 
-scheduling:
-  cron: "0 6 * * *"
-  description: Runs daily at 6 AM UTC
+capabilities:
+  - vulnerability-scanning
+  - risk-assessment
+  - dependency-analysis
+  - teams-notification
 
-integrations:
-  - name: Snyk
-    type: security_scanner
-    required: true
-  - name: Microsoft Teams
-    type: notification
-    required: false
+dependencies:
+  node:
+    - snyk
 
-constraints:
-  - Does NOT block pipelines
-  - Does NOT auto-merge dependency updates
-  - Uses heuristics only (no ML models)
-  - Read-only analysis
+installable: true
+version: "1.0.0"
+icon: shield
+documentation_url: "https://github.com/shvee-pandora/pnd-agents/blob/main/docs/agents/snyk-predictor.md"

@@ -1,13 +1,8 @@
 id: test-analysis-design
 name: Test Analysis Design Agent (qAIn)
-description: Junior Quality Engineer agent that generates comprehensive test cases from JIRA tickets, requirements, and user stories.
-version: "1.0.0"
-author: Pandora Group
-category: Quality
-icon: "clipboard-check"
-status: stable
-visibility: public
-
+description: Junior Quality Engineer that generates comprehensive test cases from JIRA tickets and requirements.
+category: qa
+subCategory: test-design
 tags:
   - qa
   - test-cases
@@ -17,88 +12,74 @@ tags:
   - accessibility
   - security
 
-long_description: |
-  qAIn (Quality AI Agent) is your Junior Quality Engineer that generates comprehensive 
-  test cases from requirements with JIRA integration. It targets 70% manual effort reduction.
-  
-  Key capabilities:
-  - Test case generation from JIRA tickets and requirements
-  - Full Pandora JIRA hierarchy support (Initiative -> Epic -> Story -> Task)
-  - BDD/Gherkin format output
-  - Figma and Confluence documentation integration
-  - 9 test type generators: functional, negative, edge case, boundary, 
-    integration, API, security, accessibility, performance
-  - Existing test case reuse and scenario merging
-  
-  Signature: "I'm your Junior Quality Engineer - qAIn"
+maturity: stable
+
+owner:
+  team: QE Platform
+  contact: qe-platform@pandora.com
+
+visibility: internal
+
+entrypoint:
+  type: python
+  command: python -m agents.test_analysis_design
 
 inputs:
   - name: story_key
     type: string
-    description: JIRA story key (e.g., PROJ-123)
     required: false
+    description: JIRA story key (e.g., PROJ-123)
+
   - name: requirements
     type: string
-    description: Requirements text if not using JIRA
     required: false
+    description: Requirements text if not using JIRA
+
   - name: feature_name
     type: string
-    description: Name of the feature being tested
     required: true
+    description: Name of the feature being tested
+
   - name: include_hierarchy
     type: boolean
-    description: Fetch full JIRA hierarchy for context
     required: false
-    default: true
+    description: Fetch full JIRA hierarchy for context
+
   - name: include_security
     type: boolean
-    description: Include security test scenarios
     required: false
-    default: true
+    description: Include security test scenarios
+
   - name: include_accessibility
     type: boolean
+    required: false
     description: Include accessibility test scenarios
-    required: false
-    default: true
-  - name: external_docs
-    type: json
-    description: URLs to Figma designs or Confluence pages
-    required: false
 
 outputs:
-  - name: test_suite
-    type: json
+  - type: json
+    path: outputs/test-suite.json
     description: Complete test suite with all test cases
-  - name: gherkin_scenarios
-    type: markdown
+
+  - type: markdown
+    path: outputs/gherkin-scenarios.md
     description: Test cases in Gherkin/BDD format
-  - name: coverage_matrix
-    type: json
+
+  - type: json
+    path: outputs/coverage-matrix.json
     description: Test coverage matrix
-  - name: jira_test_cases
-    type: json
-    description: Created JIRA test case issue keys
 
-examples:
-  - title: Generate test cases from JIRA story
-    description: Create comprehensive test suite from a user story
-    input:
-      story_key: "PAN-1234"
-      feature_name: "User Login"
-      include_hierarchy: true
-      include_security: true
-    expected_output: "Test suite with functional, negative, security, and accessibility scenarios"
+capabilities:
+  - test-case-generation
+  - jira-integration
+  - bdd-gherkin
+  - security-testing
+  - accessibility-testing
 
+dependencies:
+  python:
+    - jira
+
+installable: true
+version: "1.0.0"
+icon: clipboard-check
 documentation_url: "https://github.com/shvee-pandora/pnd-agents/blob/main/docs/test_analysis_design.md"
-
-constraints:
-  read_only: false
-  human_approval_required: false
-  max_execution_time: 600
-
-requirements:
-  python_version: ">=3.10"
-  env_vars:
-    - JIRA_URL
-    - JIRA_EMAIL
-    - JIRA_API_TOKEN

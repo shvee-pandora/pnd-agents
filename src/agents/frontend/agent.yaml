@@ -1,13 +1,8 @@
 id: frontend-engineer
 name: Frontend Engineer Agent
-description: Specialized in React/Next.js component development following Pandora UI Toolkit patterns, atomic design, and accessibility standards.
-version: "1.0.0"
-author: Pandora Group
-category: Development
-icon: "react"
-status: stable
-visibility: public
-
+description: Generates React/Next.js components following Pandora UI Toolkit patterns and accessibility standards.
+category: frontend
+subCategory: components
 tags:
   - react
   - nextjs
@@ -15,62 +10,58 @@ tags:
   - accessibility
   - figma
 
-long_description: |
-  The Frontend Engineer Agent generates production-ready React components following 
-  Pandora's UI Toolkit patterns and atomic design principles. It can parse Figma designs,
-  create Storybook stories, and ensure WCAG accessibility compliance.
-  
-  Key capabilities:
-  - Figma design parsing and component extraction
-  - React/Next.js component generation with TypeScript
-  - Storybook story creation
-  - Accessibility validation (WCAG 2.1 AA)
-  - Design token implementation
+maturity: stable
+
+owner:
+  team: Frontend Platform
+  contact: frontend-platform@pandora.com
+
+visibility: internal
+
+entrypoint:
+  type: python
+  command: python -m agents.frontend
 
 inputs:
   - name: component_spec
     type: json
-    description: Component specification including name, props, and behavior
     required: true
+    description: Component specification including name, props, and behavior
+
   - name: figma_url
-    type: url
-    description: Figma design URL for visual reference
+    type: string
     required: false
+    description: Figma design URL for visual reference
+
   - name: design_tokens
     type: json
-    description: Design tokens for styling
     required: false
+    description: Design tokens for styling
 
 outputs:
-  - name: component_files
-    type: file
-    description: Generated React component files (.tsx)
-  - name: story_files
-    type: file
-    description: Storybook story files (.stories.tsx)
-  - name: test_files
-    type: file
-    description: Unit test files (.test.tsx)
+  - type: text
+    path: outputs/component.tsx
+    description: Generated React component file
 
-examples:
-  - title: Generate a Button component
-    description: Create a reusable button component from Figma design
-    input:
-      component_spec:
-        name: Button
-        variants: [primary, secondary, ghost]
-        sizes: [sm, md, lg]
-      figma_url: "https://figma.com/file/xxx"
-    expected_output: "Button.tsx, Button.stories.tsx, Button.test.tsx"
+  - type: text
+    path: outputs/component.stories.tsx
+    description: Storybook story file
 
+  - type: text
+    path: outputs/component.test.tsx
+    description: Unit test file
+
+capabilities:
+  - figma-parsing
+  - component-generation
+  - storybook-stories
+  - accessibility-validation
+
+dependencies:
+  python:
+    - httpx
+
+installable: true
+version: "1.0.0"
+icon: react
 documentation_url: "https://github.com/shvee-pandora/pnd-agents/blob/main/docs/agents/frontend.md"
-
-constraints:
-  read_only: false
-  human_approval_required: false
-  max_execution_time: 300
-
-requirements:
-  python_version: ">=3.10"
-  env_vars:
-    - FIGMA_ACCESS_TOKEN
